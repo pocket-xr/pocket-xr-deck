@@ -20,6 +20,7 @@ import json
 import math
 import os
 import shutil
+import socket
 import sys
 import threading
 import time
@@ -36,6 +37,8 @@ LOG = os.path.expanduser("~/.local/state/pocket-xr-deck/gaming.log")
 FOV_V_DEG = 38.0  # the glasses' picture, vertical (as the desktop app)
 ASPECT = 16 / 9
 DEFAULTS = {"mode": "space", "size": 0.8}
+# The Quick Access panel (decky/ plugin) talks to the service here: one JSON request per line, one JSON answer per line
+CONTROL_SOCKET = os.path.join(os.environ.get("XDG_RUNTIME_DIR") or f"/run/user/{os.getuid()}", "pocket-xr-gaming.sock")
 SEND_HZ = 500  # how often the loop looks; updates go out as fast as gamescope takes them (paced)
 PREDICT_S = 0.020  # head prediction: gamescope's composite and the glasses' display
 GONE_GRACE_S = 12.0
@@ -104,6 +107,64 @@ class Gaming:
         self.lock = threading.Lock()
         self.buttons = DeckButtons(self._button, log=log)
         self.buttons.start()
+        threading.Thread(target=self._control_server, name="control", daemon=True).start()
+
+    # ---- the Quick Access panel ----
+    def status(self):
+        return {
+            "gaming": self.reshade is not None,
+            "glasses": self.glasses.name if self.glasses else None,
+            "tracking": self.reader is not None,
+            "steady_ok": self.steady_ok(),
+            "mode": self.mode() if self.glasses else self.settings.get("mode", "space"),
+            "chosen": self.settings.get("mode", "space"),
+            "size": float(self.settings.get("size", 0.8)),
+        }
+
+    def _request(self, req):
+        op = req.get("op")
+        with self.lock:
+            if op == "set_mode" and req.get("mode") in ("space", "steady", "off"):
+                self.settings["mode"] = req["mode"]
+                save_settings(self.settings)
+                self.log(f"gaming: mode {req['mode']} (Quick Access)")
+                self._apply_mode()
+            elif op == "set_size":
+                self.settings["size"] = max(0.3, min(1.2, float(req.get("size", 0.8))))
+                save_settings(self.settings)
+                if self.reshade is not None:
+                    try:
+                        self._send_view()
+                    except OSError as e:
+                        self._lost_gamescope(e)
+            elif op == "recentre":
+                self.recentre()
+            return self.status()
+
+    def _control_server(self):
+        try:
+            os.unlink(CONTROL_SOCKET)
+        except OSError:
+            pass
+        srv = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        srv.bind(CONTROL_SOCKET)
+        os.chmod(CONTROL_SOCKET, 0o600)
+        srv.listen(4)
+        while True:
+            conn, _ = srv.accept()
+            try:
+                f = conn.makefile("rw")
+                for line in f:
+                    try:
+                        answer = self._request(json.loads(line))
+                    except (ValueError, TypeError) as e:
+                        answer = {"error": str(e)}
+                    f.write(json.dumps(answer) + "\n")
+                    f.flush()
+            except OSError:
+                pass
+            finally:
+                conn.close()
 
     # ---- the back buttons ----
     def _button(self, name, kind):

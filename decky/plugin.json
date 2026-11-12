@@ -1,0 +1,11 @@
+{
+  "name": "Pocket XR",
+  "author": "Mike Haye",
+  "flags": [],
+  "api_version": 1,
+  "publish": {
+    "tags": ["xr", "glasses", "xreal", "viture"],
+    "description": "Pocket XR's Gaming Mode controls: your games on a screen held still in your XR glasses.",
+    "image": "https://raw.githubusercontent.com/pocket-xr/pocket-xr-deck/main/assets/pocket-xr-steam-deck.png"
+  }
+}
