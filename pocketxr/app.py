@@ -206,7 +206,15 @@ class App:
                 last_check = now
                 self._check_glasses()
             if self.window:
-                self._draw(now)
+                try:
+                    self._draw(now)
+                except Exception:  # noqa: BLE001
+                    # A drawing mistake must cost a frame, not the app (and the glasses' settings with it).
+                    import traceback
+                    tb = traceback.format_exc()
+                    if tb != getattr(self, "_last_tb", None):
+                        self._last_tb = tb
+                        self.log("draw failed, carrying on: " + tb)
                 frames += 1
             else:
                 self._pump()

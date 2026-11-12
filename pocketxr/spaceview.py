@@ -585,7 +585,7 @@ class SpaceView:
     def _close_card(self, kind, now):
         """Cards fade out over EXIT_S, as Pocket XR's do."""
         card = self.launcher if kind == "launcher" else self.cc
-        if card is not None:
+        if card is not None and card[0] is not None:
             self.closing.append((kind, card[0], self.card_specs.get(kind), now))
         if kind == "launcher":
             self.launcher = None
@@ -623,6 +623,7 @@ class SpaceView:
             key = ("cc",) + tuple((k, tuple(v) if isinstance(v, list) else v) for k, v in sorted(st.items()))
         cur = self.card_specs.get(kind)
         if cur is not None and cur[0] == key:
+            self._place_cc(cur[1])
             return cur
         if kind == "launcher":
             spec = ui.launcher_card(self.app_list or [], self.launcher[1], lambda a: a.icon, COLS, ROWS)
@@ -641,12 +642,17 @@ class SpaceView:
         tid = self._tex(("card", kind), lambda: (spec.data, spec.w, spec.h))
         cur = (key, spec, tid)
         self.card_specs[kind] = cur
-        if kind == "cc" and self.cc is not None and self.cc[0] is None:
-            self.cc[0] = self._card_pose(self.cc[2], self.cc[3], CC_D, S.deg_to_m(CC_WDEG, CC_D), spec.w, spec.h)
-        elif kind == "cc" and self.cc is not None:
-            p = self.cc[0]
+        if kind == "cc" and self.cc is not None and self.cc[0] is not None:
+            p = self.cc[0]  # its content changed size: keep its place, take the new height
             self.cc[0] = self._card_pose(p.yaw, p.pitch, CC_D, S.deg_to_m(CC_WDEG, CC_D), spec.w, spec.h)
+        self._place_cc(spec)
         return cur
+
+    def _place_cc(self, spec):
+        """A Control Center just opened gets its place from its card's size. (Reopened with nothing changed, its card
+        is reused unpainted, and that path once left it with no place: R5 crashed the app, 11 Nov 2026.)"""
+        if self.cc is not None and self.cc[0] is None:
+            self.cc[0] = self._card_pose(self.cc[2], self.cc[3], CC_D, S.deg_to_m(CC_WDEG, CC_D), spec.w, spec.h)
 
     def _item(self, it):
         now = time.monotonic()
@@ -921,7 +927,7 @@ class SpaceView:
 
     def _draw_card(self, pose, spec_entry, kind, alpha, scale, now):
         key, spec, tid = spec_entry
-        if not tid:
+        if not tid or pose is None:
             return
         W, H = pose.width_m(), pose.height_m()
         gl.glPushMatrix()
