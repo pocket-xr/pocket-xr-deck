@@ -264,10 +264,10 @@ class App:
         bias = ", ".join(f"{math.degrees(b):.2f}" for b in h.bias) if h else "-"
         panels = self.capture.snapshot()
         if self.pcvr is not None:
-            st = (ctypes.c_uint64 * 3)()
+            st = (ctypes.c_uint64 * 4)()  # decoded, errors, on the GPU, held back (garbled)
             if self.pcvr.started:
                 self.pcvr.lib.pxr_stats(st)
-            self.log(f"pcvr: {self.pcvr.state}, {st[0]} decoded, {st[1]} errors, {self.pcvr.frames} shown")
+            self.log(f"pcvr: {self.pcvr.state}, {st[0]} decoded, {st[1]} errors, {st[3]} garbled held back, {self.pcvr.frames} shown")
         self.log(f"health: {self.fps:.0f} fps, imu {rate:.0f}/s, gyro zero {bias} deg/s ({h.rest_blocks if h else 0} rests), "
                  f"{self._view()}, {self.settings['source']} ({len(panels)} panels), x errors {self.capture.errors} {self.capture.error_kinds}")
 
