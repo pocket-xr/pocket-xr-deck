@@ -16,6 +16,12 @@ import time
 from . import control as c
 
 SET_GAP_S = 3.0
+# Pocket XR GlassesDisplayCommands.keepFollow: Ultrawide or Spatial Anchor leaves the Aura in hover ("anchor") and it
+# stays there, through a replug too; follow is sent, read back after 1.5 s, tried every 3 s, 3 times a plug-in.
+FOLLOW_READ_S = 1.5
+FOLLOW_RETRY_S = 3.0
+FOLLOW_TRIES = 3
+FOLLOW_CHECK_S = 5.0
 TRIES = 2
 SIZE_SAME = 0.005
 
@@ -45,6 +51,8 @@ class SettingsControl(threading.Thread):
         # What this app turned on, so quitting puts back only that.
         self.we_set_ultrawide = False
         self.we_set_anchor = False
+        self.follow_tries = 0
+        self.last_follow_check = 0.0
 
     # ---- requests from the app ----
     def want(self, view):
@@ -67,10 +75,18 @@ class SettingsControl(threading.Thread):
             try:
                 job, arg = self.jobs.get(timeout=1.0)
             except queue.Empty:
+                if time.monotonic() - self.last_follow_check >= FOLLOW_CHECK_S:
+                    try:
+                        self._keep_follow()
+                    except OSError as e:
+                        self.log(f"settings: link lost ({e})")
+                        self.link = None
                 continue
             try:
                 self.busy = True
                 if job == "view":
+                    if arg != self.wanted:
+                        self.follow_tries = 0
                     self.wanted = arg
                     self._apply(arg)
                 elif job == "recentre":
@@ -93,6 +109,7 @@ class SettingsControl(threading.Thread):
             self.log(f"settings: control link not open yet ({e})")
             return False
         self.log("settings: control link open")
+        self.follow_tries = 0
         self._read()
         if self.wanted:
             self.jobs.put(("view", self.wanted))
@@ -143,12 +160,36 @@ class SettingsControl(threading.Thread):
                 self._set_and_check(c.anchor_set, False, c.ANCHOR_GET, 0, "Spatial Anchor off for 3DoF")
             if st["ultrawide"] == 1:
                 self._set_and_check(c.ultrawide_set, False, c.ULTRAWIDE_GET, 0, "Ultrawide off for 3DoF")
+            self._keep_follow()
         elif view != "steady" and st.get("ultrawide") == 1 and self.we_set_ultrawide:
             if self._set_and_check(c.ultrawide_set, False, c.ULTRAWIDE_GET, 0, "Ultrawide off"):
                 self.we_set_ultrawide = False
             if not self.glasses.app_anchor:
                 self.on_message(TURN_OFF_6DOF)
         self._read()
+
+    def _keep_follow(self):
+        """In Window in space on the Aura: Follow mode, so the glasses do not hold the picture against the app's tracking."""
+        self.last_follow_check = time.monotonic()
+        if not self.glasses.managed or self.wanted == "steady" or self.link is None or self.link.closed:
+            return
+        if self.follow_tries >= FOLLOW_TRIES or self.state.get("ultrawide") == 1:
+            return
+        mode = flag(self.link.get(c.SPACE_MODE_GET))
+        self.state["space"] = mode
+        if mode == c.SPACE_FOLLOW:
+            return
+        self.follow_tries += 1
+        self.log(f"settings: the glasses are in hover; Follow mode (try {self.follow_tries})")
+        self.link.request(c.follow)
+        time.sleep(FOLLOW_READ_S)
+        mode = flag(self.link.get(c.SPACE_MODE_GET))
+        self.state["space"] = mode
+        if mode == c.SPACE_FOLLOW:
+            self.log("settings: Follow mode holds")
+        else:
+            time.sleep(max(0.0, FOLLOW_RETRY_S - FOLLOW_READ_S))
+        self._publish()
 
     def _steady_on(self, st):
         self.on_message("Setting up Steady mode in 6DoF...")

@@ -39,6 +39,7 @@ DEFAULTS = {"view": "3dof", "source": "deck", "distance": 2.0, "scale": 1.0, "ca
 # 3DoF: a full Deck screen (1280 px wide) is this wide at 1.0, in metres.
 DECK_SCREEN_M = 1.6
 GAP_DEG = 3.0
+GONE_GRACE_S = 12.0
 LOOK_DWELL_S = 0.6
 FOV_V_DEG = 38.0  # the Aura's picture, vertical, per eye (about 70 degrees diagonal)
 
@@ -115,6 +116,8 @@ class App:
         self.look_since = 0.0
         self.edge_since = None
         self.last_layout = []
+        self.missing_since = None  # when the glasses stopped showing on USB
+        self.known_seen = 0.0  # when known glasses were last seen, so a re-plug is not taken for unknown glasses
 
     # ---------- start ----------
     def run(self):
@@ -211,7 +214,7 @@ class App:
     def _health(self):
         h = self.head
         imu_n = h.count if h else 0
-        rate = (imu_n - getattr(self, "_last_imu", 0)) / 30.0
+        rate = max(0, imu_n - getattr(self, "_last_imu", 0)) / 30.0
         self._last_imu = imu_n
         bias = ", ".join(f"{math.degrees(b):.2f}" for b in h.bias) if h else "-"
         panels = self.capture.snapshot()
@@ -257,7 +260,21 @@ class App:
 
     def _check_glasses(self):
         g = gmod.detect()
-        if g is None:
+        now = time.monotonic()
+        if g is not None and g.family != "other":
+            self.known_seen = now
+            self.missing_since = None
+        elif self.glasses is not None and self.glasses.family != "other":
+            # The Aura drops off USB for a few seconds when its glasses service restarts or a mode re-plugs it.
+            # Keep everything for GONE_GRACE_S, so the link and the view come straight back.
+            if self.missing_since is None:
+                self.missing_since = now
+                self.log(f"glasses not on USB; waiting up to {GONE_GRACE_S:.0f} s for them to come back")
+            if now - self.missing_since < GONE_GRACE_S:
+                g = self.glasses
+        if g is None and now - self.known_seen < GONE_GRACE_S + 5:
+            pass  # known glasses only just left: not "other glasses"
+        elif g is None:
             # Glasses Pocket XR does not know: a second display is enough to show the windows flat.
             if self.glasses is not None and self.glasses.family == "other" and self.window is not None:
                 g = self.glasses

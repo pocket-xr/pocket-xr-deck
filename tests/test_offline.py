@@ -149,6 +149,12 @@ def test_glasses_detect():
     assert glasses.detect([(0x28DE, 0x1205, [0x03], "Steam Deck Controller")]) is None
 
 
+def test_follow_bytes():
+    # Pocket XR ControlWire.spaceMode(id, SPACE_FOLLOW): 10284 with { 1: 1 }; 10421 reads it back.
+    assert control.follow(0x80000001).hex() == "282c" + "00000008" + "80000001" + "1a020801"
+    assert control.rpc(control.SPACE_MODE_GET, 0x80000001).hex() == "28b5" + "00000006" + "80000001" + "1a00"
+
+
 def test_recenter_bytes():
     assert control.recenter(0x80000001).hex() == "2827" + "00000006" + "80000001" + "1a00"
 

@@ -21,13 +21,16 @@ ULTRAWIDE_GET, ULTRAWIDE_SET = 10277, 10278
 SIZE_RANGE, SIZE_GET, SIZE_SET = 10396, 10397, 10398
 ANCHOR_GET, ANCHOR_SET = 10404, 10405  # Spatial Anchor
 SERIAL_GET = 10025
+SPACE_MODE_GET = 10421  # 1 follow, 0 (left out) hover
+SPACE_MODE = 10284  # set { 1: mode }: 1 follow
+SPACE_FOLLOW = 1
 RECENTER = 10279  # empty request: in Ultrawide the glasses bring their canvas in front (Pocket XR 1.1.18 on)
 
 SENDABLE = {HEARTBEAT, STEREO_GET, STEREO_SET, ULTRAWIDE_GET, ULTRAWIDE_SET, SIZE_RANGE, SIZE_GET, SIZE_SET,
-            ANCHOR_GET, ANCHOR_SET, SERIAL_GET, RECENTER}
+            ANCHOR_GET, ANCHOR_SET, SERIAL_GET, RECENTER, SPACE_MODE_GET, SPACE_MODE}
 FORBIDDEN = {10079, 10325, 10326, 10327, 10328}
 assert not (SENDABLE & FORBIDDEN)
-SETS = {STEREO_SET, ULTRAWIDE_SET, SIZE_SET, ANCHOR_SET, RECENTER}
+SETS = {STEREO_SET, ULTRAWIDE_SET, SIZE_SET, ANCHOR_SET, RECENTER, SPACE_MODE}
 
 
 # ---------- protobuf, just enough ----------
@@ -188,6 +191,10 @@ class Framer:
                     out.append(Answer(mtype, rid, pb_parse(body[4:]) or {}))
         del self.buf[:pos]
         return out
+
+
+def follow(rid):
+    return rpc(SPACE_MODE, rid, pb_varint(1, SPACE_FOLLOW))
 
 
 def recenter(rid):
