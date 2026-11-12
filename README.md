@@ -8,7 +8,7 @@ On the Deck, in Desktop Mode, with the XREAL glasses plugged in:
 
 1. In the glasses' own menu, turn **Spatial Anchor off**. It fights the app's head tracking.
 2. Copy the `prototype` folder to the Deck.
-3. In Konsole: `python3 prototype/deckxr.py`
+3. In Konsole: `./prototype/run.sh` (it also works from SSH)
 4. Keep your head still for 2 seconds while the gyro settles.
 
 Add `--capture` to show the Deck's own screen instead of the test card.

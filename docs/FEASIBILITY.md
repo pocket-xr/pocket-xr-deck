@@ -108,4 +108,20 @@ Mike's Deck, over SSH, with Mike wearing the glasses.
 
 ## Prototype test result
 
-(Filled in after Mike's test.)
+11 Nov 2026, Mike's Steam Deck (SteamOS 3.7.17, Desktop Mode on X11) with his XREAL Aura on
+the Deck's USB-C port, in 2D, Spatial Anchor off.
+
+- **Glasses link:** SteamOS brought up both of the Aura's USB networks by itself (169.254.2.10
+  and 169.254.1.10, by the glasses' DHCP). No setup, no root.
+- **Head tracking:** 1000 reports a second from 169.254.2.1:52998, none dropped, over about
+  3 minutes. Gravity reads along +y, so the Aura's axes are the same on Linux as on the phone.
+- **Picture:** the glasses show as "XREAL 1 Ultra" at 1920x1080, 90 Hz. The prototype drew a
+  steady 90 fps for the whole test.
+- **Mike, wearing the glasses:** "Stays put, works." The test card held still in the room
+  while he turned and nodded.
+- **Nothing was sent to the glasses.**
+
+Not tried yet: `--capture` (the Deck's own desktop as the window), 3D side by side, long runs
+for yaw drift, Gaming Mode.
+
+So the main risk, whether the Aura works on the Deck at all, is gone.
