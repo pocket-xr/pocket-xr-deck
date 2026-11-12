@@ -24,6 +24,41 @@ xc = ctypes.CDLL(ctypes.util.find_library("Xcomposite") or "libXcomposite.so.1")
 xf = ctypes.CDLL(ctypes.util.find_library("Xfixes") or "libXfixes.so.3")
 xt = ctypes.CDLL(ctypes.util.find_library("Xtst") or "libXtst.so.6")
 xt.XTestFakeKeyEvent.argtypes = [ctypes.c_void_p, ctypes.c_uint, ctypes.c_int, ctypes.c_ulong]
+xi = ctypes.CDLL(ctypes.util.find_library("Xi") or "libXi.so.6")
+
+
+class XIEventMask(ctypes.Structure):
+    _fields_ = [("deviceid", ctypes.c_int), ("mask_len", ctypes.c_int), ("mask", ctypes.POINTER(ctypes.c_ubyte))]
+
+
+class XGenericEventCookie(ctypes.Structure):
+    _fields_ = [("type", ctypes.c_int), ("serial", ctypes.c_ulong), ("send_event", ctypes.c_int),
+                ("display", ctypes.c_void_p), ("extension", ctypes.c_int), ("evtype", ctypes.c_int),
+                ("cookie", ctypes.c_uint), ("data", ctypes.c_void_p)]
+
+
+class XIValuatorState(ctypes.Structure):
+    _fields_ = [("mask_len", ctypes.c_int), ("mask", ctypes.POINTER(ctypes.c_ubyte)),
+                ("values", ctypes.POINTER(ctypes.c_double))]
+
+
+class XIRawEvent(ctypes.Structure):
+    _fields_ = [("type", ctypes.c_int), ("serial", ctypes.c_ulong), ("send_event", ctypes.c_int),
+                ("display", ctypes.c_void_p), ("extension", ctypes.c_int), ("evtype", ctypes.c_int),
+                ("time", ctypes.c_ulong), ("deviceid", ctypes.c_int), ("sourceid", ctypes.c_int),
+                ("detail", ctypes.c_int), ("flags", ctypes.c_int), ("valuators", XIValuatorState),
+                ("raw_values", ctypes.POINTER(ctypes.c_double))]
+
+
+class _AnyEvent(ctypes.Union):
+    _fields_ = [("cookie", XGenericEventCookie), ("pad", ctypes.c_long * 24)]
+
+
+xi.XIQueryVersion.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_int), ctypes.POINTER(ctypes.c_int)]
+xi.XISelectEvents.argtypes = [ctypes.c_void_p, ctypes.c_ulong, ctypes.POINTER(XIEventMask), ctypes.c_int]
+XI_RAW_MOTION = 17
+GENERIC_EVENT = 35
+XI_ALL_MASTER_DEVICES = 1
 
 Display = ctypes.c_void_p
 Window = ctypes.c_ulong
@@ -85,6 +120,11 @@ x11.XSendEvent.argtypes = [Display, Window, ctypes.c_int, ctypes.c_long, P(XEven
 x11.XSetErrorHandler.restype = ctypes.c_void_p
 x11.XSetErrorHandler.argtypes = [ERROR_HANDLER]
 x11.XMoveWindow.argtypes = [Display, Window, ctypes.c_int, ctypes.c_int]
+x11.XQueryExtension.argtypes = [Display, ctypes.c_char_p, P(ctypes.c_int), P(ctypes.c_int), P(ctypes.c_int)]
+x11.XPending.argtypes = [Display]
+x11.XNextEvent.argtypes = [Display, ctypes.c_void_p]
+x11.XGetEventData.argtypes = [Display, ctypes.c_void_p]
+x11.XFreeEventData.argtypes = [Display, ctypes.c_void_p]
 xc.XCompositeNameWindowPixmap.restype = ctypes.c_ulong
 xc.XCompositeNameWindowPixmap.argtypes = [Display, Window]
 xc.XCompositeQueryExtension.argtypes = [Display, P(ctypes.c_int), P(ctypes.c_int)]
@@ -97,7 +137,7 @@ xf.XFixesDestroyRegion.argtypes = [Display, ctypes.c_ulong]
 SHAPE_INPUT = 2
 # The one spot of the view on the glasses that takes clicks: the space pointer parks the real pointer here whenever
 # it is over Pocket XR's own things (title bars, handles, buttons, empty space), so those clicks come to the app.
-CHROME_SPOT = (0, 0, 24, 24)
+CHROME_SPOT = (948, 528, 24, 24)  # the middle of a 1920x1080 output, away from its edges
 
 
 class XRectangle(ctypes.Structure):
@@ -169,10 +209,61 @@ class XCapture(threading.Thread):
         self._last_warp = None
         self.raise_wanted = None
         self.pointer_on_glasses = False
+        self._raw_ok = False
+        self._left_space = False
         self.restored = True
         self._handler = ERROR_HANDLER(self._on_error)
         self.own_pid = os.getpid()
         self.panel_pid = None
+
+    def _listen_raw(self):
+        """XInput 2 raw motion: the trackpad's own movement, which no screen edge clips (the pointer's place would)."""
+        op, ev, er = ctypes.c_int(), ctypes.c_int(), ctypes.c_int()
+        if not x11.XQueryExtension(self.dpy, b"XInputExtension", ctypes.byref(op), ctypes.byref(ev), ctypes.byref(er)):
+            self.log("capture: no XInput; the space pointer uses the pointer's place")
+            return False
+        major, minor = ctypes.c_int(2), ctypes.c_int(0)
+        if xi.XIQueryVersion(self.dpy, ctypes.byref(major), ctypes.byref(minor)) != 0:
+            return False
+        self._xi_op = op.value
+        bits = (ctypes.c_ubyte * 4)()
+        bits[XI_RAW_MOTION >> 3] |= 1 << (XI_RAW_MOTION & 7)
+        m = XIEventMask(XI_ALL_MASTER_DEVICES, 4, ctypes.cast(bits, ctypes.POINTER(ctypes.c_ubyte)))
+        xi.XISelectEvents(self.dpy, self.root, ctypes.byref(m), 1)
+        x11.XFlush(self.dpy)
+        self._ev = _AnyEvent()
+        return True
+
+    def _raw_motion(self):
+        """The motion summed from the raw events waiting: (dx, dy) in the pointer's own (accelerated) units."""
+        dx = dy = 0.0
+        while x11.XPending(self.dpy):
+            x11.XNextEvent(self.dpy, ctypes.byref(self._ev))
+            c = self._ev.cookie
+            if c.type != GENERIC_EVENT or c.extension != self._xi_op:
+                continue
+            if not x11.XGetEventData(self.dpy, ctypes.byref(self._ev.cookie)):
+                continue
+            try:
+                if c.evtype == XI_RAW_MOTION and self._ev.cookie.data:
+                    r = XIRawEvent.from_address(self._ev.cookie.data)
+                    vs = r.valuators
+                    k = 0
+                    for axis in range(min(2, vs.mask_len * 8)):
+                        if vs.mask[axis >> 3] & (1 << (axis & 7)):
+                            if axis == 0:
+                                dx += vs.values[k]
+                            else:
+                                dy += vs.values[k]
+                            k += 1
+            finally:
+                x11.XFreeEventData(self.dpy, ctypes.byref(self._ev.cookie))
+        return dx, dy
+
+    def leave_space(self):
+        """Back to the Deck's screen on purpose (the space pointer pushed past the left edge of the view)."""
+        with self.lock:
+            self.requests.append(("leave", None))
 
     def install_handler(self):
         """Xlib has one error handler for the whole process, and SDL puts in its own "safety net" (which exits) each
@@ -236,7 +327,10 @@ class XCapture(threading.Thread):
 
     def chrome_spot(self):
         g = self.glasses_rect
-        return (g[0] + CHROME_SPOT[0] + CHROME_SPOT[2] // 2, g[1] + CHROME_SPOT[1] + CHROME_SPOT[3] // 2) if g else None
+        if not g:
+            return None
+        return (g[0] + min(CHROME_SPOT[0], g[2] - 24) + CHROME_SPOT[2] // 2,
+                g[1] + min(CHROME_SPOT[1], g[3] - 24) + CHROME_SPOT[3] // 2)
 
     @property
     def virtual(self):
@@ -256,6 +350,7 @@ class XCapture(threading.Thread):
         self.composite = bool(xc.XCompositeQueryExtension(self.dpy, ctypes.byref(ev), ctypes.byref(er)))
         if not self.composite:
             self.log("capture: no XComposite; app windows cannot be shown, only the Deck's screen")
+        self._raw_ok = self._listen_raw()
         self.atoms = {n: x11.XInternAtom(self.dpy, n.encode(), 0) for n in (
             "_NET_CLIENT_LIST", "_NET_ACTIVE_WINDOW", "_NET_WM_NAME", "UTF8_STRING", "WM_NAME", "_NET_WM_PID",
             "_NET_WM_WINDOW_TYPE", "_NET_WM_WINDOW_TYPE_NORMAL", "_NET_WM_WINDOW_TYPE_DIALOG", "_NET_WM_STATE",
@@ -289,6 +384,12 @@ class XCapture(threading.Thread):
                     x11.XSync(self.dpy, 0)
                     time.sleep(0.05)
                     self._send_keys(combo)
+                elif kind == "leave":
+                    dx, dy, dw, dh = self.deck_rect
+                    x11.XWarpPointer(self.dpy, 0, self.root, 0, 0, 0, 0, dx + dw - 60, dy + dh // 2)
+                    x11.XFlush(self.dpy)
+                    self._last_warp = None
+                    self._left_space = True
                 elif kind == "restore":
                     self._restore_all()
                     self.restored = True
@@ -544,11 +645,23 @@ class XCapture(threading.Thread):
         dx, dy, dw, dh = self.deck_rect
         g = self.glasses_rect
         on_glasses = self.virtual and g[0] <= px < g[0] + g[2] and g[1] <= py < g[1] + g[3]
+        raw = self._raw_motion() if self._raw_ok else (0.0, 0.0)
+        if self._left_space and on_glasses:
+            self._left_space = False
+        # A small move off the glasses' output while the space pointer is on is still the space pointer (the real
+        # pointer sat near the edge); only a jump (a touch on the Deck's screen) or leave_space() leaves it.
+        if not on_glasses and self.space_pointer and self._last_warp is not None and not self._left_space and \
+                abs(px - self._last_warp[0]) + abs(py - self._last_warp[1]) < 160:
+            on_glasses = True
         if on_glasses and self.space_pointer:
             if self._last_warp is not None:
                 with self.lock:
-                    self.motion[0] += px - self._last_warp[0]
-                    self.motion[1] += py - self._last_warp[1]
+                    if self._raw_ok:
+                        self.motion[0] += raw[0]
+                        self.motion[1] += raw[1]
+                    else:
+                        self.motion[0] += px - self._last_warp[0]
+                        self.motion[1] += py - self._last_warp[1]
             t = self.warp_target or self.chrome_spot()
             if t is not None and (t[0], t[1]) != (px, py):
                 x11.XWarpPointer(self.dpy, 0, self.root, 0, 0, 0, 0, int(t[0]), int(t[1]))

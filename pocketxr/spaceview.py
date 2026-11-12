@@ -35,6 +35,7 @@ LAUNCHER_D, LAUNCHER_W, LAUNCHER_H, LAUNCHER_DROP = 1.0, 1.007, 0.66, 5.0
 CC_D, CC_WDEG = 1.8, 38.0
 CC_OPEN_S = 0.22
 COLS, ROWS = 5, 3
+LEAVE_PUSH_DEG = 8.0  # pushing this far past the left edge of the view goes back to the Deck's screen
 
 
 def deg_per_px(speed):
@@ -74,6 +75,7 @@ class SpaceView:
         self.tex = {}  # cache key -> (texture id, w, h)
         self.app_list = None
         self.focus = None
+        self.push_left = 0.0
 
     # ---------- textures ----------
     def _tex(self, key, make):
@@ -177,7 +179,15 @@ class SpaceView:
             if self.adjust_all is not None and (dx or dy):
                 self._adjust_all_turn(-dx * k, -dy * k)
             else:
-                self.cursor[0] = S.clamp(self.cursor[0] - dx * k, -CURSOR_LIMIT[0], CURSOR_LIMIT[0])
+                want = self.cursor[0] - dx * k
+                if want > CURSOR_LIMIT[0] and not self.drag and not self.resize:
+                    self.push_left += want - CURSOR_LIMIT[0]
+                    if self.push_left > LEAVE_PUSH_DEG:
+                        self.push_left = 0.0
+                        self.app.capture.leave_space()
+                elif dx > 0:
+                    self.push_left = 0.0  # a move to the right starts the push again; a still frame does not
+                self.cursor[0] = S.clamp(want, -CURSOR_LIMIT[0], CURSOR_LIMIT[0])
                 self.cursor[1] = S.clamp(self.cursor[1] - dy * k, -CURSOR_LIMIT[1], CURSOR_LIMIT[1])
         local = S.direction(self.cursor[0], self.cursor[1])
         self.ray = fusion.qrot(view_q, local)
