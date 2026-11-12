@@ -297,6 +297,8 @@ class SpaceView:
     # ---------- input ----------
     def mouse(self, button, down, now):
         h = self.hover
+        if down:
+            self.log(f"space: button {button} down over {h[0] + ' ' + str(h[1]) + ' ' + str(h[2]) + ' ' + str(h[3]) if h else 'nothing'}")
         if not down:
             if self.drag:
                 self._drag_end()

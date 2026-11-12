@@ -241,6 +241,8 @@ class App:
                 mod = int.from_bytes(bytes(ev[24:26]), "little")
                 if sym == ord("q") and mod & KMOD_CTRL:
                     self.request_quit("Ctrl+Q")
+            elif etype in (0x401, 0x402) and not self.capture.space_pointer:
+                self.log(f"view: a click came while the space pointer is off")
             elif etype in (0x401, 0x402) and self.capture.space_pointer:  # mouse button down / up
                 self.space.mouse(ev[16], etype == 0x401, time.monotonic())
             elif etype == 0x403 and self.capture.space_pointer:  # wheel

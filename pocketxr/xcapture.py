@@ -200,6 +200,7 @@ class XCapture(threading.Thread):
         self._last_grab = {}
         self._moved = set()
         self._redirected = set()
+        self._unminimised = set()
         self._placed = {}  # client window -> (frame x, frame y, client w, client h, maximized) before it was moved
         self._stack = []  # client windows, bottom to top
         self._view_win = None  # the app's own view on the glasses, made click-through
@@ -462,7 +463,17 @@ class XCapture(threading.Thread):
         if types and not ({self.atoms["_NET_WM_WINDOW_TYPE_NORMAL"], self.atoms["_NET_WM_WINDOW_TYPE_DIALOG"]} & set(types)):
             return False
         state = set(self._longs(w, "_NET_WM_STATE"))
-        if self.atoms["_NET_WM_STATE_HIDDEN"] in state or self.atoms["_NET_WM_STATE_SKIP_TASKBAR"] in state:
+        if self.atoms["_NET_WM_STATE_SKIP_TASKBAR"] in state:
+            return False
+        if self.atoms["_NET_WM_STATE_HIDDEN"] in state:
+            # Minimised: no picture to show. In the Space every open app is a window, as in Pocket XR, so a
+            # minimised app is restored, once per window (a window minimised again after that stays so).
+            if self.virtual and w not in self._unminimised:
+                pid = self._longs(w, "_NET_WM_PID")
+                if not (pid and pid[0] in (self.own_pid, self.panel_pid)) and self._title(w) not in OWN_TITLES:
+                    self._unminimised.add(w)
+                    self._activate(w)
+                    self.log(f"capture: '{self._title(w)}' was minimised; restored so it shows in the Space")
             return False
         pid = self._longs(w, "_NET_WM_PID")
         if pid and pid[0] in (self.own_pid, self.panel_pid):
