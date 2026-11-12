@@ -149,7 +149,8 @@ class App:
         self.capture.source = self.settings["source"]
         self.capture.install_handler()
         self.capture.start()
-        DeckButtons(lambda n, k: self.events.put(("button", n, k)), log=self.log).start()
+        self.deckpad = DeckButtons(lambda n, k: self.events.put(("button", n, k)), log=self.log)
+        self.deckpad.start()
         self.panel = self._start_panel()
         self.capture.panel_pid = self.panel.pid if self.panel else None
         # Asked to stop (log out, shut down, systemctl): put the glasses back first, as with Quit.

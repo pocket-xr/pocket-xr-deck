@@ -384,3 +384,130 @@ void pxr_stats(uint64_t *out) {
     out[1] = g_errors;
     out[2] = (uint64_t)g_hw_ok;
 }
+
+/* ---- Controllers: both hands as Quest Touch controllers, as Pocket XR on Android (pocketxr_alvr.cpp) ---- */
+
+struct hand_ids {
+    uint64_t device, primary_click, primary_touch, secondary_click, secondary_touch, menu_click, squeeze_value,
+        trigger_value, trigger_touch, stick_x, stick_y, stick_click, stick_touch, thumbrest_touch;
+};
+static struct hand_ids g_hand[2];
+static int g_hand_ids_ready = 0;
+static float g_last[2][13];
+static int g_last_valid[2] = {0, 0};
+
+static uint64_t hand_path(const char *side, const char *fmt, const char *part) {
+    char path[96];
+    snprintf(path, sizeof path, fmt, side, part);
+    return alvr_path_string_to_id(path);
+}
+
+static void make_hand_ids(void) {
+    if (g_hand_ids_ready) return;
+    const char *side[2] = {"/user/hand/left", "/user/hand/right"};
+    const char *primary[2] = {"x", "a"};
+    const char *secondary[2] = {"y", "b"};
+    const char *menu[2] = {"menu", "system"};
+    for (int h = 0; h < 2; ++h) {
+        struct hand_ids *i = &g_hand[h];
+        i->device = alvr_path_string_to_id(side[h]);
+        i->primary_click = hand_path(side[h], "%s/input/%s/click", primary[h]);
+        i->primary_touch = hand_path(side[h], "%s/input/%s/touch", primary[h]);
+        i->secondary_click = hand_path(side[h], "%s/input/%s/click", secondary[h]);
+        i->secondary_touch = hand_path(side[h], "%s/input/%s/touch", secondary[h]);
+        i->menu_click = hand_path(side[h], "%s/input/%s/click", menu[h]);
+        i->squeeze_value = hand_path(side[h], "%s/input/%s", "squeeze/value");
+        i->trigger_value = hand_path(side[h], "%s/input/%s", "trigger/value");
+        i->trigger_touch = hand_path(side[h], "%s/input/%s", "trigger/touch");
+        i->stick_x = hand_path(side[h], "%s/input/%s", "thumbstick/x");
+        i->stick_y = hand_path(side[h], "%s/input/%s", "thumbstick/y");
+        i->stick_click = hand_path(side[h], "%s/input/%s", "thumbstick/click");
+        i->stick_touch = hand_path(side[h], "%s/input/%s", "thumbstick/touch");
+        i->thumbrest_touch = hand_path(side[h], "%s/input/%s", "thumbrest/touch");
+    }
+    g_hand_ids_ready = 1;
+}
+
+static void hand_inputs(const struct hand_ids *i, uint64_t *out) {
+    const uint64_t one[13] = {i->primary_click, i->primary_touch, i->secondary_click, i->secondary_touch,
+                              i->menu_click, i->squeeze_value, i->trigger_value, i->trigger_touch, i->stick_x,
+                              i->stick_y, i->stick_click, i->stick_touch, i->thumbrest_touch};
+    memcpy(out, one, sizeof one);
+}
+
+/** After streaming starts: tells the PC both hands are Quest Touch controllers. One message with both hands' inputs:
+ * the PC builds its mapping from the latest message alone (found on Android, 8 November 2026). */
+void pxr_send_controller_profile(void) {
+    make_hand_ids();
+    uint64_t inputs[26];
+    hand_inputs(&g_hand[0], inputs);
+    hand_inputs(&g_hand[1], inputs + 13);
+    g_last_valid[0] = g_last_valid[1] = 0;
+    alvr_send_active_interaction_profile(g_hand[0].device,
+                                         alvr_path_string_to_id("/interaction_profiles/oculus/touch_controller"),
+                                         inputs, 26);
+}
+
+/** One hand's buttons: [buttons] 1 primary, 2 secondary, 4 menu, 8 stick click, touches 0x10 primary, 0x20 secondary,
+ * 0x40 trigger, 0x80 stick, 0x100 thumb rest; [trigger] and [squeeze] 0 to 1; the stick -1 to 1. Only changes go. */
+void pxr_send_buttons(int hand, int buttons, float trigger, float squeeze, float stick_x, float stick_y) {
+    if (hand < 0 || hand > 1) return;
+    make_hand_ids();
+    const float now[13] = {
+        (buttons & 1) ? 1.f : 0.f, (buttons & 0x10) ? 1.f : 0.f, (buttons & 2) ? 1.f : 0.f,
+        (buttons & 0x20) ? 1.f : 0.f, (buttons & 4) ? 1.f : 0.f, squeeze, trigger, (buttons & 0x40) ? 1.f : 0.f,
+        stick_x, stick_y, (buttons & 8) ? 1.f : 0.f, (buttons & 0x80) ? 1.f : 0.f, (buttons & 0x100) ? 1.f : 0.f};
+    uint64_t ids[13];
+    hand_inputs(&g_hand[hand], ids);
+    const int scalar[13] = {0, 0, 0, 0, 0, 1, 1, 0, 1, 1, 0, 0, 0};
+    for (int k = 0; k < 13; ++k) {
+        if (g_last_valid[hand] && g_last[hand][k] == now[k]) continue;
+        AlvrButtonValue v;
+        memset(&v, 0, sizeof v);
+        if (scalar[k]) {
+            v.tag = ALVR_BUTTON_VALUE_SCALAR;
+            v.scalar = now[k];
+        } else {
+            v.tag = ALVR_BUTTON_VALUE_BINARY;
+            v.binary = now[k] > 0.5f;
+        }
+        alvr_send_button(ids[k], v);
+        g_last[hand][k] = now[k];
+    }
+    g_last_valid[hand] = 1;
+}
+
+/** The head and both hands at [target_ns] in one tracking packet. [h] as pxr_send_head (10 floats); [hands] per hand,
+ * left first: valid (1 or 0), orientation x y z w, position x y z, angular velocity x y z, velocity x y z. */
+void pxr_send_tracking(uint64_t target_ns, const float *h, const float *hands) {
+    make_hand_ids();
+    AlvrDeviceMotion m[3];
+    memset(m, 0, sizeof m);
+    uint64_t n = 0;
+    m[n].device_id = g_head_id;
+    m[n].pose.orientation.x = h[0];
+    m[n].pose.orientation.y = h[1];
+    m[n].pose.orientation.z = h[2];
+    m[n].pose.orientation.w = h[3];
+    for (int k = 0; k < 3; ++k) {
+        m[n].pose.position[k] = h[4 + k];
+        m[n].angular_velocity[k] = h[7 + k];
+    }
+    ++n;
+    for (int k = 0; k < 2; ++k) {
+        const float *p = hands + 14 * k;
+        if (p[0] < 0.5f) continue;
+        m[n].device_id = g_hand[k].device;
+        m[n].pose.orientation.x = p[1];
+        m[n].pose.orientation.y = p[2];
+        m[n].pose.orientation.z = p[3];
+        m[n].pose.orientation.w = p[4];
+        for (int j = 0; j < 3; ++j) {
+            m[n].pose.position[j] = p[5 + j];
+            m[n].angular_velocity[j] = p[8 + j];
+            m[n].linear_velocity[j] = p[11 + j];
+        }
+        ++n;
+    }
+    alvr_send_tracking(target_ns, m, n, NULL, NULL);
+}

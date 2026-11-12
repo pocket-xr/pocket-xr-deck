@@ -52,6 +52,10 @@ The Deck's back buttons work at any time, alongside Steam's controls:
 In PC VR the buttons belong to the game, except one: hold L5 or R5 for two seconds to go back to your Space. A ring
 fills on the card while you hold; let go before it fills to stay in the game.
 
+In PC VR the Deck is a pair of controllers: its left half the left hand, its right half the right. The triggers,
+L1 and R1 (grip), both sticks, A, B, X, Y and the menu button go to the game. Drag on a trackpad to aim that hand,
+for pointing at a menu; press the pad in to point it straight ahead again.
+
 Holding the pointer against the right edge of the Deck's screen for a second also recentres.
 
 The mouse pointer is drawn in the glasses on the window it is over. It stays on the Deck's screen: past its right

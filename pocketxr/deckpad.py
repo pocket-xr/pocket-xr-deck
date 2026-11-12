@@ -53,6 +53,7 @@ class DeckButtons(threading.Thread):
         self.log = log
         self.stop = False
         self.device = None
+        self.report = None  # the newest state report (bytes), for PC VR's controllers
 
     def run(self):
         while not self.stop:
@@ -86,6 +87,7 @@ class DeckButtons(threading.Thread):
                 seen = True
                 self.device = dev
                 self.log(f"buttons: reading {dev}")
+            self.report = d
             bits = struct.unpack_from("<Q", d, 8)[0]
             now = time.monotonic()
             for name, mask in BUTTONS.items():

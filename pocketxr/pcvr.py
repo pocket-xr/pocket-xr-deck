@@ -19,6 +19,7 @@ import threading
 import time
 
 from . import fusion
+from . import pcvr_pads as pads
 from . import pcvr_scene as scene
 from .gl import GL_LINEAR, GL_QUADS, GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_TEXTURE_MIN_FILTER, gl
 
@@ -103,6 +104,8 @@ def _load():
     lib.pxr_prediction_offset_ns.restype = ctypes.c_uint64
     lib.pxr_send_view_params.argtypes = [ctypes.c_float, ctypes.POINTER(ctypes.c_float)]
     lib.pxr_send_head.argtypes = [ctypes.c_uint64, ctypes.POINTER(ctypes.c_float)]
+    lib.pxr_send_tracking.argtypes = [ctypes.c_uint64, ctypes.POINTER(ctypes.c_float), ctypes.POINTER(ctypes.c_float)]
+    lib.pxr_send_buttons.argtypes = [ctypes.c_int, ctypes.c_int] + [ctypes.c_float] * 4
     lib.pxr_acquire.restype = ctypes.c_uint64
     lib.pxr_acquire.argtypes = [ctypes.c_uint, ctypes.c_uint, ctypes.POINTER(ctypes.c_int), ctypes.POINTER(ctypes.c_float)]
     lib.pxr_submit.argtypes = [ctypes.c_uint64, ctypes.c_uint64]
@@ -146,6 +149,8 @@ class PcVr:
         self.leave_down_at = None
         self.loc = None
         self.size = 0.0
+        self.hands = pads.DeckHands()
+        self.pad_report_seen = False
         self.token_path = os.path.join(os.path.expanduser("~/.config/pocket-xr-deck"), "pc-helper.json")
         h, v = math.atan(math.tan(math.radians(19)) * 16 / 9), math.radians(19)
         self.fovs = (ctypes.c_float * 8)(-h, h, v, -v, -h, h, v, -v)
@@ -236,6 +241,8 @@ class PcVr:
                 self.streaming = True
                 self.state, self.message = "streaming", ""
                 lib.pxr_send_view_params(IPD, self.fovs)
+                lib.pxr_send_controller_profile()
+                self.hands.recentre()
                 self.log(f"pcvr: streaming {int(ev[0])}x{int(ev[1])} per eye at {ev[2]:.0f} Hz")
             elif t == 2:  # stopped
                 self.streaming = False
@@ -260,7 +267,28 @@ class PcVr:
             k = math.sin(ang / 2) / (ang / dt)
             q = fusion.qnorm(fusion.qmul((math.cos(ang / 2), w[0] * k, w[1] * k, w[2] * k), view_q))
         head = (ctypes.c_float * 10)(q[1], q[2], q[3], q[0], 0.0, HEAD_HEIGHT, 0.0, w[0], w[1], w[2])
-        lib.pxr_send_head(now + ahead, head)
+        if not self.streaming:
+            lib.pxr_send_head(now + ahead, head)
+            return
+        hands = (ctypes.c_float * 28)(*self.hands.poses(view_q, HEAD_HEIGHT))
+        lib.pxr_send_tracking(now + ahead, head, hands)
+        self._send_buttons()
+
+    def _send_buttons(self):
+        """The Deck's controls as both hands' buttons (pcvr_pads.py); nothing while L5 or R5 is held to leave."""
+        dp = getattr(self.app, "deckpad", None)
+        report = dp.report if dp is not None else None
+        if report is None or len(report) < 56:
+            return
+        if not self.pad_report_seen:
+            self.pad_report_seen = True
+            self.log("pcvr: the Deck's controls are both hands")
+        self.hands.steer(report)
+        hands = pads.deck_buttons(report)
+        if self.leave_down_at is not None or self.closing_at is not None:
+            hands = [(0, 0.0, 0.0, 0.0, 0.0)] * 2
+        for side, (b, trig, sq, sx, sy) in enumerate(hands):
+            self.lib.pxr_send_buttons(side, b, trig, sq, sx, sy)
 
     def _gl_setup(self):
         ids = (ctypes.c_uint * 2)()
