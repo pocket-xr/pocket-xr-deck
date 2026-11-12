@@ -10,7 +10,8 @@ import math
 import time
 
 from . import look as L
-from .text import FORMAT_ARGB32, TextExtents, _take, cairo
+from .i18n import N_, tr
+from .text import FORMAT_ARGB32, TextExtents, _take, cairo, ui_font
 
 cairo.cairo_set_font_size.argtypes = [ctypes.c_void_p, ctypes.c_double]
 cairo.cairo_curve_to.argtypes = [ctypes.c_void_p] + [ctypes.c_double] * 6
@@ -78,7 +79,7 @@ class Canvas:
     def text(self, x, y, s, size, col=L.INK, medium=False, align="left", max_w=None):
         """Text with its vertical middle at y; cut with an ellipsis to max_w."""
         c = self.c
-        cairo.cairo_select_font_face(c, (L.FONT_MEDIUM if medium else L.FONT).encode(), 0, 0)
+        cairo.cairo_select_font_face(c, ui_font(medium).encode(), 0, 0)
         cairo.cairo_set_font_size(c, size)
         raw = s.encode("utf-8")
         ext = TextExtents()
@@ -95,6 +96,14 @@ class Canvas:
         self.rgba(col)
         cairo.cairo_move_to(c, x, y + size * 0.36)
         cairo.cairo_show_text(c, raw)
+        return ext.x_advance
+
+    def measure(self, s, size, medium=False):
+        """How wide text() would draw s, uncut."""
+        cairo.cairo_select_font_face(self.c, ui_font(medium).encode(), 0, 0)
+        cairo.cairo_set_font_size(self.c, size)
+        ext = TextExtents()
+        cairo.cairo_text_extents(self.c, s.encode("utf-8"), ctypes.byref(ext))
         return ext.x_advance
 
     def line(self, pts, col, width, close=False):
@@ -386,10 +395,22 @@ def icon_png(cv, path, name, cx, cy, size):
 CARD_GLASS = L.GLASS[:3] + (0.97,)
 
 
+WEEKDAYS = (N_("Monday"), N_("Tuesday"), N_("Wednesday"), N_("Thursday"), N_("Friday"), N_("Saturday"), N_("Sunday"))
+MONTHS = (N_("January"), N_("February"), N_("March"), N_("April"), N_("May"), N_("June"), N_("July"), N_("August"),
+          N_("September"), N_("October"), N_("November"), N_("December"))
+
+
 def clock12():
-    """The time in 12-hour form, "7:23 PM"."""
+    """The time in 12-hour form, "7:23 PM", as the user's language writes it."""
     t = time.localtime()
-    return f"{(t.tm_hour % 12) or 12}:{t.tm_min:02d} {'AM' if t.tm_hour < 12 else 'PM'}"
+    hm = f"{(t.tm_hour % 12) or 12}:{t.tm_min:02d}"
+    return tr("{time} AM", time=hm) if t.tm_hour < 12 else tr("{time} PM", time=hm)
+
+
+def date_line():
+    """Today, "Thursday 12 November", in the user's language (not the system's locale, which is often C)."""
+    t = time.localtime()
+    return tr("{weekday} {day} {month}", weekday=tr(WEEKDAYS[t.tm_wday]), day=t.tm_mday, month=tr(MONTHS[t.tm_mon - 1]))
 
 
 class CardSpec:
@@ -404,16 +425,16 @@ def launcher_card(apps, page, icon_for, cols=5, rows=3):
     cv = Canvas(W, H)
     items = []
     cv.glass(0, 0, W, H, 44, fill=CARD_GLASS, rim=L.RIM)
-    cv.text(56, 70, "Apps", 44, L.INK, medium=True)
+    title_w = cv.text(56, 70, tr("Apps"), 44, L.INK, medium=True, max_w=520)
     cv.text(W - 140, 58, clock12(), 32, L.INK, medium=True, align="right")
-    cv.text(W - 140, 92, time.strftime("%A %d %B"), 20, L.INK_2, align="right")
+    cv.text(W - 140, 92, date_line(), 20, L.INK_2, align="right")
     # close
     cx, cy, r = W - 74, 72, 30
     cv.glass(cx - r, cy - r, 2 * r, 2 * r, r, fill=L.GLASS_RAISED)
     cv.icon("close", cx, cy, 26, L.INK)
     items.append((cx - r, cy - r, 2 * r, 2 * r, "launcher_close", None, r))
     # PC VR, as the tile in Pocket XR's launcher: SteamVR from the PC
-    px, py, pw, ph = 230, 42, 170, 56
+    px, py, pw, ph = max(230, 56 + title_w + 40), 42, 170, 56
     cv.glass(px, py, pw, ph, ph / 2, fill=L.ACCENT_DEEP, rim=L.ACCENT)
     cv.text(px + pw / 2, py + ph / 2, "PC VR", 22, (1, 1, 1, 1), medium=True, align="center")
     items.append((px, py, pw, ph, "pcvr", None, ph / 2))
@@ -429,7 +450,7 @@ def launcher_card(apps, page, icon_for, cols=5, rows=3):
         cv.text(x + tw / 2, y + 170, a.name, 22, L.INK, align="center", max_w=tw - 24)
         items.append((x + 6, y, tw - 12, th, "launch", a, 24))
     if not apps:
-        cv.text(W / 2, H / 2, "No apps found", 24, L.INK_2, align="center")
+        cv.text(W / 2, H / 2, tr("No apps found"), 24, L.INK_2, align="center")
     if pages > 1:
         dy = H - 64
         total = pages * 22
@@ -454,25 +475,28 @@ def cc_card(state):
     cv = Canvas(W, H)
     items = []
     cv.glass(0, 0, W, H, 44, fill=CARD_GLASS, rim=L.RIM)
-    cv.text(56, 72, "Control Center", 40, L.INK, medium=True)
-    # Recenter view pill and close
-    px, py, pw, ph = W - 380, 44, 230, 56
+    cv.text(56, 72, tr("Control Center"), 40, L.INK, medium=True, max_w=560)
+    # Recenter view pill and close, each pill as wide as its words need
+    recenter = tr("Recenter view")
+    pw, ph = max(230, int(62 + cv.measure(recenter, 20) + 26)), 56
+    px, py = W - 150 - pw, 44
     cv.glass(px, py, pw, ph, ph / 2, fill=L.GLASS_RAISED)
     cv.icon("recenter", px + 36, py + ph / 2, 30, L.INK)
-    cv.text(px + 62, py + ph / 2, "Recenter view", 20, L.INK)
+    cv.text(px + 62, py + ph / 2, recenter, 20, L.INK)
     items.append((px, py, pw, ph, "recenter", None, ph / 2))
     # Record pill: a red dot and Record, or filled red with Stop recording while it records
     rec = state.get("recording")
-    qw = 240 if rec else 160
+    rec_word = tr("Stop recording") if rec else tr("Record")
+    qw = max(240 if rec else 160, int((56 if rec else 58) + cv.measure(rec_word, 20, medium=bool(rec)) + 26))
     qx = px - 16 - qw
     if rec:
         cv.fill_round(qx, py, qw, ph, ph / 2, L.DANGER)
         cv.fill_round(qx + 26, py + ph / 2 - 9, 18, 18, 4, L.INK)
-        cv.text(qx + 56, py + ph / 2, "Stop recording", 20, L.INK, medium=True)
+        cv.text(qx + 56, py + ph / 2, rec_word, 20, L.INK, medium=True)
     else:
         cv.glass(qx, py, qw, ph, ph / 2, fill=L.GLASS_RAISED)
         cv.fill_round(qx + 26, py + ph / 2 - 10, 20, 20, 10, L.DANGER)
-        cv.text(qx + 58, py + ph / 2, "Record", 20, L.INK)
+        cv.text(qx + 58, py + ph / 2, rec_word, 20, L.INK)
     items.append((qx, py, qw, ph, "record", None, ph / 2))
     cx, cy, r = W - 82, 72, 30
     cv.glass(cx - r, cy - r, 2 * r, 2 * r, r, fill=L.GLASS_RAISED)
@@ -481,12 +505,12 @@ def cc_card(state):
 
     # ---- Arrange (left) ----
     lx, ly, lw = 56, 140, 820
-    cv.text(lx, ly, "ARRANGE", 16, L.INK_3, medium=True)
+    head_w = cv.text(lx, ly, tr("Arrange").upper(), 16, L.INK_3, medium=True)
     if state.get("locked"):
-        cv.text(lx + 120, ly, "Screens are locked", 16, L.INK_3)
+        cv.text(lx + max(120, head_w + 24), ly, tr("Screens are locked"), 16, L.INK_3, max_w=lw - head_w - 24)
     layouts = state["layouts"]  # [(name, poses, main_i)]
     tile_w, tile_h, gap = (lw - 20) / 3, 190, 16
-    for i, (name, poses, mi) in enumerate(layouts + [("Adjust all", None, 0)]):
+    for i, (name, poses, mi) in enumerate(layouts + [(N_("Adjust all"), None, 0)]):
         r_, c_ = divmod(i, 3)
         x = lx + c_ * (tile_w + 10)
         y = ly + 30 + r_ * (tile_h + gap)
@@ -495,33 +519,33 @@ def cc_card(state):
             thumb(cv, x + 22, y + 18, tile_w - 44, tile_h - 78, poses, mi)
         else:
             cv.icon("all", x + tile_w / 2, y + 66, 64, L.INK_2)
-        cv.text(x + tile_w / 2, y + tile_h - 32, name, 20, L.INK, align="center", max_w=tile_w - 20)
+        cv.text(x + tile_w / 2, y + tile_h - 32, tr(name), 20, L.INK, align="center", max_w=tile_w - 20)
         items.append((x, y, tile_w, tile_h, "adjust_all" if poses is None else "arrange", name, L.RADIUS_M * 1.6))
 
     # ---- right column ----
     rx, rw = 920, W - 920 - 56
     y = 140
-    cv.text(rx, y, "WINDOWS", 16, L.INK_3, medium=True)
+    cv.text(rx, y, tr("Windows").upper(), 16, L.INK_3, medium=True)
     y += 26
-    rows = [("sbs_3d", "3D side by side", "Each eye its own view: windows at a real depth"),
-            ("snap", "Snap windows together", "Line up and dock as you move them"),
-            ("locked", "Lock screens", "Nothing moves or resizes; clicks still work"),
-            ("cursor_follows_head", "Cursor follows head", "Off: the cursor stays in the room")]
+    rows = [("sbs_3d", N_("3D side by side"), N_("Each eye its own view: windows at a real depth")),
+            ("snap", N_("Snap windows together"), N_("Line up and dock as you move them")),
+            ("locked", N_("Lock screens"), N_("Nothing moves or resizes; clicks still work")),
+            ("cursor_follows_head", N_("Cursor follows head"), N_("Off: the cursor stays in the room"))]
     cv.glass(rx, y, rw, len(rows) * 92, L.RADIUS_M * 1.6, fill=L.GLASS_RAISED)
     for i, (key, title, sub) in enumerate(rows):
         ry = y + i * 92
         if i:
             cv.fill_round(rx + 24, ry, rw - 48, 1, 0, L.RIM)
-        cv.text(rx + 28, ry + 34, title, 22, L.INK)
-        cv.text(rx + 28, ry + 64, sub, 16, L.INK_2, max_w=rw - 140)
+        cv.text(rx + 28, ry + 34, tr(title), 22, L.INK, max_w=rw - 140)
+        cv.text(rx + 28, ry + 64, tr(sub), 16, L.INK_2, max_w=rw - 140)
         cv.switch(rx + rw - 28 - 64, ry + 26, state.get(key), scale=64 / 52)
         items.append((rx, ry, rw, 92, "toggle", key, 0))
     y += len(rows) * 92 + 34
 
     def stepper(y, label, value, action):
         cv.glass(rx, y, rw, 84, L.RADIUS_M * 1.6, fill=L.GLASS_RAISED)
-        cv.text(rx + 28, y + 42, label, 22, L.INK)
         bx = rx + rw - 28 - 220
+        cv.text(rx + 28, y + 42, label, 22, L.INK, max_w=bx - rx - 28 - 16)
         for k, (ic, arg) in enumerate((("minus", -1), ("plus", 1))):
             x = bx if k == 0 else bx + 220 - 52
             cv.glass(x, y + 16, 52, 52, 26, fill=L.GLASS_HOVER)
@@ -529,24 +553,24 @@ def cc_card(state):
             items.append((x, y + 16, 52, 52, action, arg, 26))
         cv.text(bx + 110, y + 42, value, 22, L.INK, medium=True, align="center")
 
-    cv.text(rx, y, "POINTER AND WINDOW", 16, L.INK_3, medium=True)
+    cv.text(rx, y, tr("Pointer and window").upper(), 16, L.INK_3, medium=True)
     y += 26
-    stepper(y, "Cursor speed", f"{state['speed'] * 10}%", "speed")
+    stepper(y, tr("Cursor speed"), f"{state['speed'] * 10}%", "speed")
     y += 96
-    stepper(y, "Curve" + ("" if state.get("focus") else " (no window)"), f"{state['curve']}%", "curve")
+    stepper(y, tr("Curve") if state.get("focus") else tr("Curve (no window)"), f"{state['curve']}%", "curve")
     y += 84 + 34
-    cv.text(rx, y, "SAVED LAYOUTS", 16, L.INK_3, medium=True)
+    cv.text(rx, y, tr("Saved layouts").upper(), 16, L.INK_3, medium=True)
     y += 26
     presets = state["presets"][:3]
     for i, name in enumerate(presets):
         cv.glass(rx, y, rw, 64, L.RADIUS_M * 1.4, fill=L.GLASS_RAISED)
-        cv.text(rx + 28, y + 32, name, 20, L.INK)
+        cv.text(rx + 28, y + 32, name, 20, L.INK, max_w=rw - 100)
         cv.icon("next", rx + rw - 36, y + 32, 22, L.INK_2)
         items.append((rx, y, rw, 64, "preset", i, L.RADIUS_M * 1.4))
         y += 74
     cv.stroke_round(rx, y, rw, 64, 32, L.ACCENT, 2.0)
     cv.icon("save", rx + 40, y + 32, 26, L.ACCENT)
-    cv.text(rx + 68, y + 32, "Save this layout", 20, L.ACCENT, medium=True)
+    cv.text(rx + 68, y + 32, tr("Save this layout"), 20, L.ACCENT, medium=True, max_w=rw - 96)
     items.append((rx, y, rw, 64, "save_preset", None, 32))
     data, w, h = cv.done()
     return CardSpec(data, w, h, items)

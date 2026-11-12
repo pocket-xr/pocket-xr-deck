@@ -14,6 +14,7 @@ import threading
 import time
 
 from . import control as c
+from .i18n import N_, tr
 
 SET_GAP_S = 3.0
 # Pocket XR GlassesDisplayCommands.keepFollow: Ultrawide or Spatial Anchor leaves the Aura in hover ("anchor") and it
@@ -31,8 +32,11 @@ SBS_DROP_WINDOW_S = 20.0
 TRIES = 2
 SIZE_SAME = 0.005
 
-TURN_ON_6DOF = "Turn on 6DoF in your glasses' menu (Spatial Display) so the screen stays put as you move."
-TURN_OFF_6DOF = "Turn 6DoF off again in your glasses' menu."
+TURN_ON_6DOF = N_("Turn on 6DoF in your glasses' menu (Spatial Display) so the screen stays put as you move.")
+TURN_OFF_6DOF = N_("Turn 6DoF off again in your glasses' menu.")
+SPATIAL_ANCHOR_FAILED = N_("Spatial Anchor did not come on. Try again, or turn it on in the glasses' menu.")
+# Messages that ask for something in the glasses' own menu: the app also shows these as a desktop notification.
+NOTIFY = (TURN_ON_6DOF, TURN_OFF_6DOF, SPATIAL_ANCHOR_FAILED)
 
 
 def flag(a):
@@ -184,7 +188,7 @@ class SettingsControl(threading.Thread):
                 if self._set_and_check(c.ultrawide_set, False, c.ULTRAWIDE_GET, 0, "Ultrawide off"):
                     self.we_set_ultrawide = False
                 if not self.glasses.app_anchor:
-                    self.on_message(TURN_OFF_6DOF)
+                    self.on_message(tr(TURN_OFF_6DOF))
             if view != "steady":
                 self._depth(fresh=True)
         self._read()
@@ -248,13 +252,13 @@ class SettingsControl(threading.Thread):
         self._publish()
 
     def _steady_on(self, st):
-        self.on_message("Setting up Steady mode in 6DoF...")
+        self.on_message(tr("Setting up Steady mode in 6DoF..."))
         if st["stereo"] == 1 and not self._set_and_check(c.stereo_set, False, c.STEREO_GET, 0, "2D, on the way to Ultrawide"):
-            self.on_message("The glasses stayed in 3D, so Steady mode could not start.")
+            self.on_message(tr("The glasses stayed in 3D, so Steady mode could not start."))
             return
         if self.steady_wide and st["ultrawide"] != 1:
             if not self._set_and_check(c.ultrawide_set, True, c.ULTRAWIDE_GET, 1, "Ultrawide on"):
-                self.on_message("Ultrawide did not come on, so Steady mode could not start.")
+                self.on_message(tr("Ultrawide did not come on, so Steady mode could not start."))
                 return
             self.we_set_ultrawide = True
         st = self._read()
@@ -266,12 +270,12 @@ class SettingsControl(threading.Thread):
         if self.glasses.app_anchor:
             if self._read()["anchor"] != 1:
                 if not self._set_and_check(c.anchor_set, True, c.ANCHOR_GET, 1, "Spatial Anchor on"):
-                    self.on_message("Spatial Anchor did not come on. Try again, or turn it on in the glasses' menu.")
+                    self.on_message(tr(SPATIAL_ANCHOR_FAILED))
                     return
                 self.we_set_anchor = True
-            self.on_message("Steady mode in 6DoF is on. The glasses hold the screen in place as you move.")
+            self.on_message(tr("Steady mode in 6DoF is on. The glasses hold the screen in place as you move."))
         else:
-            self.on_message(TURN_ON_6DOF)
+            self.on_message(tr(TURN_ON_6DOF))
 
     def _restore(self):
         if self.link is None or self.link.closed:
@@ -285,7 +289,7 @@ class SettingsControl(threading.Thread):
             self._set_and_check(c.ultrawide_set, False, c.ULTRAWIDE_GET, 0, "Ultrawide off")
             changed = True
             if not self.glasses.app_anchor and self.glasses.steady_6dof:
-                self.on_message(TURN_OFF_6DOF)
+                self.on_message(tr(TURN_OFF_6DOF))
         if st["stereo"] == 1 and self.we_set_3d:
             self._set_and_check(c.stereo_set, False, c.STEREO_GET, 0, "2D")
             changed = True

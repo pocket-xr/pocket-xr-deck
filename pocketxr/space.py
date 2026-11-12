@@ -9,6 +9,8 @@ import json
 import math
 import os
 
+from .i18n import N_, tr
+
 # PanelLayout / PanelLimits
 DEFAULT_DISTANCE = 1.4
 DEFAULT_WIDTH_DEG = 40.0
@@ -389,14 +391,15 @@ def snap(p, others, partner=None):
 # ---------------- arrange layouts (ArrangeLayouts) ----------------
 def layout_choices(n):
     if n <= 1:
-        return ["Center", "Theater"]
+        return [N_("Center"), N_("Theater")]
     if n == 2:
-        return ["Side by side", "Main + side", "Stacked", "Circle"]
+        return [N_("Side by side"), N_("Main + side"), N_("Stacked"), N_("Circle")]
     if n == 3:
-        return ["Three across", "Main + two stacked", "Focus center", "Circle"]
+        return [N_("Three across"), N_("Main + two stacked"), N_("Focus center"), N_("Circle")]
     if n == 4:
-        return ["2x2 grid", "Main + three stacked", "Main + strip below", "Four across", "Circle"]
-    return ["Grid", "Main + strip below", "Focus center", "Main + column", "All around you", "Circle"]
+        return [N_("2x2 grid"), N_("Main + three stacked"), N_("Main + strip below"), N_("Four across"), N_("Circle")]
+    return [N_("Grid"), N_("Main + strip below"), N_("Focus center"), N_("Main + column"), N_("All around you"),
+            N_("Circle")]
 
 
 def _shape(p):
@@ -605,9 +608,10 @@ class Store:
     def add_preset(self, windows):
         n = 1
         names = {p["name"] for p in self.presets}
-        while f"Workspace {n}" in names:
+        while tr("Workspace {n}", n=n) in names:
             n += 1
-        self.presets.insert(0, {"name": f"Workspace {n}", "windows": windows})
+        name = tr("Workspace {n}", n=n)
+        self.presets.insert(0, {"name": name, "windows": windows})
         del self.presets[PRESETS_MAX:]
         self.save()
-        return f"Workspace {n}"
+        return name

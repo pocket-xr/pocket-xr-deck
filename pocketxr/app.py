@@ -26,6 +26,8 @@ from .gl import (GL_BGRA, GL_BLEND, GL_CLAMP_TO_EDGE, GL_COLOR_BUFFER_BIT, GL_LI
                  SDL_WINDOW_FULLSCREEN_DESKTOP, SDL_WINDOW_OPENGL, SDL_WINDOW_SKIP_TASKBAR, displays, gl, sdl,
                  split_displays)
 from . import pcvr as pcvrmod
+from . import settingsctl
+from .i18n import tr
 from .recorder import Recorder
 from .settingsctl import SettingsControl
 from .spaceview import SpaceView
@@ -134,7 +136,7 @@ class App:
     def run(self):
         lock = single_instance()
         if lock is None:
-            notify("Pocket XR is already running.")
+            notify(tr("Pocket XR is already running."))
             return 0
         self.log(f"Pocket XR for Steam Deck starting, settings {self.settings}")
         sdl.SDL_SetHint(b"SDL_VIDEO_MINIMIZE_ON_FOCUS_LOSS", b"0")
@@ -345,7 +347,7 @@ class App:
                     if "xreal" in gd[1].lower() or "ultra" in gd[1].lower():
                         # The Aura's picture without its USB side: its glasses service has stopped (seen on the
                         # phone too); a replug brings it back.
-                        g = gmod.Glasses("XREAL glasses, no USB link", "other", 0, 0)
+                        g = gmod.Glasses(tr("XREAL glasses, no USB link"), "other", 0, 0)
                         self.usb_down_hint = True
         if g != self.glasses:
             if self.glasses is not None:
@@ -364,8 +366,8 @@ class App:
                 self._start_tracking()
                 if getattr(self, "usb_down_hint", False) and g.family == "other":
                     self.usb_down_hint = False
-                    self.message = ("Your XREAL glasses show a picture but their USB link is down, so there is no head "
-                                    "tracking. Unplug them and plug them back in.")
+                    self.message = tr("Your XREAL glasses show a picture but their USB link is down, so there is no "
+                                      "head tracking. Unplug them and plug them back in.")
                     notify(self.message)
                 if g.control_link:
                     self.control = SettingsControl(g, self.log, self._on_control_state, self._on_message)
@@ -373,7 +375,7 @@ class App:
                     self.control.start()
                     self.control.want(self._view())
             else:
-                self.message = "Plug your glasses into the Deck's USB-C port."
+                self.message = tr("Plug your glasses into the Deck's USB-C port.")
         if self.glasses is None:
             return
         # The glasses' display: open the view on it, or open it again when its size changes (Ultrawide, 3D).
@@ -483,7 +485,7 @@ class App:
             self.space.toggle_cc(time.monotonic())
         elif name == "L5" and how == "hold":
             self.set_setting("locked", not self.settings.get("locked", False))
-            self.message = "Screens are locked." if self.settings["locked"] else "Screens are unlocked."
+            self.message = tr("Screens are locked.") if self.settings["locked"] else tr("Screens are unlocked.")
         elif name == "R5" and how == "hold":
             self.space.start_adjust_all()
 
@@ -534,7 +536,7 @@ class App:
 
     def set_view(self, view):
         if view == "steady" and not (self.glasses and self.glasses.steady_6dof):
-            self.message = (self.glasses.why_no_6dof() if self.glasses else "Plug your glasses in first.")
+            self.message = (self.glasses.why_no_6dof() if self.glasses else tr("Plug your glasses in first."))
             return
         self.settings["view"] = view
         save_settings(self.settings)
@@ -550,7 +552,7 @@ class App:
         if self.pcvr is not None:
             return
         if not pcvrmod.available():
-            self.space.toast("PC VR's parts are missing from this install")
+            self.space.toast(tr("PC VR's parts are missing from this install"))
             return
         if self._view() == "steady":
             self.set_view("3dof")  # a game needs both eyes, not the glasses' flat canvas
@@ -628,11 +630,12 @@ class App:
     def toggle_record(self):
         """Start or stop recording what the glasses show (recorder.py)."""
         on = self.recorder.toggle()
-        self.space.toast("Recording. The red dot is on the glasses only." if on else "Recording stopped. Saving...")
+        self.space.toast(tr("Recording. The red dot is on the glasses only.") if on
+                         else tr("Recording stopped. Saving..."))
         self._send_status()
 
     def _record_saved(self, path):
-        self.space.toast(f"Saved to Videos, Pocket XR: {os.path.basename(path)}")
+        self.space.toast(tr("Saved to Videos, Pocket XR: {file}", file=os.path.basename(path)))
         self._send_status()
 
     def request_quit(self, why):
@@ -641,7 +644,7 @@ class App:
         self.quitting = True
         self.log(f"quit: {why}")
         self.recorder.wanted = False
-        self.message = "Putting your glasses back..."
+        self.message = tr("Putting your glasses back...")
         self._send_status()
         self.space.save_places()
         if self.pcvr is not None:
@@ -660,7 +663,7 @@ class App:
 
     def _on_message(self, text):
         self.message = text
-        if "menu" in text:
+        if text in [tr(m) for m in settingsctl.NOTIFY]:  # asks for something in the glasses' menu
             notify(text)
 
     # ---------- status for the panel ----------
@@ -670,17 +673,17 @@ class App:
         g = self.glasses
         hint = ""
         if self.capture.virtual and self.window:
-            hint = "Move the pointer off the right of the Deck's screen to use the Space."
+            hint = tr("Move the pointer off the right of the Deck's screen to use the Space.")
         if g is None:
-            status = "No glasses found."
+            status = tr("No glasses found.")
         else:
             parts = [g.name]
             if self.reader:
-                parts.append("head tracking " + ("on" if self.reader.connected_to else "starting"))
+                parts.append(tr("head tracking on") if self.reader.connected_to else tr("head tracking starting"))
             if self.window:
                 parts.append(f"{self.win_size[0]}x{self.win_size[1]}, {self.fps:.0f} fps")
             else:
-                parts.append("waiting for its display")
+                parts.append(tr("waiting for its display"))
             cs = self.control_state
             if cs.get("link"):
                 bits = []
@@ -689,9 +692,9 @@ class App:
                 elif cs.get("stereo") == 1:
                     bits.append("3D")
                 if cs.get("anchor") == 1:
-                    bits.append("Spatial Anchor on")
+                    bits.append(tr("Spatial Anchor on"))
                 if cs.get("busy"):
-                    bits.append("changing settings...")
+                    bits.append(tr("changing settings..."))
                 if bits:
                     parts.append(", ".join(bits))
             status = " · ".join(parts)
@@ -712,7 +715,7 @@ class App:
             "flat": self._flat(),
             "viture": bool(g and g.family == "viture"),
             "viture_on": bool(g and g.family == "viture" and self._viture_on()),
-            "viture_label": ("VITURE head tracking" if g and g.beast else "Experimental VITURE head tracking"),
+            "viture_label": tr("VITURE head tracking") if g and g.beast else tr("Experimental VITURE head tracking"),
         }
         try:
             self.panel.stdin.write(json.dumps(st) + "\n")

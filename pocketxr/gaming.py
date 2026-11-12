@@ -26,7 +26,7 @@ import threading
 import time
 
 from . import fusion, glasses as gmod, hidimu, imu
-from . import wlreshade
+from . import i18n, sendlogs, wlreshade
 from .deckpad import DeckButtons
 from .settingsctl import SettingsControl
 
@@ -119,10 +119,20 @@ class Gaming:
             "mode": self.mode() if self.glasses else self.settings.get("mode", "space"),
             "chosen": self.settings.get("mode", "space"),
             "size": float(self.settings.get("size", 0.8)),
+            "lang": i18n.lang(),  # the Quick Access panel speaks the same language
         }
 
     def _request(self, req):
         op = req.get("op")
+        if op == "send_logs":
+            # No email app opens in Gaming Mode: the zip goes in Downloads and the panel says where.
+            try:
+                path = sendlogs.build()
+                self.log(f"gaming: logs saved in {path}")
+                return dict(self.status(), logs=os.path.basename(path))
+            except OSError as e:
+                self.log(f"gaming: could not make the logs ({e})")
+                return dict(self.status(), logs_error=str(e))
         with self.lock:
             if op == "set_mode" and req.get("mode") in ("space", "steady", "off"):
                 self.settings["mode"] = req["mode"]

@@ -16,7 +16,7 @@ def _socket_path():
 
 def _ask(req):
     s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    s.settimeout(1.5)
+    s.settimeout(30.0 if req.get("op") == "send_logs" else 1.5)  # making the logs' zip takes a few seconds
     try:
         s.connect(_socket_path())
         f = s.makefile("rw")

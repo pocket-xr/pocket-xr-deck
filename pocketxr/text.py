@@ -32,7 +32,27 @@ cairo.cairo_rectangle.argtypes = [ctypes.c_void_p] + [ctypes.c_double] * 4
 cairo.cairo_set_line_width.argtypes = [ctypes.c_void_p, ctypes.c_double]
 cairo.cairo_stroke.argtypes = [ctypes.c_void_p]
 
-FONT = b"Noto Sans"
+# Inter and Noto Sans have no Korean, Japanese or Chinese, and Cairo's simple text API takes no other font for a
+# character its font lacks, so those languages get SteamOS's own Noto Sans CJK for their region (it has Latin too).
+CJK_FONTS = {"ko": "Noto Sans CJK KR", "ja": "Noto Sans CJK JP", "zh_CN": "Noto Sans CJK SC", "zh_TW": "Noto Sans CJK TC"}
+
+
+def ui_font(medium=False, lang=None):
+    """The font family for the UI's text in this language: Inter (Pocket XR's look), or Noto Sans CJK."""
+    from . import look, i18n
+    cjk = CJK_FONTS.get(lang or i18n.lang())
+    if cjk:
+        return cjk + " Medium" if medium else cjk
+    return look.FONT_MEDIUM if medium else look.FONT
+
+
+def plain_font(lang=None):
+    """The font for the simple labels: Noto Sans, or Noto Sans CJK in Korean, Japanese and Chinese."""
+    from . import i18n
+    return CJK_FONTS.get(lang or i18n.lang(), "Noto Sans")
+
+
+FONT = plain_font().encode()
 
 
 def _rounded(cr, x, y, w, h, r):

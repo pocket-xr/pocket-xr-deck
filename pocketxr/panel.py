@@ -9,17 +9,29 @@ import queue
 import sys
 import threading
 import tkinter as tk
+import tkinter.font as tkfont
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 from pocketxr.look import TK as C  # noqa: E402
+from pocketxr.i18n import N_, tr  # noqa: E402
+from pocketxr.text import ui_font  # noqa: E402
+from pocketxr import sendlogs  # noqa: E402
 
-FONT, MEDIUM = "Inter", "Inter Medium"
+FONT, MEDIUM = ui_font(), ui_font(medium=True)  # Inter, or Noto Sans CJK in Korean, Japanese and Chinese
 W = 440
 
 
 def send(cmd, value=None):
     sys.stdout.write(json.dumps({"cmd": cmd, "value": value}) + "\n")
     sys.stdout.flush()
+
+
+def fitted(font, text, max_w, smallest=7):
+    """The font, its size stepped down until text fits in max_w pixels (some languages run longer than English)."""
+    family, size = font[0], font[1]
+    while size > smallest and tkfont.Font(family=family, size=size).measure(text) > max_w:
+        size -= 1
+    return (family, size) + tuple(font[2:])
 
 
 def rounded(cv, x0, y0, x1, y1, r, **kw):
@@ -84,7 +96,7 @@ class Button(tk.Canvas):
         else:
             fill, rim, ink = C["raised"], C["rim"], C["ink"] if self.enabled else C["ink3"]
         rounded(self, 1, 1, w - 1, h - 1, self.radius, fill=fill, outline=rim, width=1)
-        self.create_text(w / 2, h / 2, text=self.text, fill=ink, font=self.font)
+        self.create_text(w / 2, h / 2, text=self.text, fill=ink, font=fitted(self.font, self.text, w - 10))
 
 
 class Switch(tk.Canvas):
@@ -105,9 +117,10 @@ class Switch(tk.Canvas):
     def draw(self):
         self.delete("all")
         w, h = self.winfo_width(), self.winfo_height()
-        self.create_text(14, 14, text=self.title, anchor="w", fill=C["ink"], font=(FONT, 11))
-        self.create_text(14, 31, text=self.sub, anchor="w", fill=C["ink2"], font=(FONT, 8))
         tw, th = 46, 26
+        room = w - 14 - tw - 14 - 10
+        self.create_text(14, 14, text=self.title, anchor="w", fill=C["ink"], font=fitted((FONT, 11), self.title, room))
+        self.create_text(14, 31, text=self.sub, anchor="w", fill=C["ink2"], font=fitted((FONT, 8), self.sub, room, 6))
         x0, y0 = w - 14 - tw, (h - th) / 2
         rounded(self, x0, y0, x0 + tw, y0 + th, th / 2, fill=C["accent"] if self.on else "#33363D", outline="")
         k = x0 + tw - th / 2 if self.on else x0 + th / 2
@@ -164,8 +177,18 @@ class Panel:
         # Quit first, at the bottom, so it is always on screen whatever the panel's height.
         quit_row = tk.Frame(root, bg=C["page"])
         quit_row.pack(side="bottom", fill="x", padx=12, pady=(2, 8))
-        Button(quit_row, "Quit and put the glasses back", self.quit, height=40, bg=C["page"], kind="danger",
+        Button(quit_row, tr("Quit and put the glasses back"), self.quit, height=40, bg=C["page"], kind="danger",
                radius=20).pack(fill="x")
+
+        # Send logs to Mike, as on Android: a zip with personal details taken out, then an email the user sends.
+        logs = tk.Frame(root, bg=C["page"])
+        logs.pack(side="bottom", fill="x", padx=12, pady=(2, 2))
+        self.logs_button = Button(logs, tr(sendlogs.BUTTON), self.send_logs, height=30, bg=C["page"],
+                                  font=(FONT, 9), radius=10)
+        self.logs_button.pack(fill="x")
+        self.logs_line = tk.Label(logs, text=tr(sendlogs.EXPLAIN), bg=C["page"], fg=C["ink3"], font=(FONT, 7),
+                                  justify="left", anchor="w", wraplength=W - 36)
+        self.logs_line.pack(fill="x", padx=4, pady=(2, 0))
 
         head = tk.Frame(root, bg=C["page"])
         head.pack(fill="x", padx=16, pady=(8, 2))
@@ -175,18 +198,19 @@ class Panel:
         titles = tk.Frame(head, bg=C["page"])
         titles.pack(side="left", fill="x", expand=True)
         tk.Label(titles, text="Pocket XR", bg=C["page"], fg=C["ink"], font=(MEDIUM, 17)).pack(anchor="w")
-        self.status = tk.Label(titles, text="Starting...", bg=C["page"], fg=C["ink2"], font=(FONT, 10), anchor="w",
+        self.status = tk.Label(titles, text=tr("Starting..."), bg=C["page"], fg=C["ink2"], font=(FONT, 10), anchor="w",
                                justify="left", wraplength=W - 90)
         self.status.pack(anchor="w", fill="x")
 
-        self.view = self.segment("View", [("3dof", "Window in space"), ("steady", "Steady 6DoF")], "view")
-        self.source = self.segment("Show", [("deck", "Deck screen"), ("apps", "App windows")], "source")
+        self.view = self.segment(tr("View"), [("3dof", tr("Window in space")), ("steady", tr("Steady 6DoF"))], "view")
+        self.source = self.segment(tr("Show"), [("deck", tr("Deck screen")), ("apps", tr("App windows"))], "source")
 
-        sp = Card(root, "Space")
+        sp = Card(root, tr("Space"))
         row = tk.Frame(sp.body, bg=C["card"])
         row.pack(fill="x", padx=4, pady=(4, 2))
         self.space_buttons = {}
-        for i, (label, cmd) in enumerate((("Launcher", "launcher"), ("Control Center", "cc"), ("PC VR", "pcvr"), ("Record", "record"))):
+        for i, (label, cmd) in enumerate(((tr("Launcher"), "launcher"), (tr("Control Center"), "cc"), ("PC VR", "pcvr"),
+                                          (tr("Record"), "record"))):
             # four in a row in the Window in front row's smaller type, so "Control Center" fits and the panel keeps its
             # height (two rows hid the back buttons' guide behind Quit)
             b = Button(row, label, lambda c=cmd: send(c), height=38, font=(FONT, 10), radius=10)
@@ -194,24 +218,24 @@ class Panel:
             row.columnconfigure(i, weight=1)
             self.space_buttons[cmd] = b
         self.switches = {}
-        for key, title, sub in (("sbs_3d", "3D side by side", "Each eye its own view: windows at a real depth"),
-                                ("snap", "Snap windows together", "Line up and dock as you move them"),
-                                ("locked", "Lock screens", "Nothing moves or resizes; clicks still work"),
-                                ("cursor_follows_head", "Cursor follows head", "Off: the cursor stays in the room")):
-            s = Switch(sp.body, title, sub, lambda on, k=key: send(k, on))
+        for key, title, sub in (("sbs_3d", N_("3D side by side"), N_("Each eye its own view: windows at a real depth")),
+                                ("snap", N_("Snap windows together"), N_("Line up and dock as you move them")),
+                                ("locked", N_("Lock screens"), N_("Nothing moves or resizes; clicks still work")),
+                                ("cursor_follows_head", N_("Cursor follows head"), N_("Off: the cursor stays in the room"))):
+            s = Switch(sp.body, tr(title), tr(sub), lambda on, k=key: send(k, on))
             s.pack(fill="x", padx=2)
             self.switches[key] = s
-        self.viture = Switch(sp.body, "VITURE head tracking", "Experimental on models other than the Beast",
+        self.viture = Switch(sp.body, tr("VITURE head tracking"), tr("Experimental on models other than the Beast"),
                              lambda on: send("viture", on))
 
-        win = Card(root, "Window in front")
+        win = Card(root, tr("Window in front"))
         wr = tk.Frame(win.body, bg=C["card"])
         wr.pack(fill="x", padx=4, pady=4)
         self.adjust = {}
-        for c_, (label, cmd, val) in enumerate((("Recentre", "recentre", None), ("Smaller", "size", -1),
-                                                 ("Bigger", "size", 1), ("Nearer", "distance", -1),
-                                                 ("Further", "distance", 1))):
-            b = Button(wr, label, lambda c=cmd, v=val: send(c, v), height=36, font=(FONT, 10), radius=10)
+        for c_, (label, cmd, val) in enumerate(((N_("Recentre"), "recentre", None), (N_("Smaller"), "size", -1),
+                                                 (N_("Bigger"), "size", 1), (N_("Nearer"), "distance", -1),
+                                                 (N_("Further"), "distance", 1))):
+            b = Button(wr, tr(label), lambda c=cmd, v=val: send(c, v), height=36, font=(FONT, 10), radius=10)
             b.grid(row=0, column=c_, sticky="ew", padx=2)
             wr.columnconfigure(c_, weight=1)
             self.adjust[label] = b
@@ -221,10 +245,10 @@ class Panel:
 
         keys = tk.Frame(root, bg=C["page"])
         keys.pack(fill="x", padx=16, pady=(2, 2))
-        tk.Label(keys, text="BACK BUTTONS", bg=C["page"], fg=C["ink3"], font=(MEDIUM, 9)).grid(
+        tk.Label(keys, text=tr("Back buttons").upper(), bg=C["page"], fg=C["ink3"], font=(MEDIUM, 9)).grid(
             row=0, column=0, columnspan=4, sticky="w", pady=(0, 3))
-        rows = (("L4", "Recentre", "hold: switch view"), ("R4", "Next app", "hold: Deck / apps"),
-                ("L5", "Launcher", "hold: lock screens"), ("R5", "Control Center", "hold: adjust all"))
+        rows = (("L4", tr("Recentre"), tr("hold: switch view")), ("R4", tr("Next app"), tr("hold: Deck / apps")),
+                ("L5", tr("Launcher"), tr("hold: lock screens")), ("R5", tr("Control Center"), tr("hold: adjust all")))
         for i, (k, tap, hold) in enumerate(rows):
             r, c_ = divmod(i, 2)
             cell = tk.Frame(keys, bg=C["page"])
@@ -273,6 +297,10 @@ class Panel:
                 if msg.get("exit"):
                     self.root.destroy()
                     return
+                if "logs_line" in msg:
+                    self.logs_line.configure(text=msg["logs_line"])
+                    self.logs_button.set(enabled=True)
+                    continue
                 self.show(msg)
         except queue.Empty:
             pass
@@ -286,14 +314,14 @@ class Panel:
             b.set(selected=st.get("source") == k)
         on = bool(st.get("pcvr"))
         b = self.space_buttons["pcvr"]
-        label = "Leave PC VR" if on else "PC VR"
+        label = tr("Leave PC VR") if on else "PC VR"
         if b.text != label:
             b.text = label
             b.draw()
         b.set(selected=on)
         rec = bool(st.get("recording"))
         b = self.space_buttons["record"]
-        label = "Stop recording" if rec else "Record"
+        label = tr("Stop recording") if rec else tr("Record")
         if b.text != label:
             b.text = label
             b.draw()
@@ -306,7 +334,7 @@ class Panel:
         if st.get("viture"):
             if not self.viture.winfo_ismapped():
                 self.viture.pack(fill="x", padx=2)
-            self.viture.title = st.get("viture_label", "VITURE head tracking")
+            self.viture.title = st.get("viture_label") or tr("VITURE head tracking")
             self.viture.set(st.get("viture_on", False))
         elif self.viture.winfo_ismapped():
             self.viture.pack_forget()
@@ -321,9 +349,24 @@ class Panel:
             elif not msg and self.message.winfo_ismapped():
                 self.message.pack_forget()
 
+    def send_logs(self):
+        if not self.logs_button.enabled:
+            return
+        self.logs_button.set(enabled=False)
+        self.logs_line.configure(text=tr(sendlogs.GETTING_READY), fg=C["accent"])
+
+        def work():
+            try:
+                line = sendlogs.send()
+            except OSError as e:
+                line = tr(sendlogs.COULD_NOT, error=e)
+            self.inbox.put({"logs_line": line})
+
+        threading.Thread(target=work, daemon=True).start()
+
     def quit(self):
         send("quit")
-        self.message.configure(text="Putting your glasses back...")
+        self.message.configure(text=tr("Putting your glasses back..."))
 
 
 def main():

@@ -12,6 +12,7 @@ import math
 
 from . import look as L
 from . import ui
+from .i18n import tr
 from .gl import GL_LINEAR, GL_QUADS, GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_TEXTURE_MIN_FILTER, gl
 
 CARD_W, CARD_H = 1200, 640
@@ -116,13 +117,13 @@ gl.glUniform4f.argtypes = [ctypes.c_int] + [ctypes.c_float] * 4
 gl.glUniformMatrix3fv.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_ubyte, ctypes.POINTER(ctypes.c_float)]
 
 TITLES = {
-    "finding": ("Connecting to your PC", "This takes a few seconds."),
-    "finding_slow": ("Still looking for your PC",
-                     "Check the Pocket XR PC helper is running and both are on the same Wi-Fi."),
-    "starting": ("Starting SteamVR", "Almost there."),
-    "reconnecting": ("Reconnecting to your PC", "Your game keeps running."),
-    "leaving": ("Going back to your Space", "Keep holding, or let go to stay."),
-    "stalled": ("Waiting for your PC", "The picture paused. It comes back by itself."),
+    "finding": (tr("Connecting to your PC"), tr("This takes a few seconds.")),
+    "finding_slow": (tr("Still looking for your PC"),
+                     tr("Check the Pocket XR PC helper is running and both are on the same Wi-Fi.")),
+    "starting": (tr("Starting SteamVR"), tr("Almost there.")),
+    "reconnecting": (tr("Reconnecting to your PC"), tr("Your game keeps running.")),
+    "leaving": (tr("Going back to your Space"), tr("Keep holding, or let go to stay.")),
+    "stalled": (tr("Waiting for your PC"), tr("The picture paused. It comes back by itself.")),
 }
 
 
@@ -164,7 +165,7 @@ def _wrap(text, size, max_w, medium=False):
     """Splits text into lines no wider than max_w at this size (at most two; the second is cut if need be)."""
     cv = ui.Canvas(8, 8)
     c = cv.c
-    ui.cairo.cairo_select_font_face(c, (L.FONT_MEDIUM if medium else L.FONT).encode(), 0, 0)
+    ui.cairo.cairo_select_font_face(c, ui.ui_font(medium).encode(), 0, 0)
     ui.cairo.cairo_set_font_size(c, size)
     ext = ui.TextExtents()
 
@@ -172,15 +173,22 @@ def _wrap(text, size, max_w, medium=False):
         ui.cairo.cairo_text_extents(c, s.encode("utf-8"), ctypes.byref(ext))
         return ext.x_advance
 
-    words = text.split()
-    if width(text) <= max_w or len(words) < 2:
+    if width(text) <= max_w or len(text) < 2:
         cv.done()
         return [text]
-    # two lines of about the same width, so no word is left alone on the second
-    best = min(range(1, len(words)),
-               key=lambda i: max(width(" ".join(words[:i])), width(" ".join(words[i:]))))
+
+    def split(words, sep):
+        # two lines of about the same width, so no word is left alone on the second
+        best = min(range(1, len(words)), key=lambda i: max(width(sep.join(words[:i])), width(sep.join(words[i:]))))
+        return [sep.join(words[:best]).strip(), sep.join(words[best:]).strip()]
+
+    words = text.split()
+    lines = split(words, " ") if len(words) >= 2 else None
+    cjk = any(ord(ch) >= 0x2E80 for ch in text)
+    if cjk and (lines is None or max(width(ln) for ln in lines) > max_w):
+        lines = split(list(text), "")  # Japanese and Chinese have no spaces: between any two characters
     cv.done()
-    return [" ".join(words[:best]), " ".join(words[best:])]
+    return lines or [text]
 
 
 def paint_card(title, line, hint=""):

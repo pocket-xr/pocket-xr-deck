@@ -17,6 +17,7 @@ from . import space as S
 from . import look as L
 from . import text
 from . import ui
+from .i18n import tr
 from .gl import (GL_BLEND, GL_LINEAR, GL_LINE_LOOP, GL_ONE_MINUS_SRC_ALPHA, GL_QUADS, GL_RGBA, GL_BGRA,
                  GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_TEXTURE_MIN_FILTER, GL_UNSIGNED_BYTE, gl)
 
@@ -545,8 +546,8 @@ class SpaceView:
                 wins.append({"app": p.cls, "pose": self.poses[p.key].to_json()})
         if wins:
             name = self.store.add_preset(wins)
-            self.app.message = f"Saved this layout as {name}."
-            self.toast(f"Saved as {name}")
+            self.app.message = tr("Saved this layout as {name}.", name=name)
+            self.toast(tr("Saved as {name}", name=name))
 
     def recall_preset(self, i, now):
         if i >= len(self.store.presets) or self.app.settings.get("locked", False):
@@ -570,8 +571,9 @@ class SpaceView:
         if self.app.settings.get("locked", False) or not self.poses:
             return
         self.adjust_all = {}
-        self.toast("Adjust all: move to turn, scroll to push or pull, click to let go")
-        self.app.message = "Adjust all: move to turn every window, scroll to push or pull, Smaller or Bigger to resize. Click to let go."
+        self.toast(tr("Adjust all: move to turn, scroll to push or pull, click to let go"))
+        self.app.message = tr("Adjust all: move to turn every window, scroll to push or pull, Smaller or Bigger to "
+                              "resize. Click to let go.")
 
     def _apply_all(self, **kw):
         keys = list(self.poses)
@@ -706,7 +708,7 @@ class SpaceView:
         if a == "launch":
             self.pending_spot = (self.launcher[0].yaw, self.launcher[0].pitch + LAUNCHER_DROP, now + 20.0)
             appsmod.launch(it.arg, self.log)
-            self.toast(f"Opening {it.arg.name}")
+            self.toast(tr("Opening {app}", app=it.arg.name))
             self._close_card("launcher", now)
         elif a == "pcvr":
             self._close_card("launcher", now)
@@ -723,22 +725,23 @@ class SpaceView:
             self.app.toggle_record()
         elif a == "recenter":
             self.app.recentre()
-            self.toast("View recentred")
+            self.toast(tr("View recentred"))
         elif a == "arrange":
             if self.app.settings.get("locked", False):
-                self.toast("Screens are locked. Unlock them from the Control Center.")
+                self.toast(tr("Screens are locked. Unlock them from the Control Center."))
             else:
                 self.arrange(it.arg, now)
-                self.toast(it.arg)
+                self.toast(tr(it.arg))
         elif a == "adjust_all":
             self._close_card("cc", now)
             self.start_adjust_all()
         elif a == "toggle":
             on = not self.app.settings.get(it.arg, it.arg in ("cursor_follows_head", "sbs_3d"))
             self.app.set_setting(it.arg, on)
-            names = {"snap": "Snap", "locked": "Lock screens", "cursor_follows_head": "Cursor follows head",
+            names = {"snap": tr("Snap"), "locked": tr("Lock screens"), "cursor_follows_head": tr("Cursor follows head"),
                      "sbs_3d": "3D"}
-            self.toast(f"{names.get(it.arg, it.arg)} {'on' if on else 'off'}")
+            what = names.get(it.arg, it.arg)
+            self.toast(tr("{setting} on", setting=what) if on else tr("{setting} off", setting=what))
         elif a == "speed":
             self.app.set_setting("cursor_speed", int(S.clamp(self.app.settings.get("cursor_speed", 5) + it.arg, 1, 10)))
         elif a == "curve":

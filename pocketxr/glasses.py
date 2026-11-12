@@ -6,6 +6,8 @@ import glob
 import os
 from dataclasses import dataclass
 
+from .i18n import tr
+
 XREAL = 0x3318
 VITURE = 0x35CA
 
@@ -81,22 +83,22 @@ class Glasses:
         if self.steady_6dof:
             return None
         if self.family == "one":
-            return "The One series holds 6DoF only with the XREAL Eye attached."
+            return tr("The One series holds 6DoF only with the XREAL Eye attached.")
         if self.family == "viture":
-            return "6DoF on VITURE glasses waits on VITURE's SDK."
-        return "These glasses have no 6DoF that Pocket XR can use."
+            return tr("6DoF on VITURE glasses waits on VITURE's SDK.")
+        return tr("These glasses have no 6DoF that Pocket XR can use.")
 
     def why_no_tracking(self, viture_on=None):
         if self.family == "viture":
             on = self.viture_tracking_default() if viture_on is None else viture_on
             if on:
-                return None if self.beast else "VITURE head tracking is experimental on this model."
-            return "VITURE head tracking is off. Turn it on in the panel to try it."
+                return None if self.beast else tr("VITURE head tracking is experimental on this model.")
+            return tr("VITURE head tracking is off. Turn it on in the panel to try it.")
         if self.imu:
             return None
         if self.family == "air":
-            return "Head tracking for this Air model is not known yet. Windows are shown flat."
-        return "Head tracking for these glasses is not known. Windows are shown flat, as on Pocket XR."
+            return tr("Head tracking for this Air model is not known yet. Windows are shown flat.")
+        return tr("Head tracking for these glasses is not known. Windows are shown flat, as on Pocket XR.")
 
 
 def _read_hex(path):
@@ -140,14 +142,14 @@ def detect(devices=None):
     vit = [(v, p, name) for v, p, _, name in devs if v == VITURE and p != VITURE_MICROPHONE]
     if vit:
         v, p, name = sorted(vit, key=lambda t: t[1] != VITURE_BEAST)[0]
-        return Glasses(name or "VITURE glasses", "viture", v, p)
+        return Glasses(name or tr("VITURE glasses"), "viture", v, p)
     for v, p, cls, name in devs:
         # Any other XREAL device with a CDC network interface takes the network path, as Pocket XR does.
         if v == XREAL and 0x02 in cls:
-            return Glasses(name or "XREAL glasses", "one", v, p, eye)
+            return Glasses(name or tr("XREAL glasses"), "one", v, p, eye)
     return None
 
 
 def other_glasses():
     """Glasses Pocket XR does not know, seen only as a second display: shown flat, as Pocket XR's plain fallback."""
-    return Glasses("Other glasses", "other", 0, 0)
+    return Glasses(tr("Other glasses"), "other", 0, 0)

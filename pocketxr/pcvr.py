@@ -22,6 +22,7 @@ from . import fusion
 from . import joycon
 from . import pcvr_pads as pads
 from . import pcvr_scene as scene
+from .i18n import tr
 from .gl import GL_LINEAR, GL_QUADS, GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_TEXTURE_MIN_FILTER, gl
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -126,7 +127,7 @@ class PcVr:
         self.log = app.log
         self.lib = _load()
         self.state = "finding"  # finding, pairing, starting, waiting, streaming, failed
-        self.message = "Looking for your PC..."
+        self.message = tr("Looking for your PC...")
         self.stop = False
         self.started = False
         self.streaming = False
@@ -183,12 +184,12 @@ class PcVr:
 
     def _connect(self):
         if self.lib is None:
-            self.state, self.message = "failed", "PC VR's parts are missing from this install."
+            self.state, self.message = "failed", tr("PC VR's parts are missing from this install.")
             return
         found = self._find()
         if not found:
             self.state = "failed"
-            self.message = "No PC found. Start the Pocket XR PC helper on your PC, on the same network."
+            self.message = tr("No PC found. Start the Pocket XR PC helper on your PC, on the same network.")
             return
         host, port, pc = found
         self.log(f"pcvr: PC helper on {pc} ({host})")
@@ -198,10 +199,11 @@ class PcVr:
             token = None
         try:
             if not token:
-                self.state, self.message = "pairing", f"Allow this Steam Deck on {pc}: a question is on its screen."
+                self.state, self.message = "pairing", tr("Allow this Steam Deck on {pc}: a question is on its screen.",
+                                                         pc=pc)
                 r = self._ask(host, port, {"op": "pair", "phone": "Steam Deck"}, timeout=120)
                 if not r.get("ok"):
-                    self.state, self.message = "failed", f"{pc} did not allow this Deck."
+                    self.state, self.message = "failed", tr("{pc} did not allow this Deck.", pc=pc)
                     return
                 token = r["token"]
                 os.makedirs(os.path.dirname(self.token_path), exist_ok=True)
@@ -211,17 +213,18 @@ class PcVr:
             self.started = True
             name = ctypes.create_string_buffer(128)
             self.lib.pxr_hostname(name, 128)
-            self.state, self.message = "starting", f"Starting SteamVR on {pc}..."
+            self.state, self.message = "starting", tr("Starting SteamVR on {pc}...", pc=pc)
             r = self._ask(host, port, {"op": "start", "token": token, "alvr": name.value.decode()})
             if not r.get("ok"):
-                self.state, self.message = "failed", f"{pc}: {r.get('why', 'could not start SteamVR')}"
+                why = r.get("why") or tr("could not start SteamVR")  # the PC helper's own words, in English
+                self.state, self.message = "failed", f"{pc}: {why}"
                 return
             if not r.get("steam") or not r.get("alvr"):
-                self.state, self.message = "failed", f"{pc} needs Steam and SteamVR installed."
+                self.state, self.message = "failed", tr("{pc} needs Steam and SteamVR installed.", pc=pc)
                 return
-            self.state, self.message = "waiting", f"Waiting for SteamVR on {pc}..."
+            self.state, self.message = "waiting", tr("Waiting for SteamVR on {pc}...", pc=pc)
         except OSError as e:
-            self.state, self.message = "failed", f"Lost the PC ({e})."
+            self.state, self.message = "failed", tr("Lost the PC ({error}).", error=e)
 
     # ---- every frame, on the GL thread ----
     def frame(self, view_q, gyro_head):
@@ -250,7 +253,7 @@ class PcVr:
             elif t == 2:  # stopped
                 self.streaming = False
                 lib.pxr_destroy_decoder()
-                self.state, self.message = "waiting", "The PC stopped the stream. Waiting..."
+                self.state, self.message = "waiting", tr("The PC stopped the stream. Waiting...")
                 if self.reveal_at is not None:  # back to the loading room until the game comes back
                     self.reconnecting = True
                     self.reveal_at = None
@@ -424,14 +427,14 @@ class PcVr:
     def _words(self, now):
         """The card's (title, line, hint), its ring (-1 turning, -2 none, 0..1 filling) and how strongly it shows
         over the game."""
-        hint = "Hold L5 or R5 to leave PC VR"
+        hint = tr("Hold L5 or R5 to leave PC VR")
         if self.leave_down_at is not None and now - self.leave_down_at >= HOLD_SHOWN_S:
             p = min(1.0, (now - self.leave_down_at) / HOLD_TO_LEAVE_S)
             return scene.TITLES["leaving"] + ("",), p, min(p * 2.5, 0.92)
         if self.closing_at is not None:
             return scene.TITLES["leaving"] + ("",), 1.0, 0.0
         if self.state == "failed":
-            return ("PC VR did not start", self.message, hint), -2.0, 0.0
+            return (tr("PC VR did not start"), self.message, hint), -2.0, 0.0
         if self.reveal_at is not None:
             return scene.TITLES["stalled"] + (hint,), -1.0, self.stall
         if self.reconnecting:
@@ -440,7 +443,7 @@ class PcVr:
             slow = now - self.opened_at > scene.SLOW_FIND_S
             return scene.TITLES["finding_slow" if slow else "finding"] + (hint,), -1.0, 0.0
         if self.state == "pairing":
-            return ("Allow this Steam Deck on your PC", "A question is on your PC's screen.", hint), -1.0, 0.0
+            return (tr("Allow this Steam Deck on your PC"), tr("A question is on your PC's screen."), hint), -1.0, 0.0
         return scene.TITLES["starting"] + (hint,), -1.0, 0.0
 
     def draw_eye(self, eye, view_q, tans, viewport):
