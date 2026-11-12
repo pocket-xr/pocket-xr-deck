@@ -73,6 +73,10 @@ Settings on the glasses themselves, as on Android:
 - **XREAL One series:** use **Follow** mode and turn **Stabilizer off** in the glasses' menu. Otherwise the glasses
   and Pocket XR both move the picture.
 
+**A "KDE Wallet" window pops up when you plug in the glasses?** KDE asks its wallet for network passwords each time
+the glasses' USB network appears. Pocket XR doesn't need it. To stop it: System Settings, KDE Wallet, untick
+"Enable the KDE wallet subsystem".
+
 If your glasses are on the list but don't work, please open an issue with the log from
 `~/.local/state/pocket-xr-deck/pocket-xr.log`.
 

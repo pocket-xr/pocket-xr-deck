@@ -160,3 +160,23 @@ the glasses returned to 1920x1080 at 90 Hz, with 2D size 1.3 as before.
 Not tried yet: 3D side by side, runs of an hour or more, Gaming Mode.
 
 So the main risk, whether the Aura works on the Deck at all, is gone.
+
+## Pocket XR for Steam Deck 0.1.0 (11 Nov 2026)
+
+The prototype became one app, installed from the release package on Mike's Deck and opened from its desktop icon:
+a touch panel on the Deck, the back buttons, the Deck screen or each app window in space, look to bring a window to
+the front, Steady 6DoF, the glasses put back on quit, and every glasses Pocket XR supports (Air family and VITURE
+over USB HID, unknown glasses shown flat).
+
+Found in Mike's first test and fixed the same day:
+
+- **"Anchor mode" in Window in space** was the Aura's hover, left by Ultrawide and Spatial Anchor. Ported Pocket XR's
+  keepFollow (10421 read, 10284 = 1, read back). Seen in the log: hover, Follow sent, "Follow mode holds" 2 s later.
+- **The view dropped when switching views.** The Aura leaves USB for a few seconds as its modes change. A drop of up
+  to 12 s now keeps the view and the links.
+- **KDE Wallet pop-ups.** KDE's network service (kded6, plasma-nm) asks the wallet each time the glasses' USB networks
+  come up. Turned the wallet off on Mike's Deck (nothing deleted). Other Deck users with a locked wallet will see it
+  too; the README should say how to turn it off.
+- KWin's compositing is off in the Deck's Desktop Mode, so Pocket XR redirects app windows itself to read them.
+
+Mike: "All fixed."
