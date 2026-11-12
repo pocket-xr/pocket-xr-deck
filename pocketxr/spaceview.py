@@ -35,6 +35,7 @@ HALO_PER_M = 0.012
 HALO_ALPHA = 0.32
 RIM_PER_M = 0.0007
 CURSOR_DEG = 1.1
+RECENTRE_SPREAD_MAX_DEG = 200.0
 # The cursor's marks, as Pocket XR on Android (SpaceRenderer): sizes in units of 0.8 degrees across
 CURSOR_UNIT = 0.014  # metres across per metre away
 CURSOR_DOT = 0.62
@@ -322,6 +323,29 @@ class SpaceView:
         if self.last_raised != p.key:
             cap.raise_window(p.key)
             self.last_raised = p.key
+
+    # ---------- recentre ----------
+    def content_yaw(self):
+        """Pocket XR Android's RecentreContent: the yaw to bring in front at a recentre, the middle of the windows'
+        spread, or the focused window's when they go round the head (wider than 200 degrees); 0 with none. Without it,
+        windows that open beside the ones before sat off to one side after a recentre."""
+        poses = [p for k, p in self.poses.items()]
+        if not poses:
+            return 0.0
+        sx = sum(math.cos(math.radians(p.yaw)) for p in poses)
+        sz = sum(math.sin(math.radians(p.yaw)) for p in poses)
+        mean = poses[0].yaw if sx * sx + sz * sz < 1e-6 else math.degrees(math.atan2(sz, sx))
+        lo = min(S.wrap(p.yaw - mean) - p.wdeg / 2 for p in poses)
+        hi = max(S.wrap(p.yaw - mean) + p.wdeg / 2 for p in poses)
+        if hi - lo > RECENTRE_SPREAD_MAX_DEG:
+            return (self.poses.get(self.focus) or poses[0]).yaw
+        return S.wrap(mean + (lo + hi) / 2)
+
+    def centre_pointer(self):
+        """The cursor back to the middle of the view, as Android's recentre does."""
+        self.cursor = [0.0, 0.0]
+        self.cursor_world = None
+        self.room_motion = (0.0, 0.0)
 
     # ---------- input ----------
     def mouse(self, button, down, now):

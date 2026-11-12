@@ -34,7 +34,7 @@ def yaw_pitch(head):
 
 def test_turn_left_is_positive_yaw():
     h = fusion.HeadFusion("aura")
-    t = run(h, 2.0, (0.0, 0.0, 0.0))
+    t = run(h, 2.5, (0.0, 0.0, 0.0))
     assert h.bias_ready
     run(h, 1.0, (0.0, math.radians(30), 0.0), t0=t)  # turn about +y = to the left
     yaw, pitch = yaw_pitch(h)
@@ -44,7 +44,7 @@ def test_turn_left_is_positive_yaw():
 
 def test_bias_removed():
     h = fusion.HeadFusion("aura")
-    bias = (0.01, -0.02, 0.005)
+    bias = (0.01, -0.015, 0.005)  # the Aura's at rest is under 0.5 deg/s; these are up to 0.9
     t = run(h, 3.0, bias)  # learnt from quiet half seconds; a fraction of a degree goes by first
     y0, _ = yaw_pitch(h)
     run(h, 10.0, bias, t0=t)
@@ -85,7 +85,7 @@ def test_tilt_follows_gravity():
 
 def test_one_axes_flip():
     h = fusion.HeadFusion("one")
-    t = run(h, 2.0, (0, 0, 0), accel=(0.0, -9.8, 0.0))
+    t = run(h, 2.5, (0, 0, 0), accel=(0.0, -9.8, 0.0))
     run(h, 1.0, (0.0, -math.radians(30), 0.0), accel=(0.0, -9.8, 0.0), t0=t)
     yaw, _ = yaw_pitch(h)
     assert 28 < yaw < 31, yaw
@@ -238,6 +238,39 @@ def test_joycon_pose_and_buttons():
     # sticks: 12 bit pairs
     report[6:9] = bytes([0x00, 0x08, 0x80])  # x 0x800, y 0x800
     assert joycon.stick_raw(report, 0) == (0x800, 0x800)
+
+
+def test_slow_turn_is_not_bias_and_no_late_recentre():
+    # 12 Nov 2026: a slow smooth turn (1.4 deg/s) was learnt as bias, and the first stillness minutes in recentred.
+    h = fusion.HeadFusion("aura")
+    t = run(h, 6.0, (0.0, math.radians(1.4), 0.0))  # a slow steady turn, no stillness: not bias
+    assert not h.bias_ready and abs(h.bias[1]) < 1e-9, h.bias
+    y0, _ = yaw_pitch(h)
+    run(h, 3.0, (0.0, 0.0, 0.0), t0=t)  # still at last, 6 s in: the bias is learnt, the view is not recentred
+    y1, _ = yaw_pitch(h)
+    assert h.bias_ready and abs(y1 - y0) < 0.5 and abs(y0) > 5, (y0, y1)
+
+
+def test_recentre_brings_the_windows_middle_in_front():
+    # As Android's RecentreContent: windows from 0 to 60 degrees left; after a recentre facing anywhere, the head's
+    # forward is at their middle.
+    from pocketxr import space as S
+    from pocketxr.spaceview import SpaceView
+
+    class Fake:
+        pass
+    sv = Fake()
+    sv.poses = {1: S.Pose(10.0, 0.0, 2.0, 20.0, 12.0), 2: S.Pose(50.0, 0.0, 2.0, 20.0, 12.0)}
+    sv.focus = 1
+    yaw = SpaceView.content_yaw(sv)
+    assert abs(yaw - 30.0) < 0.01, yaw
+    h = fusion.HeadFusion("aura")
+    t = run(h, 2.5, (0.0, 0.0, 0.0))
+    t = run(h, 1.0, (0.0, math.radians(-40), 0.0), t0=t)  # turned 40 degrees right
+    h.recentre(yaw)
+    run(h, 0.01, (0.0, 0.0, 0.0), t0=t)
+    fwd = fusion.qrot(h.view(), (0.0, 0.0, -1.0))
+    assert abs(S.angles(fwd)[0] - 30.0) < 0.5, S.angles(fwd)
 
 
 if __name__ == "__main__":

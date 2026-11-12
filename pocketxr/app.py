@@ -596,10 +596,17 @@ class App:
         save_settings(self.settings)
 
     def recentre(self):
+        """As Pocket XR on Android: the head's heading is straight ahead, the view turned so the windows' middle is in
+        front of you (not the room's zero), and the cursor back in the middle."""
+        flat = self._flat()
+        yaw = 0.0 if flat else self.space.content_yaw()
         if self.head:
-            self.head.recentre()
-        if self._flat() and self.control:
+            self.head.recentre(yaw)
+        if not flat:
+            self.space.centre_pointer()
+        if flat and self.control:
             self.control.recentre()
+        self.log(f"recentre: your heading is straight ahead, the view turned {yaw:.1f} deg to the windows' middle")
 
     def resize(self, step):
         if self._flat():
