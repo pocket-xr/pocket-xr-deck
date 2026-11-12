@@ -49,6 +49,9 @@ The Deck's back buttons work at any time, alongside Steam's controls:
 | L5 | Launcher | Lock screens |
 | R5 | Control Center | Adjust all |
 
+In PC VR the buttons belong to the game, except one: hold L5 or R5 for two seconds to go back to your Space. A ring
+fills on the card while you hold; let go before it fills to stay in the game.
+
 Holding the pointer against the right edge of the Deck's screen for a second also recentres.
 
 The mouse pointer is drawn in the glasses on the window it is over. It stays on the Deck's screen: past its right

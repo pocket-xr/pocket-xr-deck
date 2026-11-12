@@ -5,6 +5,10 @@ start SteamVR for this Deck. ALVR's client library runs through Pocket XR's brid
 the stream on the Deck's GPU; each frame comes here as NV12 in two textures and is drawn, per eye, where the PC drew it:
 a quad at the head orientation the frame was rendered for, so drawing it with the head's orientation now turns it to
 the head (rotation reprojection).
+
+While it connects, Pocket XR's loading room is shown (pcvr_scene.py); it opens as a portal over the Space, fades away
+once the picture is steady, comes back as "Waiting for your PC" if the picture pauses, and holding L5 or R5 for two
+seconds closes the portal back to the Space.
 """
 import ctypes
 import json
@@ -15,6 +19,7 @@ import threading
 import time
 
 from . import fusion
+from . import pcvr_scene as scene
 from .gl import GL_LINEAR, GL_QUADS, GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_TEXTURE_MIN_FILTER, gl
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -23,6 +28,16 @@ PORT = 47610
 VIEW_W, VIEW_H, RATE = 1920, 1080, 60.0
 IPD = 0.063
 HEAD_HEIGHT = 1.6
+# When the loading room gives way to the game, as Pocket XR on Android (PcVrRenderer.kt)
+MIN_LOADING_S = 1.2  # the room is shown at least this long, so it never flashes
+STEADY_S = 1.5  # frames have come steadily this long
+STEADY_GAP_S = 0.15  # a gap longer than this is not steady
+FADE_S = 0.8
+STALL_S = 1.0  # no frame this long: "Waiting for your PC"
+STALL_ALPHA = 0.95
+STALL_EASE = 0.08
+HOLD_TO_LEAVE_S = 2.0
+HOLD_SHOWN_S = 0.3
 GL_TEXTURE0 = 0x84C0
 GL_TEXTURE1 = 0x84C1
 GL_FRAGMENT_SHADER = 0x8B30
@@ -37,11 +52,21 @@ VERT = b"""
 void main() { gl_TexCoord[0] = gl_MultiTexCoord0; gl_Position = ftransform(); }
 """
 # NV12 to RGB, BT.709 limited range (what ALVR's encoders send).
+PORTAL = b"""
+uniform vec4 viewport;
+uniform float portal;
+void portal_clip() {
+    vec2 q = ((gl_FragCoord.xy - viewport.xy) / viewport.zw - 0.5) * vec2(viewport.z / viewport.w, 1.0);
+    if (length(q) > portal) discard;
+}
+"""
 FRAG_DEBUG = b"""
 #version 120
 uniform sampler2D ty;
 uniform sampler2D tuv;
+""" + PORTAL + b"""
 void main() {
+    portal_clip();
     vec2 t = gl_TexCoord[0].st;
     gl_FragColor = vec4(texture2D(tuv, t).r, texture2D(tuv, t).a, texture2D(ty, t).r, 1.0);
 }
@@ -50,7 +75,9 @@ FRAG = FRAG_DEBUG if os.environ.get("POCKETXR_PCVR_DEBUG") == "1" else b"""
 #version 120
 uniform sampler2D ty;
 uniform sampler2D tuv;
+""" + PORTAL + b"""
 void main() {
+    portal_clip();
     vec2 t = gl_TexCoord[0].st;
     float y = 1.1644 * (texture2D(ty, t).r - 0.0625);
     vec2 c = texture2D(tuv, t).ra - 0.5;
@@ -105,6 +132,20 @@ class PcVr:
         self.frame_pose = None  # (quat w x y z, fovs[8])
         self.frame_size = (0, 0)
         self.frames = 0
+        # what is shown: the loading room, the portal, the stall and leaving cards
+        t = time.monotonic()
+        self.room = scene.Room(self.log)
+        self.opened_at = t
+        self.loading_since = t
+        self.closing_at = None
+        self.last_frame_at = None
+        self.steady_since = None
+        self.reveal_at = None
+        self.reconnecting = False
+        self.stall = 0.0
+        self.leave_down_at = None
+        self.loc = None
+        self.size = 0.0
         self.token_path = os.path.join(os.path.expanduser("~/.config/pocket-xr-deck"), "pc-helper.json")
         h, v = math.atan(math.tan(math.radians(19)) * 16 / 9), math.radians(19)
         self.fovs = (ctypes.c_float * 8)(-h, h, v, -v, -h, h, v, -v)
@@ -200,6 +241,12 @@ class PcVr:
                 self.streaming = False
                 lib.pxr_destroy_decoder()
                 self.state, self.message = "waiting", "The PC stopped the stream. Waiting..."
+                if self.reveal_at is not None:  # back to the loading room until the game comes back
+                    self.reconnecting = True
+                    self.reveal_at = None
+                    self.loading_since = time.monotonic()
+                self.frame_ts = 0
+                self.last_frame_at = self.steady_since = None
             elif t == 4:
                 lib.pxr_create_decoder(int(ev[0]))
         # the head now, a little ahead (ALVR's own delay), in ALVR's axes (x right, y up, z back, as ours)
@@ -254,6 +301,7 @@ class PcVr:
         gl.glUniform1i(ly, 0)
         gl.glUniform1i(luv, 1)
         gl.glUseProgram(0)
+        self.loc = (gl.glGetUniformLocation(p, b"viewport"), gl.glGetUniformLocation(p, b"portal"))
         self.log(f"pcvr: shader program {p} linked {ok.value}, samplers at {ly} and {luv}")
         self.prog = p
 
@@ -274,14 +322,18 @@ class PcVr:
     def forget_gl(self):
         self.tex = None
         self.prog = None
+        self.room.forget_gl()
 
-    def draw_eye(self, eye):
-        """Draws this eye's half of the newest frame where the PC drew it (call with the eye's view and projection set)."""
-        if not self.streaming:
-            return False
-        if self.tex is None:
-            self._gl_setup()
-        if eye == 0:
+    # ---- what is shown ----
+    def tick(self, view_q):
+        """Once a frame, before the eyes: takes the newest frame and moves the loading room, portal and cards on.
+        Returns "leave" when L5 or R5 has been held long enough."""
+        now = time.monotonic()
+        self.size = self._portal_size(now)  # once a frame, so both eyes match
+        self.room.follow(view_q)
+        if self.streaming:
+            if self.tex is None:
+                self._gl_setup()
             size = (ctypes.c_int * 2)()
             pose = (ctypes.c_float * 12)()
             ts = self.lib.pxr_acquire(self.tex[0], self.tex[1], size, pose)
@@ -293,8 +345,81 @@ class PcVr:
                 self.frames += 1
                 if self.frames == 30 and os.environ.get("POCKETXR_PCVR_DEBUG") == "1":
                     self._debug_textures()
-        if not self.frame_ts or self.frame_pose is None:
-            return False
+                if self.last_frame_at is None or now - self.last_frame_at > STEADY_GAP_S:
+                    self.steady_since = now
+                self.last_frame_at = now
+        if (self.reveal_at is None and self.frame_ts and self.frame_pose is not None
+                and self.steady_since is not None and now - self.steady_since >= STEADY_S
+                and now - self.loading_since >= MIN_LOADING_S):
+            self.reveal_at = now
+            self.reconnecting = False
+            self.log(f"pcvr: the picture is steady, the loading room fades ({self.frames} frames)")
+        stalled = (self.reveal_at is not None and now - self.reveal_at > FADE_S
+                   and (self.last_frame_at is None or now - self.last_frame_at > STALL_S))
+        self.stall += ((STALL_ALPHA if stalled else 0.0) - self.stall) * STALL_EASE
+        if self.leave_down_at is not None and self.closing_at is None and now - self.leave_down_at >= HOLD_TO_LEAVE_S:
+            self.leave_down_at = None
+            return "leave"
+        return None
+
+    def _portal_size(self, now):
+        """How open the portal is, 0 to 1 (1: PC VR fills the view)."""
+        if self.closing_at is not None:
+            return 1.0 - scene.ease_out3((now - self.closing_at) / scene.PORTAL_CLOSE_S)
+        return scene.ease_out3((now - self.opened_at) / scene.PORTAL_OPEN_S)
+
+    def closed(self):
+        return self.closing_at is not None and time.monotonic() - self.closing_at >= scene.PORTAL_CLOSE_S
+
+    def covers(self):
+        """True when PC VR fills the view, so the Space behind need not be drawn."""
+        return self.closing_at is None and self.size >= 1.0
+
+    def _room_alpha(self, now):
+        if self.reveal_at is None:
+            return 1.0
+        t = max(0.0, min(1.0, (now - self.reveal_at) / FADE_S))
+        return 1.0 - t * t * (3 - 2 * t)
+
+    def _words(self, now):
+        """The card's (title, line, hint), its ring (-1 turning, -2 none, 0..1 filling) and how strongly it shows
+        over the game."""
+        hint = "Hold L5 or R5 to leave PC VR"
+        if self.leave_down_at is not None and now - self.leave_down_at >= HOLD_SHOWN_S:
+            p = min(1.0, (now - self.leave_down_at) / HOLD_TO_LEAVE_S)
+            return scene.TITLES["leaving"] + ("",), p, min(p * 2.5, 0.92)
+        if self.closing_at is not None:
+            return scene.TITLES["leaving"] + ("",), 1.0, 0.0
+        if self.state == "failed":
+            return ("PC VR did not start", self.message, hint), -2.0, 0.0
+        if self.reveal_at is not None:
+            return scene.TITLES["stalled"] + (hint,), -1.0, self.stall
+        if self.reconnecting:
+            return scene.TITLES["reconnecting"] + (hint,), -1.0, 0.0
+        if self.state == "finding":
+            slow = now - self.opened_at > scene.SLOW_FIND_S
+            return scene.TITLES["finding_slow" if slow else "finding"] + (hint,), -1.0, 0.0
+        if self.state == "pairing":
+            return ("Allow this Steam Deck on your PC", "A question is on your PC's screen.", hint), -1.0, 0.0
+        return scene.TITLES["starting"] + (hint,), -1.0, 0.0
+
+    def draw_eye(self, eye, view_q, tans, viewport):
+        """This eye's PC VR: the game's frame where the PC drew it, then the loading room or a card over it, all
+        inside the portal. Call with the eye's view and projection set and its viewport (x, y, w, h) in place."""
+        now = time.monotonic()
+        size = self.size
+        aspect = viewport[2] / max(1.0, viewport[3])
+        opening = size < 1.0 or self.closing_at is not None
+        portal = scene.portal_radius(size, aspect) if opening else 10.0
+        room_alpha = self._room_alpha(now)
+        if room_alpha < 1.0 and self.frame_ts and self.frame_pose is not None:
+            self._draw_frame(eye, viewport, portal)
+        words, progress, over = self._words(now)
+        self.room.draw(now, view_q, tans, viewport, max(room_alpha, over), None, words, progress, portal)
+        if opening:
+            self.room.draw_rim(size, viewport)
+
+    def _draw_frame(self, eye, viewport, portal):
         q, f = self.frame_pose
         l, r, u, d = f[4 * eye:4 * eye + 4]
         D = 10.0
@@ -306,6 +431,8 @@ class PcVr:
         m = (ctypes.c_float * 16)(*fusion.matrix(q))
         gl.glMultMatrixf(m)  # into the head orientation the PC drew this frame for
         gl.glUseProgram(self.prog)
+        gl.glUniform4f(self.loc[0], *[float(v) for v in viewport])
+        gl.glUniform1f(self.loc[1], float(portal))
         gl.glActiveTexture(GL_TEXTURE1)
         gl.glBindTexture(GL_TEXTURE_2D, self.tex[1])
         gl.glActiveTexture(GL_TEXTURE0)
@@ -317,7 +444,6 @@ class PcVr:
         gl.glEnd()
         gl.glUseProgram(0)
         gl.glPopMatrix()
-        return True
 
     def submitted(self):
         if self.frame_ts:

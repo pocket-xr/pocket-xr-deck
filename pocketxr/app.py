@@ -245,7 +245,10 @@ class App:
         for line in lines:
             try:
                 m = json.loads(line)
-                self._panel_cmd(m.get("cmd"), m.get("value"))
+                if m.get("cmd") == "button":  # {"cmd": "button", "value": ["L5", "down"]}
+                    self._button(*m["value"])
+                else:
+                    self._panel_cmd(m.get("cmd"), m.get("value"))
             except (ValueError, AttributeError):
                 pass
 
@@ -447,9 +450,16 @@ class App:
                 self._panel_cmd(a, b)
 
     def _button(self, name, how):
-        if self.pcvr is not None and name in ("L5", "R5") and how == "tap":
-            self.log(f"button {name} {how}")
-            self.stop_pcvr()
+        if self.pcvr is not None:
+            # In PC VR the Deck's buttons belong to the game, except holding L5 or R5 for two seconds to leave,
+            # with a ring filling on the card (as Pocket XR on Android).
+            if name in ("L5", "R5") and how == "down":
+                self.pcvr.leave_down_at = time.monotonic()
+                self.log(f"button {name} down: hold to leave PC VR")
+            elif name in ("L5", "R5") and how == "up":
+                self.pcvr.leave_down_at = None
+            return
+        if how in ("down", "up"):
             return
         self.log(f"button {name} {how}")
         if name == "L4" and how == "tap":
@@ -524,7 +534,8 @@ class App:
             self.head.recentre()
 
     def start_pcvr(self):
-        """PC VR: SteamVR from the PC, as Pocket XR's PC VR tile on Android. L5 or R5 brings the Space back."""
+        """PC VR: SteamVR from the PC, as Pocket XR's PC VR tile on Android. It opens as a portal into the loading
+        room; holding L5 or R5 (or the panel's Leave PC VR) closes the portal back to the Space."""
         if self.pcvr is not None:
             return
         if not pcvrmod.available():
@@ -538,12 +549,22 @@ class App:
         self.log("pcvr: starting")
 
     def stop_pcvr(self):
+        """Closes the portal; once it has closed, PC VR stops (_finish_pcvr)."""
+        if self.pcvr is None or self.pcvr.closing_at is not None:
+            return
+        if self._flat() or not self.window:
+            self._finish_pcvr()
+            return
+        self.pcvr.closing_at = time.monotonic()
+        self.pcvr.leave_down_at = None
+        self.log("pcvr: leaving")
+
+    def _finish_pcvr(self):
         if self.pcvr is None:
             return
         # ALVR's shutdown waits for its threads: off the drawing thread, so the view never stalls.
         pc, self.pcvr = self.pcvr, None
         threading.Thread(target=pc.close, daemon=True).start()
-        self.space.toast("Back to your windows")
         self.log("pcvr: stopped")
 
     def set_setting(self, key, value):
@@ -771,13 +792,16 @@ class App:
         eyes = [(-0.032, 0, w // 2), (0.032, w // 2, w // 2)] if sbs else [(0.0, 0, w)]
         view = self.head.view() if self.head else (1.0, 0.0, 0.0, 0.0)
         m = (ctypes.c_float * 16)(*fusion.matrix(fusion.qconj(view)))
-        live = self.capture.virtual and self.pcvr is None
+        pc = self.pcvr
+        if pc is not None and pc.closed():
+            self._finish_pcvr()
+            pc = None
+        live = self.capture.virtual and pc is None
         self.capture.space_pointer = live
-        if self.pcvr is not None:
-            self.pcvr.frame(view, self.head.last_gyro if self.head else (0.0, 0.0, 0.0))
-            if not self.pcvr.streaming and self.pcvr.message and (not self.space.toasts or
-                                                                   self.space.toasts[0][0] != self.pcvr.message):
-                self.space.toast(self.pcvr.message)
+        if pc is not None:
+            pc.frame(view, self.head.last_gyro if self.head else (0.0, 0.0, 0.0))
+            if pc.tick(view) == "leave":
+                self.stop_pcvr()
         g = self.capture.glasses_rect
         self.space.frame(now, view, panels, (g[2], g[3]) if g else None, live and self.capture.pointer_on_glasses)
         self._edge_recentre(now)
@@ -793,9 +817,12 @@ class App:
             gl.glLoadIdentity()
             gl.glTranslatef(-eye_x, 0.0, 0.0)
             gl.glMultMatrixf(m)
-            if self.pcvr is not None and self.pcvr.draw_eye(0 if (not sbs or vx == 0) else 1):
-                continue
-            self.space.draw(panels, now, tex)
+            if pc is None or not pc.covers():
+                self.space.draw(panels, now, tex)
+            if pc is not None:
+                tv = top / near
+                th = tv * vw / h
+                pc.draw_eye(0 if (not sbs or vx == 0) else 1, view, (-th, th, tv, -tv), (vx, 0, vw, h))
         self._edge_fade(w, h, sbs)
 
     def _edge_fade(self, w, h, sbs):

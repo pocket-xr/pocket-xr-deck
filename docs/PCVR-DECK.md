@@ -88,3 +88,20 @@ On Mike's Deck with his Aura in 3D, and his PC running the Pocket XR PC helper:
   jobs and no debug info (under 4 minutes).
 
 Next: controllers (Joy-Cons, then the Deck's own), the microphone, and a Glasses report line for PC VR.
+
+## Loading room and portal, 12 November 2026
+
+PC VR now opens and closes as on Android (`pocketxr/pcvr_scene.py`, from `PcVrLoading.kt` and `PcVrRenderer.kt`):
+
+- **Opening:** a circle with a blue rim grows from the middle of each eye over the Space (0.75 s) into the loading
+  room: a dark room with a breathing blue horizon, a faint floor grid and one card saying what is happening.
+- **The card:** "Connecting to your PC", "Still looking for your PC" after 20 s, "Starting SteamVR",
+  "Reconnecting to your PC", with a turning arc. It stays where you were looking and drifts back once you turn more
+  than 35 degrees away. On the Deck it also says "Hold L5 or R5 to leave PC VR".
+- **Into the game:** once frames have come steadily for 1.5 s (and the room has shown at least 1.2 s), the room fades
+  over 0.8 s. If the picture stops for 1 s, "Waiting for your PC" eases in over the game.
+- **Leaving:** hold L5 or R5 for 2 s. After 0.3 s "Going back to your Space" shows with a ring filling; let go to stay.
+  When it fills (or Leave PC VR is pressed on the panel), the circle closes over 0.55 s onto the Space.
+
+Tested on Mike's Deck and Aura: the portal, the room and card, the fade into SteamVR Home (steady after 91 frames),
+holding L5 to leave, and opening it again.

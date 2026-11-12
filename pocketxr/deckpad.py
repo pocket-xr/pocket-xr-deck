@@ -44,7 +44,8 @@ def find_device():
 
 
 class DeckButtons(threading.Thread):
-    """Calls on_event(name, kind) with kind "tap" (pressed and let go before HOLD_S) or "hold" (held HOLD_S)."""
+    """Calls on_event(name, kind) with kind "tap" (pressed and let go before HOLD_S) or "hold" (held HOLD_S), and
+    "down" and "up" as each button goes down and comes up (for PC VR's hold to leave, which shows its own ring)."""
 
     def __init__(self, on_event, log=print):
         super().__init__(daemon=True)
@@ -92,10 +93,12 @@ class DeckButtons(threading.Thread):
                 was_down = bool(prev & mask)
                 if is_down and not was_down:
                     down_at[name] = now
+                    self.on_event(name, "down")
                 elif is_down and name not in held and now - down_at.get(name, now) >= HOLD_S:
                     held.add(name)
                     self.on_event(name, "hold")
                 elif not is_down and was_down:
+                    self.on_event(name, "up")
                     if name in held:
                         held.discard(name)
                     else:
