@@ -11,7 +11,7 @@ started with the user's session, waits for Gaming Mode (gamescope's Wayland sock
   without Ultrawide so the game stays 16:9.
 
 Controls, for now on the Deck's back buttons (held, so a quick tap still reaches the game): hold L4 to recentre, hold
-R4 to switch between the screen in space and Steady (or off, on glasses without Steady). The choice is kept in
+R4 to switch between the screen in space and Steady (or off, on glasses without Steady), two modes only. The choice is kept in
 ~/.config/pocket-xr-deck/gaming.json.
 
 In Desktop Mode there is no gamescope socket, so this service does nothing and the desktop app has the glasses.
@@ -134,7 +134,9 @@ class Gaming:
         return m
 
     def next_mode(self):
-        order = ["space", "steady", "off"] if self.steady_ok() else ["space", "off"]
+        # Two modes on the button, so it's always clear which one you're in (Mike, 12 Nov 2026: a third, "off",
+        # left him unsure where he was). Off for glasses with Steady comes with the Quick Access menu's switch.
+        order = ["space", "steady"] if self.steady_ok() else ["space", "off"]
         cur = self.settings.get("mode", "space")
         nxt = order[(order.index(cur) + 1) % len(order)] if cur in order else "space"
         self.settings["mode"] = nxt
