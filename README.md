@@ -138,6 +138,12 @@ Holding the pointer against the right edge of the Deck's screen for a second als
 The mouse pointer is drawn in the glasses on the window it is over. It stays on the Deck's screen: past its right
 edge you could not see or use it.
 
+### Languages
+
+Pocket XR speaks English, Korean, Japanese, Chinese (simplified and traditional), Spanish, Portuguese (Brazil),
+French, German, Italian and Russian. It follows Steam's language, in Desktop Mode too. To pick another, start it with
+`POCKET_XR_LANG=ko` (or `ja`, `zh_CN`, `fr` and so on). The translations are new: if something reads oddly, tell me.
+
 ## Glasses
 
 The same glasses as Pocket XR on Android:
@@ -173,11 +179,13 @@ glasses it sends only the start and stop of the motion stream.
 
 ## Feedback
 
-This is the first version, and I put out updates almost every day. Bug reports, glasses reports ("it works on my
-One Pro", or "it doesn't"), and ideas all help:
+It's still early, and I put out updates almost every day. Bug reports, glasses reports ("it works on my One Pro", or
+"it doesn't"), and ideas all help:
 
-- **Something broke?** Open an [issue](https://github.com/pocket-xr/pocket-xr-deck/issues) and attach
-  `~/.local/state/pocket-xr-deck/pocket-xr.log`.
+- **Something broke?** Press **Send logs to Mike**, in the panel in Desktop Mode or in Quick Access in Gaming Mode. It
+  makes one zip of Pocket XR's logs in Downloads, with emails, Wi-Fi and Bluetooth names, IP addresses and your
+  computer's name taken out, and opens an email to me with it. In Gaming Mode, send the zip from Desktop Mode. Or open
+  an [issue](https://github.com/pocket-xr/pocket-xr-deck/issues) and attach the zip.
 - **An idea or a question?** Start a [discussion](https://github.com/pocket-xr/pocket-xr-deck/discussions).
 
 ## Support
