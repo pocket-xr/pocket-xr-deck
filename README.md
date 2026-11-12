@@ -15,7 +15,7 @@ source spatial desktop for Android phones. Same glasses, same rules, no account 
 > [discussion](https://github.com/pocket-xr/pocket-xr-deck/discussions). I put out updates almost every day, and
 > your feedback decides what comes first. To update, run the install line again.
 
-It runs in Desktop Mode. Gaming Mode is not supported yet. It's set up for the same XREAL and VITURE glasses as
+It works in both Desktop Mode and [Gaming Mode](#gaming-mode). It's set up for the same XREAL and VITURE glasses as
 Pocket XR on Android (see [Glasses](#glasses)). Most haven't been tried on a Deck yet, so if you have any of them,
 please give it a go and send a "works" or "doesn't" with your log: that's the fastest way to make it great on yours.
 
@@ -27,8 +27,11 @@ On the Deck, switch to Desktop Mode, open Konsole and paste:
 curl -L https://github.com/pocket-xr/pocket-xr-deck/releases/latest/download/pocket-xr-deck.tar.gz | tar xz -C /tmp && /tmp/pocket-xr-deck/install.sh
 ```
 
-Pocket XR then appears on the desktop and in the app menu. No password is needed. It installs into your home
-folder, so SteamOS updates leave it alone. Run the same line again to update.
+Pocket XR then appears on the desktop and in the app menu, and starts by itself in Gaming Mode. No password is
+needed. It installs into your home folder, so SteamOS updates leave it alone. Run the same line again to update.
+
+If you have [Decky Loader](https://decky.xyz), the installer also adds Pocket XR's panel to Quick Access in Gaming
+Mode. Restart the Deck once afterwards to see it.
 
 To remove it: `~/.local/share/pocket-xr-deck/uninstall.sh`
 
@@ -62,6 +65,30 @@ The Deck's back buttons work at any time, alongside Steam's controls:
 | R4 | Next app window | Switch between Deck screen and App windows |
 | L5 | Launcher | Lock screens |
 | R5 | Control Center | Adjust all |
+
+## Gaming Mode
+
+Plug your glasses in and play as usual. Pocket XR starts by itself in Gaming Mode and shows the whole Gaming Mode
+picture, your games and Steam's menus, as a big screen held still in front of you as you turn your head.
+
+- **Screen in space** (glasses with head tracking): the screen stays put while you turn your head.
+- **Steady** (glasses that hold the picture themselves, like the XREAL Aura): the glasses hold the screen in place
+  as you lean and move around, in 6DoF.
+- **Off**: the picture as it is, moving with your head.
+
+Change them in **Quick Access, Decky, Pocket XR**, which also has the screen's **size** and **Recentre**. Without
+Decky, use the back buttons: **hold L4** to recentre, **hold R4** to switch between the screen in space and Steady
+(or off, on glasses without Steady). A quick tap still reaches your game.
+
+Good to know:
+
+- The panel needs a recent Decky Loader (3.3 or newer). An older one may not show up in Quick Access at all with
+  current Steam versions; update it from decky.xyz.
+- Steam's own overlays, like Quick Access and notifications, stay fixed in front of you rather than on the screen
+  in space. That's how gamescope, Steam's Gaming Mode compositor, draws them.
+- App windows all around you are a Desktop Mode feature. In Gaming Mode you get one screen.
+- Unplug the glasses before restarting the Deck. Once, after a restart with the glasses plugged in, the Deck's own
+  screen stayed black until a full power-off.
 
 ## PC VR
 

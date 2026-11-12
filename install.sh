@@ -78,5 +78,25 @@ systemctl --user daemon-reload >/dev/null 2>&1 || true
 systemctl --user enable pocket-xr-gaming.service >/dev/null 2>&1 || true
 systemctl --user restart pocket-xr-gaming.service >/dev/null 2>&1 || true
 
+# Gaming Mode's Quick Access panel, for Decky Loader (https://decky.xyz), when Decky is installed. Decky keeps its
+# plugins folder read-only; it belongs to this user, so it is opened, filled and closed again without a password.
+PLUGINS="$HOME/homebrew/plugins"
+PANEL=""
+if [ -d "$PLUGINS" ] && [ -O "$PLUGINS" ] && [ -f "$SRC/decky/dist/index.js" ]; then
+  chmod u+w "$PLUGINS"
+  [ -d "$PLUGINS/PocketXR" ] && chmod -R u+w "$PLUGINS/PocketXR" && rm -rf "$PLUGINS/PocketXR"
+  mkdir -p "$PLUGINS/PocketXR/dist"
+  cp "$SRC/decky/plugin.json" "$SRC/decky/package.json" "$SRC/decky/main.py" "$PLUGINS/PocketXR/"
+  cp "$SRC/decky/dist/index.js" "$PLUGINS/PocketXR/dist/"
+  chmod -R a-w "$PLUGINS/PocketXR"
+  chmod u-w "$PLUGINS"
+  PANEL=yes
+fi
+
 echo "Done. Pocket XR $(cat "$SRC/VERSION") is on the desktop and in the app menu."
 echo "Plug in your glasses and open it from Desktop Mode. In Gaming Mode it starts by itself."
+if [ -n "$PANEL" ]; then
+  echo "Its Gaming Mode panel is in Decky: restart the Deck once to see Pocket XR in Quick Access."
+else
+  echo "For its Gaming Mode panel in Quick Access, install Decky Loader (decky.xyz) and run this again."
+fi
