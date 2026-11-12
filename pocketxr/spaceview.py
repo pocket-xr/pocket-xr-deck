@@ -27,7 +27,7 @@ DIM_BEHIND = 0.9  # windows not in focus dim slightly (Light on glass)
 TOAST_S = 2.6
 TOAST_D = 1.2
 TOAST_DROP_DEG = 13.0
-RIPPLE_S = 0.32
+RIPPLE_S = 0.38  # Android: RIPPLE_MS 380
 ACCENT = (0x5A / 255, 0x93 / 255, 1.0)
 HELD = (0x8F / 255, 0xB6 / 255, 1.0)
 INK2 = (0.62, 0.62, 0.66)
@@ -35,6 +35,19 @@ HALO_PER_M = 0.012
 HALO_ALPHA = 0.32
 RIM_PER_M = 0.0007
 CURSOR_DEG = 1.1
+# The cursor's marks, as Pocket XR on Android (SpaceRenderer): sizes in units of 0.8 degrees across
+CURSOR_UNIT = 0.014  # metres across per metre away
+CURSOR_DOT = 0.62
+CURSOR_DOT_CORE = 0.74  # the dot's white share of its radius; a dark hairline outside it
+CURSOR_RING = 1.45
+CURSOR_RING_INNER = 0.84
+CURSOR_GLOW = 2.6
+CURSOR_GLOW_ALPHA = 0.16
+RIPPLE_TO = 3.2
+RIPPLE_INNER = 0.9
+RETICLE_HOVER_S = 0.150
+RETICLE_HOVER_MIN = 0.6
+RETICLE_PRESS_SCALE = 0.7
 CURSOR_IDLE_M = 2.5
 CURSOR_LIMIT = (28.0, 17.0)  # the space pointer stays inside the glasses' view (degrees from the centre)
 DIM_UNDER_CC = 0.3
@@ -97,6 +110,8 @@ class SpaceView:
         self.appeared = {}
         self.toasts = []
         self.ripple = None
+        self.pressing = False
+        self.ring_k = 0.0  # the hover ring's tween, 0 to 1 (ReticleAnim)
         self.cursor_deg = CURSOR_DEG
         self.cursor_t = None
         self.wheel_hold = None  # (key, until)
@@ -310,6 +325,8 @@ class SpaceView:
         h = self.hover
         if down:
             self.log(f"space: button {button} down over {h[0] + ' ' + str(h[1]) + ' ' + str(h[2]) + ' ' + str(h[3]) if h else 'nothing'}")
+        if button == 1:
+            self.pressing = down
         if not down:
             if self.drag:
                 self._drag_end()
@@ -749,10 +766,7 @@ class SpaceView:
                 u, v = p.pointer[0] / p.w, p.pointer[1] / p.h
                 x, f = S.column(pose, u)
                 y = (0.5 - v) * pose.height_m()
-                t = self._tex(("cursor", False), lambda: ui.cursor(96))
-                if t:
-                    sz = 2 * pose.distance * math.tan(math.radians(CURSOR_DEG) / 2)
-                    self._quad_tex(t[0], x, y, -f + 0.004, sz, sz)
+                self._marks(x, y, -f + 0.004, pose.distance, 1.0, 0.0, 1.0, L.INK[:3], False)
             gl.glPopMatrix()
         if self.fit and self.drag and self.drag["key"] in self.poses:
             q = self.poses[self.drag["key"]].copy()
@@ -878,13 +892,13 @@ class SpaceView:
         gl.glEnd()
         gl.glDisable(GL_BLEND)
 
-    def _quad_tex(self, tid, x, y, z, w, h, alpha=1.0):
-        """A premultiplied texture centred at (x, y, z) in the current frame, w x h metres."""
+    def _quad_tex(self, tid, x, y, z, w, h, alpha=1.0, rgb=(1.0, 1.0, 1.0)):
+        """A premultiplied texture centred at (x, y, z) in the current frame, w x h metres, tinted [rgb]."""
         gl.glEnable(GL_BLEND)
         gl.glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA)
         gl.glEnable(GL_TEXTURE_2D)
         gl.glBindTexture(GL_TEXTURE_2D, tid)
-        gl.glColor4f(alpha, alpha, alpha, alpha)
+        gl.glColor4f(rgb[0] * alpha, rgb[1] * alpha, rgb[2] * alpha, alpha)
         gl.glBegin(GL_QUADS)
         gl.glTexCoord2f(0, 1); gl.glVertex3f(x - w / 2, y - h / 2, z)  # noqa: E702
         gl.glTexCoord2f(1, 1); gl.glVertex3f(x + w / 2, y - h / 2, z)  # noqa: E702
@@ -1004,34 +1018,50 @@ class SpaceView:
         gl.glPopMatrix()
 
     def _cursor(self, now):
+        """The cursor, exactly as Pocket XR on Android draws it (SpaceRenderer.drawCursor, 0.5.70 "Light on glass"): a crisp
+        white dot with a dark hairline, so it reads on a bright page as on the room; a soft light bloom round it; a thin
+        ring growing in over anything it can press (accent and a third bigger on a window's frame, where it moves the
+        window); the accent while pressing or dragging; and a ripple ring on each press."""
         h = self.hover
-        if h is None:
-            target = CURSOR_DEG
-        elif h[0] == "window" and h[2] == S.BODY:
-            target = CURSOR_DEG * 0.85
-        else:
-            target = CURSOR_DEG * 1.3  # over controls, the frame, the handle, a card
-        # eases to its size over HOVER_S
-        k = min(1.0, (now - self.cursor_t) / L.HOVER_S) if self.cursor_t else 1.0
+        dt = min(0.2, now - self.cursor_t) if self.cursor_t else 0.0
         self.cursor_t = now
-        self.cursor_deg += (target - self.cursor_deg) * k
+        step = dt / RETICLE_HOVER_S
+        self.ring_k = min(1.0, self.ring_k + step) if h is not None else max(0.0, self.ring_k - step)
         depth = (h[6] - 0.005) if h else CURSOR_IDLE_M
-        size = 2 * depth * math.tan(math.radians(self.cursor_deg) / 2)
-        t = self._tex(("cursor", False), lambda: ui.cursor(96))
-        if not t:
-            return
+        active = self.pressing or self.drag is not None or self.resize is not None
+        colour = L.ACCENT[:3] if active else L.INK[:3]
+        on_frame = h is not None and h[0] == "window" and h[2] == S.FRAME
         yaw, pitch = S.angles(self.ray)
         gl.glPushMatrix()
         gl.glRotatef(yaw, 0.0, 1.0, 0.0)
         gl.glRotatef(pitch, 1.0, 0.0, 0.0)
-        self._quad_tex(t[0], 0.0, 0.0, -depth, size, size)
-        if self.ripple and now - self.ripple[1] < RIPPLE_S:
-            rk = (now - self.ripple[1]) / RIPPLE_S
-            rt = self._tex(("ripple",), lambda: ui.ripple(128))
-            if rt:
-                rs = size * (1.0 + 1.6 * L.ease_enter(rk))
-                self._quad_tex(rt[0], 0.0, 0.0, -depth + 0.001, rs, rs, 1 - rk)
+        press = RETICLE_PRESS_SCALE if self.pressing else 1.0
+        self._marks(0.0, 0.0, -depth, depth, press, self.ring_k, 1.0, colour, on_frame, now)
         gl.glPopMatrix()
+
+    def _marks(self, x, y, z, dist, dot_scale, ring_alpha, alpha, colour, on_frame, now=None):
+        """The cursor's round marks at (x, y, z) facing the eyes, [dist] metres away: a unit is 0.8 degrees across."""
+        u = dist * CURSOR_UNIT
+        glow = self._tex(("cursor_mark", "glow"), lambda: ui.cursor_mark("glow", 128))
+        ring = self._tex(("cursor_mark", "ring"), lambda: ui.cursor_mark("ring", 96, CURSOR_RING_INNER))
+        dot = self._tex(("cursor_mark", "dot"), lambda: ui.cursor_mark("dot", 48, CURSOR_DOT_CORE))
+        if not (glow and ring and dot):
+            return
+        s = CURSOR_GLOW * dot_scale * u
+        self._quad_tex(glow[0], x, y, z, s, s, CURSOR_GLOW_ALPHA * alpha)
+        if ring_alpha > 0.01:
+            ring_scale = (RETICLE_HOVER_MIN + (1 - RETICLE_HOVER_MIN) * ring_alpha) * dot_scale
+            s = CURSOR_RING * ring_scale * (1.35 if on_frame else 1.0) * u
+            self._quad_tex(ring[0], x, y, z + 0.0005, s, s, 0.9 * alpha * ring_alpha,
+                           L.ACCENT[:3] if on_frame else colour)
+        if now is not None and self.ripple and now - self.ripple[1] < RIPPLE_S:
+            t = (now - self.ripple[1]) / RIPPLE_S
+            rip = self._tex(("cursor_mark", "ripple"), lambda: ui.cursor_mark("ring", 128, RIPPLE_INNER))
+            if rip:
+                s = (CURSOR_RING + (RIPPLE_TO - CURSOR_RING) * L.ease_enter(t)) * u
+                self._quad_tex(rip[0], x, y, z + 0.0008, s, s, 0.7 * (1 - t) * alpha, L.ACCENT[:3])
+        s = CURSOR_DOT * dot_scale * u
+        self._quad_tex(dot[0], x, y, z + 0.001, s, s, alpha, colour)
 
 
 class CardItem:

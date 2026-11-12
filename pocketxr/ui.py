@@ -245,6 +245,39 @@ def cursor(size=96, pressed=False):
     return cv.done()
 
 
+def _smooth(e0, e1, x):
+    t = min(1.0, max(0.0, (x - e0) / (e1 - e0)))
+    return t * t * (3 - 2 * t)
+
+
+def cursor_mark(kind, size, inner=0.0):
+    """One of the cursor's round marks, as Pocket XR on Android draws them (GlKit's circle modes, 0.5.70 "Light on
+    glass"), white so they can be tinted, premultiplied BGRA, the circle inscribed in the square:
+      glow: light falling off to the edge, (1 - d) squared;
+      ring: between [inner] of the radius and the edge;
+      dot:  white inside [inner] of the radius, then a dark hairline to the edge (black at 0.55), so it reads on a
+            bright page as well as on the room."""
+    half = size / 2.0
+    aa = 1.0 / half
+    out = bytearray(size * size * 4)
+    for yy in range(size):
+        for xx in range(size):
+            d = ((xx + 0.5 - half) ** 2 + (yy + 0.5 - half) ** 2) ** 0.5 / half
+            edge = 1.0 - _smooth(1.0 - aa, 1.0 + aa, d)
+            if kind == "glow":
+                f = max(0.0, 1.0 - d)
+                a, w = f * f, 1.0
+            elif kind == "ring":
+                a, w = edge * _smooth(inner - aa, inner + aa, d), 1.0
+            else:
+                core = 1.0 - _smooth(inner - aa, inner + aa, d)
+                a, w = edge * (0.55 + 0.45 * core), core
+            v = int(round(255 * w * a))
+            i = (yy * size + xx) * 4
+            out[i:i + 4] = bytes((v, v, v, int(round(255 * a))))
+    return bytes(out), size, size
+
+
 def ripple(size=128):
     cv = Canvas(size, size)
     cv.circle(size / 2, size / 2, size * 0.44, (1, 1, 1, 0.85), fill=False, width=size * 0.035)
