@@ -9,6 +9,8 @@ if [ -d "$HOME/homebrew/plugins/PocketXR" ] && [ -O "$HOME/homebrew/plugins" ]; 
   chmod u+w "$HOME/homebrew/plugins" && chmod -R u+w "$HOME/homebrew/plugins/PocketXR"
   rm -rf "$HOME/homebrew/plugins/PocketXR"
   chmod u-w "$HOME/homebrew/plugins"
+elif [ -d "$HOME/homebrew/plugins/PocketXR" ]; then
+  echo "Pocket XR's panel stays in Decky. Remove it in Decky's settings, under Plugins."
 fi
 rm -rf "$HOME/.local/share/pocket-xr-deck"
 rm -f "$HOME/.local/bin/pocket-xr" \

@@ -18,6 +18,13 @@ if [ -f decky/dist/index.js ]; then
   mkdir -p dist/pocket-xr-deck/decky/dist
   cp decky/plugin.json decky/package.json decky/main.py dist/pocket-xr-deck/decky/
   cp decky/dist/index.js dist/pocket-xr-deck/decky/dist/
+  # The same panel as a Decky plugin zip (PocketXR/plugin.json one folder deep), for Decky's Install from URL
+  python3 - <<'EOF'
+import zipfile
+with zipfile.ZipFile("dist/pocket-xr-decky.zip", "w", zipfile.ZIP_DEFLATED) as z:
+    for f in ("plugin.json", "package.json", "main.py", "dist/index.js"):
+        z.write("decky/" + f, "PocketXR/" + f)
+EOF
 else
   echo "note: no Decky panel in decky/dist (run npm run build in decky/); the release has no Quick Access panel" >&2
 fi

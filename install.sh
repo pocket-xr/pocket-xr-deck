@@ -78,9 +78,11 @@ systemctl --user daemon-reload >/dev/null 2>&1 || true
 systemctl --user enable pocket-xr-gaming.service >/dev/null 2>&1 || true
 systemctl --user restart pocket-xr-gaming.service >/dev/null 2>&1 || true
 
-# Gaming Mode's Quick Access panel, for Decky Loader (https://decky.xyz), when Decky is installed. Decky keeps its
-# plugins folder read-only; it belongs to this user, so it is opened, filled and closed again without a password.
+# Gaming Mode's Quick Access panel, for Decky Loader (https://decky.xyz), when Decky is installed. Where Decky's
+# plugins folder belongs to this user (read-only), it is opened, filled and closed again without a password. Where it
+# belongs to root, only Decky can add the panel: from the release's pocket-xr-decky.zip, by its Install from URL.
 PLUGINS="$HOME/homebrew/plugins"
+PANEL_URL="https://github.com/pocket-xr/pocket-xr-deck/releases/latest/download/pocket-xr-decky.zip"
 PANEL=""
 if [ -d "$PLUGINS" ] && [ -O "$PLUGINS" ] && [ -f "$SRC/decky/dist/index.js" ]; then
   chmod u+w "$PLUGINS"
@@ -95,8 +97,16 @@ fi
 
 echo "Done. Pocket XR $(cat "$SRC/VERSION") is on the desktop and in the app menu."
 echo "Plug in your glasses and open it from Desktop Mode. In Gaming Mode it starts by itself."
+want=$(grep -o '"version": *"[^"]*"' "$SRC/decky/package.json" 2>/dev/null || true)
+have=$(grep -o '"version": *"[^"]*"' "$PLUGINS/PocketXR/package.json" 2>/dev/null || true)
 if [ -n "$PANEL" ]; then
   echo "Its Gaming Mode panel is in Decky: restart the Deck once to see Pocket XR in Quick Access."
+elif [ -n "$want" ] && [ "$want" = "$have" ]; then
+  echo "Its Gaming Mode panel is in Quick Access, under Decky."
+elif [ -d "$PLUGINS" ]; then
+  echo "To add its Gaming Mode panel to Quick Access: in Gaming Mode, open Decky's settings and turn on Developer"
+  echo "mode. Then under Developer, choose Install Plugin from URL and enter:"
+  echo "  $PANEL_URL"
 else
   echo "For its Gaming Mode panel in Quick Access, install Decky Loader (decky.xyz) and run this again."
 fi
