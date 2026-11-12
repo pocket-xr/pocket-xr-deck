@@ -190,7 +190,8 @@ class Panel:
             b.grid(row=0, column=i, sticky="ew", padx=4)
             row.columnconfigure(i, weight=1)
         self.switches = {}
-        for key, title, sub in (("snap", "Snap windows together", "Line up and dock as you move them"),
+        for key, title, sub in (("sbs_3d", "3D side by side", "Each eye its own view: windows at a real depth"),
+                                ("snap", "Snap windows together", "Line up and dock as you move them"),
                                 ("locked", "Lock screens", "Nothing moves or resizes; clicks still work"),
                                 ("cursor_follows_head", "Cursor follows head", "Off: the cursor stays in the room")):
             s = Switch(sp.body, title, sub, lambda on, k=key: send(k, on))
@@ -280,7 +281,7 @@ class Panel:
         for k, b in self.source.items():
             b.set(selected=st.get("source") == k)
         for k, s in self.switches.items():
-            s.set(bool(st.get(k, k == "cursor_follows_head")))
+            s.set(bool(st.get(k, k in ("cursor_follows_head", "sbs_3d"))))
         flat = st.get("flat", False)
         for k in ("Nearer", "Further"):
             self.adjust[k].set(enabled=not flat)

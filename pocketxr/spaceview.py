@@ -610,6 +610,7 @@ class SpaceView:
         return {
             "n": n, "focus": bool(foc), "locked": s.get("locked", False), "snap": s.get("snap", False),
             "cursor_follows_head": s.get("cursor_follows_head", True), "speed": s.get("cursor_speed", 5),
+            "sbs_3d": s.get("sbs_3d", True),
             "curve": int(round((foc.curve / S.CURVE_MAX) * 100)) if foc else 0,
             "presets": [p["name"] for p in self.store.presets],
         }
@@ -681,9 +682,10 @@ class SpaceView:
             self._close_card("cc", now)
             self.start_adjust_all()
         elif a == "toggle":
-            on = not self.app.settings.get(it.arg, it.arg == "cursor_follows_head")
+            on = not self.app.settings.get(it.arg, it.arg in ("cursor_follows_head", "sbs_3d"))
             self.app.set_setting(it.arg, on)
-            names = {"snap": "Snap", "locked": "Lock screens", "cursor_follows_head": "Cursor follows head"}
+            names = {"snap": "Snap", "locked": "Lock screens", "cursor_follows_head": "Cursor follows head",
+                     "sbs_3d": "3D"}
             self.toast(f"{names.get(it.arg, it.arg)} {'on' if on else 'off'}")
         elif a == "speed":
             self.app.set_setting("cursor_speed", int(S.clamp(self.app.settings.get("cursor_speed", 5) + it.arg, 1, 10)))

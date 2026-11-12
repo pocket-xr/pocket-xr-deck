@@ -22,6 +22,12 @@ FOLLOW_READ_S = 1.5
 FOLLOW_RETRY_S = 3.0
 FOLLOW_TRIES = 3
 FOLLOW_CHECK_S = 5.0
+# Pocket XR (GlassesDisplayCommands, GLASSES.md "3D mode"): the Space wants 3D side by side, so the app asks for it once
+# a plug-in, again if the glasses drop it straight away, and after that the mode is the user's. 3D waits FOLLOW_SETTLE_S
+# after a follow: Ultrawide off, follow and 3D 3 s apart once left the Aura's picture blank.
+FOLLOW_SETTLE_S = 3.0
+SBS_TRIES = 2
+SBS_DROP_WINDOW_S = 20.0
 TRIES = 2
 SIZE_SAME = 0.005
 
@@ -53,6 +59,11 @@ class SettingsControl(threading.Thread):
         self.we_set_anchor = False
         self.follow_tries = 0
         self.last_follow_check = 0.0
+        self.follow_sent_at = 0.0
+        self.want_3d = lambda: True  # the app's "3D side by side" setting
+        self.sbs_tries = 0
+        self.sbs_first_at = None
+        self.we_set_3d = False
 
     # ---- requests from the app ----
     def want(self, view):
@@ -78,6 +89,7 @@ class SettingsControl(threading.Thread):
                 if time.monotonic() - self.last_follow_check >= FOLLOW_CHECK_S:
                     try:
                         self._keep_follow()
+                        self._keep_3d()
                     except OSError as e:
                         self.log(f"settings: link lost ({e})")
                         self.link = None
@@ -110,6 +122,8 @@ class SettingsControl(threading.Thread):
             return False
         self.log("settings: control link open")
         self.follow_tries = 0
+        self.sbs_tries = 0
+        self.sbs_first_at = None
         self._read()
         if self.wanted:
             self.jobs.put(("view", self.wanted))
@@ -161,12 +175,50 @@ class SettingsControl(threading.Thread):
             if st["ultrawide"] == 1:
                 self._set_and_check(c.ultrawide_set, False, c.ULTRAWIDE_GET, 0, "Ultrawide off for 3DoF")
             self._keep_follow()
-        elif view != "steady" and st.get("ultrawide") == 1 and self.we_set_ultrawide:
-            if self._set_and_check(c.ultrawide_set, False, c.ULTRAWIDE_GET, 0, "Ultrawide off"):
-                self.we_set_ultrawide = False
-            if not self.glasses.app_anchor:
-                self.on_message(TURN_OFF_6DOF)
+            self._depth(fresh=True)
+        else:
+            if view != "steady" and st.get("ultrawide") == 1 and self.we_set_ultrawide:
+                if self._set_and_check(c.ultrawide_set, False, c.ULTRAWIDE_GET, 0, "Ultrawide off"):
+                    self.we_set_ultrawide = False
+                if not self.glasses.app_anchor:
+                    self.on_message(TURN_OFF_6DOF)
+            if view != "steady":
+                self._depth(fresh=True)
         self._read()
+
+    def _depth(self, fresh=False):
+        """3D side by side for the Space (each eye its own view, windows at a real depth), or 2D if the user turned it off."""
+        if self.wanted == "steady" or self.link is None or self.link.closed:
+            return
+        st = self._read()
+        if st.get("ultrawide") == 1:
+            return  # Ultrawide is the user's (from the glasses' menu); any 3D request would switch it off
+        if not self.want_3d():
+            if st["stereo"] == 1 and self.we_set_3d:
+                if self._set_and_check(c.stereo_set, False, c.STEREO_GET, 0, "2D (3D turned off)"):
+                    self.we_set_3d = False
+            return
+        if st["stereo"] == 1:
+            return
+        if not fresh and self.sbs_tries >= SBS_TRIES:
+            return  # asked already; the mode is the user's now
+        if fresh and self.sbs_tries >= SBS_TRIES and self.sbs_first_at is not None:
+            return
+        wait = FOLLOW_SETTLE_S - (time.monotonic() - self.follow_sent_at)
+        if wait > 0:
+            time.sleep(wait)
+        self.sbs_tries += 1
+        if self.sbs_first_at is None:
+            self.sbs_first_at = time.monotonic()
+        if self._set_and_check(c.stereo_set, True, c.STEREO_GET, 1, f"3D side by side (ask {self.sbs_tries})"):
+            self.we_set_3d = True
+
+    def _keep_3d(self):
+        """If the glasses drop 3D straight after taking it (the Aura can, 1 to 5 s after a plug-in), ask once more."""
+        if self.sbs_first_at is None or time.monotonic() - self.sbs_first_at > SBS_DROP_WINDOW_S:
+            return
+        if self.sbs_tries < SBS_TRIES and self.want_3d() and self.wanted != "steady":
+            self._depth()
 
     def _keep_follow(self):
         """In Window in space on the Aura: Follow mode, so the glasses do not hold the picture against the app's tracking."""
@@ -182,6 +234,7 @@ class SettingsControl(threading.Thread):
         self.follow_tries += 1
         self.log(f"settings: the glasses are in hover; Follow mode (try {self.follow_tries})")
         self.link.request(c.follow)
+        self.follow_sent_at = time.monotonic()
         time.sleep(FOLLOW_READ_S)
         mode = flag(self.link.get(c.SPACE_MODE_GET))
         self.state["space"] = mode
@@ -230,7 +283,10 @@ class SettingsControl(threading.Thread):
             changed = True
             if not self.glasses.app_anchor and self.glasses.steady_6dof:
                 self.on_message(TURN_OFF_6DOF)
-        self.we_set_anchor = self.we_set_ultrawide = False
+        if st["stereo"] == 1 and self.we_set_3d:
+            self._set_and_check(c.stereo_set, False, c.STEREO_GET, 0, "2D")
+            changed = True
+        self.we_set_anchor = self.we_set_ultrawide = self.we_set_3d = False
         self._read()
         if not changed:
             return

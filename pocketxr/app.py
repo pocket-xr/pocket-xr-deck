@@ -35,7 +35,7 @@ STATE = os.path.join(os.environ.get("XDG_STATE_HOME", os.path.expanduser("~/.loc
 ACCENT = (0x5A / 255, 0x93 / 255, 1.0)
 
 DEFAULTS = {"view": "3dof", "source": "deck", "distance": 2.0, "scale": 1.0, "canvas_scale": 0.8, "look": True,
-            "snap": False, "locked": False, "cursor_speed": 5, "curve_default": 0.0, "cursor_follows_head": True,
+            "snap": False, "locked": False, "cursor_speed": 5, "curve_default": 0.0, "cursor_follows_head": True, "sbs_3d": True,
             "viture_tracking": None}
 
 # 3DoF: a window 1600 px wide is this wide at 1.0, in metres (the Deck's screen 1.28 m, an app's 1920 px screen 1.92 m:
@@ -353,6 +353,7 @@ class App:
                     notify(self.message)
                 if g.control_link:
                     self.control = SettingsControl(g, self.log, self._on_control_state, self._on_message)
+                    self.control.want_3d = lambda: bool(self.settings.get("sbs_3d", True))
                     self.control.start()
                     self.control.want(self._view())
             else:
@@ -477,7 +478,7 @@ class App:
             self.space.toggle_launcher()
         elif cmd == "cc":
             self.space.toggle_cc(time.monotonic())
-        elif cmd in ("snap", "locked", "cursor_follows_head"):
+        elif cmd in ("snap", "locked", "cursor_follows_head", "sbs_3d"):
             self.set_setting(cmd, bool(value))
         elif cmd == "look":
             self.settings["look"] = bool(value)
@@ -510,6 +511,8 @@ class App:
     def set_setting(self, key, value):
         self.settings[key] = value
         save_settings(self.settings)
+        if key == "sbs_3d" and self.control:
+            self.control.want(self._view())
         if key == "locked" and value:
             # Anything being moved or resized is dropped where it is.
             self.space.drag = None
@@ -590,6 +593,8 @@ class App:
                 bits = []
                 if cs.get("ultrawide") == 1:
                     bits.append("Ultrawide")
+                elif cs.get("stereo") == 1:
+                    bits.append("3D")
                 if cs.get("anchor") == 1:
                     bits.append("Spatial Anchor on")
                 if cs.get("busy"):
@@ -606,6 +611,8 @@ class App:
             "snap": self.settings.get("snap", False),
             "locked": self.settings.get("locked", False),
             "cursor_follows_head": self.settings.get("cursor_follows_head", True),
+            "sbs_3d": self.settings.get("sbs_3d", True),
+            "sbs_ok": bool(g and g.control_link),
             "steady_ok": bool(g and g.steady_6dof),
             "flat": self._flat(),
             "viture": bool(g and g.family == "viture"),

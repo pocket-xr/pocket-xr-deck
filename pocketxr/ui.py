@@ -411,7 +411,7 @@ def cc_card(state):
     W = 1600
     n_layouts = len(state["layouts"]) + 1
     left_end = 140 + 30 + math.ceil(n_layouts / 3) * (190 + 16)
-    right_end = 140 + 26 + 3 * 92 + 34 + 26 + 96 + 84 + 34 + 26 + min(3, len(state["presets"])) * 74 + 64
+    right_end = 140 + 26 + 4 * 92 + 34 + 26 + 96 + 84 + 34 + 26 + min(3, len(state["presets"])) * 74 + 64
     H = int(max(left_end, right_end) + 56)
     cv = Canvas(W, H)
     items = []
@@ -452,10 +452,11 @@ def cc_card(state):
     y = 140
     cv.text(rx, y, "WINDOWS", 16, L.INK_3, medium=True)
     y += 26
-    rows = [("snap", "Snap windows together", "Line up and dock as you move them"),
+    rows = [("sbs_3d", "3D side by side", "Each eye its own view: windows at a real depth"),
+            ("snap", "Snap windows together", "Line up and dock as you move them"),
             ("locked", "Lock screens", "Nothing moves or resizes; clicks still work"),
             ("cursor_follows_head", "Cursor follows head", "Off: the cursor stays in the room")]
-    cv.glass(rx, y, rw, 3 * 92, L.RADIUS_M * 1.6, fill=L.GLASS_RAISED)
+    cv.glass(rx, y, rw, len(rows) * 92, L.RADIUS_M * 1.6, fill=L.GLASS_RAISED)
     for i, (key, title, sub) in enumerate(rows):
         ry = y + i * 92
         if i:
@@ -464,7 +465,7 @@ def cc_card(state):
         cv.text(rx + 28, ry + 64, sub, 16, L.INK_2, max_w=rw - 140)
         cv.switch(rx + rw - 28 - 64, ry + 26, state.get(key), scale=64 / 52)
         items.append((rx, ry, rw, 92, "toggle", key, 0))
-    y += 3 * 92 + 34
+    y += len(rows) * 92 + 34
 
     def stepper(y, label, value, action):
         cv.glass(rx, y, rw, 84, L.RADIUS_M * 1.6, fill=L.GLASS_RAISED)
