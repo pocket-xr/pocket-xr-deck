@@ -145,6 +145,7 @@ CHROME_SPOT = (948, 528, 24, 24)  # the middle of a 1920x1080 output, away from 
 class XRectangle(ctypes.Structure):
     _fields_ = [("x", ctypes.c_short), ("y", ctypes.c_short), ("width", ctypes.c_ushort), ("height", ctypes.c_ushort)]
 VIEW_TITLE = "Pocket XR Deck"
+LIVE_HOLD_S = 1.5  # a window that changed is grabbed at full rate this long after its last change
 # Each app's own screen: the glasses' output, at most this big (on Ultrawide's 3840 wide output, one 1920 wide screen).
 APP_SCREEN = (1920, 1080)
 
@@ -193,6 +194,10 @@ class XCapture(threading.Thread):
         self.requests = []  # ("activate", key) and the like, run on this thread
         self.fps_active = 30.0
         self.fps_other = 6.0
+        # A window whose picture is changing (a video, a game) is grabbed at fps_active too, clicked into or not (Mike,
+        # 12 Nov 2026: a video in a window he had not clicked played laggy, at the 6 fps still windows get).
+        self._live_until = {}
+        self._sample = {}
         self.errors = 0
         self.error_kinds = {}  # (request, minor, error code) -> count, for the log
         self._serial = 0
@@ -719,12 +724,20 @@ class XCapture(threading.Thread):
                 p.pointer = (px - p.root_x, py - p.root_y)
             else:
                 p.pointer = (px - p.root_x, py - p.root_y) if key == top else None
-            rate = self.fps_active if p.active else self.fps_other
+            live = now < self._live_until.get(key, 0.0)
+            rate = self.fps_active if (p.active or live) else self.fps_other
             if now - self._last_grab.get(key, 0.0) >= 1.0 / rate:
                 self._last_grab[key] = now
                 f = self._grab(p)
                 if f is not None:
                     p.frame = f
+                    # a few hundred bytes spread over the picture: did it change since the last grab?
+                    sample = f.data[::max(4, len(f.data) // 509)]
+                    if self._sample.get(key) not in (None, sample):
+                        if not live and not p.active:
+                            self.log(f"capture: '{p.title}' is changing: grabbed at {self.fps_active:.0f} fps")
+                        self._live_until[key] = now + LIVE_HOLD_S
+                    self._sample[key] = sample
 
     def _keep_on_top(self, key, px, py, now):
         """Every app screen sits in the same place on the glasses' output, so a click goes to whichever is on top there.
