@@ -7,7 +7,7 @@ The screen shows a test card, or with --capture the Deck's own desktop.
 
 Needs nothing installed: SDL2, OpenGL and X11 come with SteamOS and are used through ctypes.
 
-Keys: Enter, Space, R or a click = recentre. Up / Down = nearer / further. Left / Right = smaller / bigger.
+Keys: Enter, Space, R or a click = recentre. With --capture: hold the pointer against the right edge of the Deck screen for a second. Up / Down = nearer / further. Left / Right = smaller / bigger.
 Ctrl+Q = quit (Escape is left alone: the Deck's B button sends it).
 """
 import argparse
@@ -67,6 +67,7 @@ GL_TEXTURE_MIN_FILTER = 0x2801
 GL_TEXTURE_MAG_FILTER = 0x2800
 GL_QUADS = 0x0007
 GL_LINE_LOOP = 0x0002
+GL_TRIANGLE_FAN = 0x0006
 GL_SCISSOR_TEST = 0x0C11
 for name in ("glClearColor", "glTexCoord2f", "glVertex3f", "glColor3f", "glTranslatef"):
     getattr(gl, name).argtypes = [ctypes.c_float] * {"glClearColor": 4, "glTexCoord2f": 2, "glVertex3f": 3, "glColor3f": 3, "glTranslatef": 3}[name]
@@ -121,6 +122,12 @@ class X11Capture:
         self.x11.XGetImage.argtypes = [ctypes.c_void_p, ctypes.c_ulong, ctypes.c_int, ctypes.c_int, ctypes.c_uint, ctypes.c_uint, ctypes.c_ulong, ctypes.c_int]
         self.x11.XGetSubImage.restype = ctypes.c_void_p
         self.x11.XGetSubImage.argtypes = [ctypes.c_void_p, ctypes.c_ulong, ctypes.c_int, ctypes.c_int, ctypes.c_uint, ctypes.c_uint, ctypes.c_ulong, ctypes.c_int, ctypes.c_void_p, ctypes.c_int, ctypes.c_int]
+        P = ctypes.POINTER
+        self.x11.XQueryPointer.argtypes = [ctypes.c_void_p, ctypes.c_ulong, P(ctypes.c_ulong), P(ctypes.c_ulong),
+                                           P(ctypes.c_int), P(ctypes.c_int), P(ctypes.c_int), P(ctypes.c_int), P(ctypes.c_uint)]
+        self.x11.XWarpPointer.argtypes = [ctypes.c_void_p, ctypes.c_ulong, ctypes.c_ulong, ctypes.c_int, ctypes.c_int,
+                                          ctypes.c_uint, ctypes.c_uint, ctypes.c_int, ctypes.c_int]
+        self.x11.XFlush.argtypes = [ctypes.c_void_p]
         self.dpy = self.x11.XOpenDisplay(None)
         if not self.dpy:
             raise RuntimeError("no X display")
@@ -135,6 +142,25 @@ class X11Capture:
     def grab(self):
         self.x11.XGetSubImage(self.dpy, self.root, self.x, self.y, self.w, self.h, 0xFFFFFFFF, 2, self.img, 0, 0)
         return self.data
+
+    def pointer(self):
+        """The mouse pointer in captured pixels, or None when it is off the captured screen.
+        X11 capture leaves the pointer out of the picture, so it is drawn on top."""
+        r, c = ctypes.c_ulong(), ctypes.c_ulong()
+        rx, ry, wx, wy = ctypes.c_int(), ctypes.c_int(), ctypes.c_int(), ctypes.c_int()
+        mask = ctypes.c_uint()
+        self.x11.XQueryPointer(self.dpy, self.root, ctypes.byref(r), ctypes.byref(c), ctypes.byref(rx), ctypes.byref(ry),
+                               ctypes.byref(wx), ctypes.byref(wy), ctypes.byref(mask))
+        px, py = rx.value - self.x, ry.value - self.y
+        if 0 <= px < self.w and 0 <= py < self.h:
+            return px, py
+        # Off the Deck's screen means onto the glasses' screen, where nothing can be seen or used:
+        # put it back on the nearest edge of the Deck's screen.
+        cx = min(max(px, 0), self.w - 1)
+        cy = min(max(py, 0), self.h - 1)
+        self.x11.XWarpPointer(self.dpy, 0, self.root, 0, 0, 0, 0, self.x + cx, self.y + cy)
+        self.x11.XFlush(self.dpy)
+        return cx, cy
 
 
 def pick_display(want):
@@ -224,6 +250,7 @@ def main():
     t_log = t_start
     last_count = 0
     last_cap = 0.0
+    edge_since = None
     running = True
     log("hold still for a moment now and then: the gyro learns its zero from quiet half seconds")
     while running:
@@ -269,6 +296,18 @@ def main():
 
         gl.glClearColor(0.0, 0.0, 0.0, 1.0)
         gl.glClear(GL_COLOR_BUFFER_BIT)
+        ptr = cap.pointer() if cap is not None else None
+        # With the pointer kept on the Deck's screen, the glasses' window never has the keyboard,
+        # so recentre is: push the pointer against the right edge and hold it there for a second.
+        if ptr is not None and ptr[0] >= tw - 1:
+            if edge_since is None:
+                edge_since = now
+            elif now - edge_since > 1.0:
+                head.recentre()
+                log("recentred (pointer held at the right edge)")
+                edge_since = now + 1e9  # once per push
+        else:
+            edge_since = None
         view = head.view()
         m = (ctypes.c_float * 16)(*fusion.matrix(fusion.qconj(view)))
         qh = th / tw * width
@@ -294,6 +333,22 @@ def main():
             gl.glTexCoord2f(0, 0); gl.glVertex3f(-width / 2, qh / 2, -distance)  # noqa: E702
             gl.glEnd()
             gl.glDisable(GL_TEXTURE_2D)
+            if ptr is not None:
+                # An arrow, tip at the pointer, a hair in front of the screen; size in captured pixels.
+                s = width / tw
+                z = -distance + 0.002
+                pts = [(x * 1.6 * s + (ptr[0] * s - width / 2), -(y * 1.6 * s) + (qh / 2 - ptr[1] * s))
+                       for x, y in ((0, 0), (0, 17), (4.5, 13), (12, 12))]
+                gl.glColor3f(1.0, 1.0, 1.0)
+                gl.glBegin(GL_TRIANGLE_FAN)
+                for px_, py_ in pts:
+                    gl.glVertex3f(px_, py_, z)
+                gl.glEnd()
+                gl.glColor3f(0.0, 0.0, 0.0)
+                gl.glBegin(GL_LINE_LOOP)
+                for px_, py_ in pts:
+                    gl.glVertex3f(px_, py_, z + 0.0005)
+                gl.glEnd()
         sdl.SDL_GL_SwapWindow(win)
         frames += 1
 

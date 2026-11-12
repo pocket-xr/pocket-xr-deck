@@ -12,7 +12,8 @@ On the Deck, in Desktop Mode, with the XREAL glasses plugged in:
    after SSH closes.
 4. Hold still for a moment now and then. The gyro learns its zero from quiet half seconds.
 
-Add `--capture` to show the Deck's own screen instead of the test card.
+Add `--capture` to show the Deck's own screen instead of the test card. The pointer is drawn in
+the glasses and kept on the Deck's screen; hold it at the right edge for a second to recentre.
 
 Keys: Enter, Space, R or a click recentres. Up and Down move the screen nearer or further.
 Left and Right make it smaller or bigger. Ctrl+Q quits.

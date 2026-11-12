@@ -135,7 +135,11 @@ the Deck's USB-C port, in 2D, Spatial Anchor off.
 - Mike, after the fixes: "Stays put now."
 - Mike chose to go on after reading this write-up.
 
-Not tried yet: the mouse pointer in the glasses (X11 capture leaves it out), 3D side by side,
-runs of an hour or more, Gaming Mode.
+**Third test, the mouse pointer:** X11 capture leaves the pointer out, so the prototype draws
+its own arrow on the window. The pointer is also kept on the Deck's screen: on the glasses'
+screen it could not be seen. Mike: "Pointer works." Holding the pointer at the right edge for
+a second recentres; it is in, but no recentre was used in that test.
+
+Not tried yet: 3D side by side, runs of an hour or more, Gaming Mode.
 
 So the main risk, whether the Aura works on the Deck at all, is gone.
