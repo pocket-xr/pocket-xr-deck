@@ -36,8 +36,9 @@ ACCENT = (0x5A / 255, 0x93 / 255, 1.0)
 DEFAULTS = {"view": "3dof", "source": "deck", "distance": 2.0, "scale": 1.0, "canvas_scale": 0.8, "look": True,
             "viture_tracking": None}
 
-# 3DoF: a full Deck screen (1280 px wide) is this wide at 1.0, in metres.
-DECK_SCREEN_M = 1.6
+# 3DoF: a window 1600 px wide is this wide at 1.0, in metres (the Deck's screen 1.28 m, an app's 1920 px screen 1.92 m:
+# about 50 degrees at 2 m, a little narrower than the glasses' own view).
+WINDOW_M_PER_1600 = 1.6
 GAP_DEG = 3.0
 GONE_GRACE_S = 12.0
 LOOK_DWELL_S = 0.6
@@ -149,6 +150,10 @@ class App:
             signal.signal(sig, lambda n, f: self.request_quit(f"signal {n}"))
         try:
             self._loop()
+            # Windows back on the Deck's screen before the view goes (the capture thread does it).
+            end = time.monotonic() + 3.0
+            while not self.capture.restored and time.monotonic() < end:
+                time.sleep(0.05)
         finally:
             self._close_window()
             if self.reader:
@@ -469,6 +474,7 @@ class App:
         self.log(f"quit: {why}")
         self.message = "Putting your glasses back..."
         self._send_status()
+        self.capture.restore_all()
         if self.control and self.control.link and not self.control.link.closed:
             self.control.restore(lambda: setattr(self, "done", True))
             t = threading.Timer(20.0, lambda: setattr(self, "done", True))
@@ -490,6 +496,10 @@ class App:
         if not self.panel or self.panel.poll() is not None:
             return
         g = self.glasses
+        hint = ""
+        if self.capture.virtual and self.window:
+            hint = ("Move the pointer right, past the Deck's screen, to use the app in front. "
+                    "Look at another window or tap R4 to bring it to the front.")
         if g is None:
             status = "No glasses found."
         else:
@@ -514,7 +524,7 @@ class App:
             status = " · ".join(parts)
         st = {
             "status": status,
-            "message": self.message,
+            "message": self.message or hint,
             "view": self._view(),
             "source": self.settings["source"],
             "look": self.settings["look"],
@@ -575,7 +585,7 @@ class App:
             f = p.frame
             if f is None:
                 continue
-            wm = DECK_SCREEN_M * s * f.w / 1280.0
+            wm = WINDOW_M_PER_1600 * s * f.w / 1600.0
             hm = wm * f.h / f.w
             ang = math.degrees(2 * math.atan(wm / 2 / d))
             items.append([p, wm, hm, ang, 0.0])

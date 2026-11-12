@@ -6,7 +6,12 @@ The renderer takes the newest frames from it.
 
 Two sources, as the app's "Show" setting:
   "deck"  the Deck's own screen, as one panel
-  "apps"  each app window as its own panel
+  "apps"  each app window as its own panel, on its own larger screen
+
+App windows get a larger screen the way Pocket XR on Android gives each app a virtual display: each one is moved
+onto the glasses' own output (a real 1920x1080 X screen nobody looks at directly, since the app's view covers it) at
+that full size. The app's view there is click-through, so the pointer, moved right past the Deck's screen, reaches
+the app in front. Switching back to the Deck screen, quitting or unplugging puts every window back as it was.
 """
 import ctypes
 import ctypes.util
@@ -16,6 +21,7 @@ import time
 
 x11 = ctypes.CDLL(ctypes.util.find_library("X11") or "libX11.so.6")
 xc = ctypes.CDLL(ctypes.util.find_library("Xcomposite") or "libXcomposite.so.1")
+xf = ctypes.CDLL(ctypes.util.find_library("Xfixes") or "libXfixes.so.3")
 
 Display = ctypes.c_void_p
 Window = ctypes.c_ulong
@@ -82,6 +88,14 @@ xc.XCompositeNameWindowPixmap.argtypes = [Display, Window]
 xc.XCompositeQueryExtension.argtypes = [Display, P(ctypes.c_int), P(ctypes.c_int)]
 xc.XCompositeRedirectWindow.argtypes = [Display, Window, ctypes.c_int]
 COMPOSITE_REDIRECT_AUTOMATIC = 0
+xf.XFixesCreateRegion.restype = ctypes.c_ulong
+xf.XFixesCreateRegion.argtypes = [Display, ctypes.c_void_p, ctypes.c_int]
+xf.XFixesSetWindowShapeRegion.argtypes = [Display, Window, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_ulong]
+xf.XFixesDestroyRegion.argtypes = [Display, ctypes.c_ulong]
+SHAPE_INPUT = 2
+VIEW_TITLE = "Pocket XR Deck"
+# Each app's own screen: the glasses' output, at most this big (on Ultrawide's 3840 wide output, one 1920 wide screen).
+APP_SCREEN = (1920, 1080)
 
 ZPIXMAP = 2
 ALL_PLANES = 0xFFFFFFFF
@@ -134,6 +148,10 @@ class XCapture(threading.Thread):
         self._last_grab = {}
         self._moved = set()
         self._redirected = set()
+        self._placed = {}  # client window -> (frame x, frame y, client w, client h, maximized) before it was moved
+        self._stack = []  # client windows, bottom to top
+        self._view_win = None  # the app's own view on the glasses, made click-through
+        self.restored = True
         self._handler = ERROR_HANDLER(self._on_error)
         self.own_pid = os.getpid()
         self.panel_pid = None
@@ -165,6 +183,19 @@ class XCapture(threading.Thread):
         with self.lock:
             self.requests.append(("activate", key))
 
+    def restore_all(self):
+        """Put every window back where it was (on quit). Sets .restored when done."""
+        self.restored = not self._placed
+        self.closing = True  # from now on nothing is moved onto the glasses again
+        with self.lock:
+            self.requests.append(("restore", None))
+
+    @property
+    def virtual(self):
+        """App windows on their own larger screens: the apps source with the glasses' output there."""
+        return (self.source == "apps" and self.composite and self.glasses_rect is not None
+                and not getattr(self, "closing", False))
+
     # ---- the thread ----
     def run(self):
         self.dpy = x11.XOpenDisplay(None)
@@ -180,7 +211,8 @@ class XCapture(threading.Thread):
         self.atoms = {n: x11.XInternAtom(self.dpy, n.encode(), 0) for n in (
             "_NET_CLIENT_LIST", "_NET_ACTIVE_WINDOW", "_NET_WM_NAME", "UTF8_STRING", "WM_NAME", "_NET_WM_PID",
             "_NET_WM_WINDOW_TYPE", "_NET_WM_WINDOW_TYPE_NORMAL", "_NET_WM_WINDOW_TYPE_DIALOG", "_NET_WM_STATE",
-            "_NET_WM_STATE_HIDDEN", "_NET_WM_STATE_SKIP_TASKBAR", "WM_CLASS")}
+            "_NET_WM_STATE_HIDDEN", "_NET_WM_STATE_SKIP_TASKBAR", "WM_CLASS", "_NET_CLIENT_LIST_STACKING",
+            "_NET_MOVERESIZE_WINDOW", "_NET_WM_STATE_MAXIMIZED_VERT", "_NET_WM_STATE_MAXIMIZED_HORZ")}
         last_list = 0.0
         while not self.stop:
             now = time.monotonic()
@@ -189,6 +221,9 @@ class XCapture(threading.Thread):
             for kind, key in reqs:
                 if kind == "activate" and isinstance(key, int):
                     self._activate(key)
+                elif kind == "restore":
+                    self._restore_all()
+                    self.restored = True
             self.install_handler()
             if now - last_list > 0.5:
                 self._refresh_list()
@@ -270,6 +305,10 @@ class XCapture(threading.Thread):
 
     # ---- the list ----
     def _refresh_list(self):
+        self._find_view()
+        self._stack = self._longs(self.root, "_NET_CLIENT_LIST_STACKING")
+        if not self.virtual and self._placed:
+            self._restore_all()
         if self.source == "deck" or not self.composite:
             p = self._panels.get("deck") or Panel("deck", "Deck screen")
             p.root_x, p.root_y, p.w, p.h = self.deck_rect
@@ -297,7 +336,10 @@ class XCapture(threading.Thread):
                     self._redirected.add(fw)
                 p.frame_win = fw
                 keep[w] = p
-                self._keep_off_glasses(w, p)
+                if self.virtual:
+                    self._place(w, p)
+                else:
+                    self._keep_off_glasses(w, p)
             if not keep:
                 # No app windows open: show the Deck's screen rather than nothing.
                 p = self._panels.get("deck") or Panel("deck", "Deck screen")
@@ -307,6 +349,78 @@ class XCapture(threading.Thread):
             self._panels = keep
         with self.lock:
             self.panels = list(self._panels.values())
+
+    def _client_message(self, w, atom, data):
+        ev = XEvent()
+        ev.xclient.type = 33  # ClientMessage
+        ev.xclient.window = w
+        ev.xclient.message_type = self.atoms[atom]
+        ev.xclient.format = 32
+        for i, v in enumerate(data):
+            ev.xclient.data[i] = v
+        x11.XSendEvent(self.dpy, self.root, 0, (1 << 20) | (1 << 19), ctypes.byref(ev))
+
+    def _maximize(self, w, on):
+        self._client_message(w, "_NET_WM_STATE", [1 if on else 0, self.atoms["_NET_WM_STATE_MAXIMIZED_VERT"],
+                                                  self.atoms["_NET_WM_STATE_MAXIMIZED_HORZ"], 2, 0])
+
+    def _move_resize(self, w, x, y, cw, ch):
+        """Frame's top left at (x, y), the client cw x ch: _NET_MOVERESIZE_WINDOW, as a pager asks it."""
+        flags = 1 | (0xF << 8) | (2 << 12)  # north-west gravity, x y w h given, from a pager
+        self._client_message(w, "_NET_MOVERESIZE_WINDOW", [flags, x, y, cw, ch])
+
+    def _place(self, w, p):
+        """Give the app its own larger screen: the glasses' output, at its full size (centred on a wider one)."""
+        if w in self._placed:
+            return
+        g = self.glasses_rect
+        fa = self._attrs(p.frame_win) if p.frame_win else None
+        fx, fy = self._origin(p.frame_win) if p.frame_win else (p.root_x, p.root_y)
+        deco_w = (fa.width - p.w) if fa else 0
+        deco_h = (fa.height - p.h) if fa else 0
+        state = set(self._longs(w, "_NET_WM_STATE"))
+        was_max = self.atoms["_NET_WM_STATE_MAXIMIZED_VERT"] in state
+        if g[0] <= fx + 10 < g[0] + g[2] and g[1] <= fy + 10 < g[1] + g[3]:
+            # Already on the glasses' output (left there before): its home is the Deck's screen, at a size that fits.
+            dx, dy, dw, dh = self.deck_rect
+            cw, ch = min(p.w, dw - deco_w - 40), min(p.h, dh - deco_h - 40)
+            self._placed[w] = (dx + (dw - cw - deco_w) // 2, dy + (dh - ch - deco_h) // 2, cw, ch, was_max)
+        else:
+            self._placed[w] = (fx, fy, p.w, p.h, was_max)
+        sw, sh = min(APP_SCREEN[0], g[2]), min(APP_SCREEN[1], g[3])
+        if was_max:
+            self._maximize(w, False)
+        self._move_resize(w, g[0] + (g[2] - sw) // 2, g[1] + (g[3] - sh) // 2, sw - deco_w, sh - deco_h)
+        x11.XFlush(self.dpy)
+        self.restored = False
+        self.log(f"capture: '{p.title}' gets its own {sw}x{sh} screen")
+
+    def _restore_all(self):
+        for w, (fx, fy, cw, ch, was_max) in list(self._placed.items()):
+            self._move_resize(w, fx, fy, cw, ch)
+            if was_max:
+                self._maximize(w, True)
+            self._moved.add(w)  # back where the user had it: leave it there
+        if self._placed:
+            self.log(f"capture: {len(self._placed)} windows put back on the Deck's screen")
+        self._placed = {}
+        x11.XFlush(self.dpy)
+
+    def _find_view(self):
+        """The app's own view on the glasses: clicks go through it to the app screens beneath."""
+        for w in self._longs(self.root, "_NET_CLIENT_LIST"):
+            pid = self._longs(w, "_NET_WM_PID")
+            if pid and pid[0] == self.own_pid and self._title(w) == VIEW_TITLE:
+                if w != self._view_win:
+                    region = xf.XFixesCreateRegion(self.dpy, None, 0)
+                    for win in {w, self._frame_of(w)}:
+                        if win:
+                            xf.XFixesSetWindowShapeRegion(self.dpy, win, SHAPE_INPUT, 0, 0, region)
+                    xf.XFixesDestroyRegion(self.dpy, region)
+                    x11.XFlush(self.dpy)
+                    self._view_win = w
+                    self.log("capture: the view on the glasses lets clicks through to the app screens")
+                return
 
     def _keep_off_glasses(self, w, p):
         """A window that opens on the glasses' output cannot be used there: move it onto the Deck's screen once."""
@@ -340,21 +454,30 @@ class XCapture(threading.Thread):
         x11.XQueryPointer(self.dpy, self.root, ctypes.byref(r), ctypes.byref(child), ctypes.byref(rx), ctypes.byref(ry),
                           ctypes.byref(wx), ctypes.byref(wy), ctypes.byref(mask))
         px, py = rx.value, ry.value
-        # The pointer stays on the Deck's screen: on the glasses' output it could not be seen or used.
+        # The pointer stays on the Deck's screen, or with app screens also on the glasses' output where they are.
         dx, dy, dw, dh = self.deck_rect
-        if not (dx <= px < dx + dw and dy <= py < dy + dh):
+        g = self.glasses_rect
+        on_glasses = self.virtual and g[0] <= px < g[0] + g[2] and g[1] <= py < g[1] + g[3]
+        if not on_glasses and not (dx <= px < dx + dw and dy <= py < dy + dh):
             px, py = min(max(px, dx), dx + dw - 1), min(max(py, dy), dy + dh - 1)
             x11.XWarpPointer(self.dpy, 0, self.root, 0, 0, 0, 0, px, py)
             x11.XFlush(self.dpy)
         self.pointer_root = (px, py)
-        self.pointer_at_right_edge = px >= dx + dw - 1
-        under = child.value  # the top-level frame under the pointer
+        self.pointer_on_glasses = on_glasses
+        self.pointer_at_right_edge = not self.virtual and px >= dx + dw - 1
+        # The window the pointer is over: the top one there in the stacking order (the view itself is above all of
+        # them on the glasses' output, so asking X for the window under the pointer would answer the view).
+        top = None
+        for w in reversed(self._stack):
+            p = self._panels.get(w)
+            if p is not None and p.root_x <= px < p.root_x + p.w and p.root_y <= py < p.root_y + p.h:
+                top = w
+                break
         for key, p in list(self._panels.items()):
             if key == "deck":
                 p.pointer = (px - p.root_x, py - p.root_y)
             else:
-                inside = p.root_x <= px < p.root_x + p.w and p.root_y <= py < p.root_y + p.h
-                p.pointer = (px - p.root_x, py - p.root_y) if inside and p.frame_win == under else None
+                p.pointer = (px - p.root_x, py - p.root_y) if key == top else None
             rate = self.fps_active if p.active else self.fps_other
             if now - self._last_grab.get(key, 0.0) >= 1.0 / rate:
                 self._last_grab[key] = now
