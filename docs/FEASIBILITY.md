@@ -154,6 +154,9 @@ a second recentres; it is in, but no recentre was used in that test.
   is told to turn 6DoF on in its own menu (untested, Mike has no One); VITURE waits on its SDK;
   others have no 6DoF source. Nothing is sent to them.
 
-Not tried yet: `steady.py off` on the Deck, 3D side by side, runs of an hour or more, Gaming Mode.
+`steady.py off` then put the Aura back: Spatial Anchor off, then Ultrawide off, each read back;
+the glasses returned to 1920x1080 at 90 Hz, with 2D size 1.3 as before.
+
+Not tried yet: 3D side by side, runs of an hour or more, Gaming Mode.
 
 So the main risk, whether the Aura works on the Deck at all, is gone.
