@@ -189,6 +189,8 @@ def main():
     ap.add_argument("--axes", default="aura", choices=sorted(fusion.AXES))
     ap.add_argument("--fov", type=float, default=38.0, help="vertical field of view per eye, degrees")
     ap.add_argument("--capture", action="store_true", help="show the Deck's own screen instead of the test card")
+    ap.add_argument("--canvas", action="store_true",
+                    help="Steady mode in 6DoF (after steady.py on): draw flat, the glasses hold the canvas in the room")
     ap.add_argument("--fake", action="store_true", help="no glasses: a made-up slow head turn")
     ap.add_argument("--seconds", type=float, default=0, help="quit after this long (0 = never)")
     args = ap.parse_args()
@@ -251,6 +253,7 @@ def main():
     last_count = 0
     last_cap = 0.0
     edge_since = None
+    canvas_scale = 0.8  # --canvas: the picture's height, a share of the canvas's
     running = True
     log("hold still for a moment now and then: the gyro learns its zero from quiet half seconds")
     while running:
@@ -269,6 +272,10 @@ def main():
                 elif sym in (13, 32, ord("r")):
                     head.recentre()
                     log("recentred")
+                elif args.canvas and sym in (0x40000052, 0x4000004F):
+                    canvas_scale = min(1.0, canvas_scale + 0.05)
+                elif args.canvas and sym in (0x40000051, 0x40000050):
+                    canvas_scale = max(0.3, canvas_scale - 0.05)
                 elif sym == 0x40000052:
                     distance = max(0.6, distance - 0.2)
                 elif sym == 0x40000051:
@@ -291,7 +298,7 @@ def main():
         h = ctypes.c_int()
         sdl.SDL_GL_GetDrawableSize(win, ctypes.byref(w), ctypes.byref(h))
         w, h = w.value, h.value
-        sbs = w >= 3 * h
+        sbs = w >= 3 * h and not args.canvas
         eyes = [(-0.032, 0, w // 2), (0.032, w // 2, w // 2)] if sbs else [(0.0, 0, w)]
 
         gl.glClearColor(0.0, 0.0, 0.0, 1.0)
@@ -309,16 +316,26 @@ def main():
         else:
             edge_since = None
         view = head.view()
-        m = (ctypes.c_float * 16)(*fusion.matrix(fusion.qconj(view)))
-        qh = th / tw * width
+        if args.canvas:
+            # Steady mode in 6DoF: the glasses hold their own canvas in the room, so the picture is drawn flat
+            # in the middle of it, with no head tracking from the app. Sizes are in the window's -1..1 units.
+            eyes = [(0.0, 0, w)]
+            m = (ctypes.c_float * 16)(*fusion.matrix((1.0, 0.0, 0.0, 0.0)))
+            qh = 2 * canvas_scale
+            width = qh * (tw / th) * (h / w)
+            distance = 0.0
+        else:
+            m = (ctypes.c_float * 16)(*fusion.matrix(fusion.qconj(view)))
+            qh = th / tw * width
         for eye_x, vx, vw in eyes:
             gl.glViewport(vx, 0, vw, h)
             gl.glMatrixMode(GL_PROJECTION)
             gl.glLoadIdentity()
-            near = 0.05
-            top = near * math.tan(math.radians(fov) / 2)
-            right = top * vw / h
-            gl.glFrustum(-right, right, -top, top, near, 100.0)
+            if not args.canvas:
+                near = 0.05
+                top = near * math.tan(math.radians(fov) / 2)
+                right = top * vw / h
+                gl.glFrustum(-right, right, -top, top, near, 100.0)
             gl.glMatrixMode(GL_MODELVIEW)
             gl.glLoadIdentity()
             gl.glTranslatef(-eye_x, 0.0, 0.0)
@@ -336,8 +353,9 @@ def main():
             if ptr is not None:
                 # An arrow, tip at the pointer, a hair in front of the screen; size in captured pixels.
                 s = width / tw
+                sy = qh / th  # the same as s in 3DoF; in --canvas x and y units differ
                 z = -distance + 0.002
-                pts = [(x * 1.6 * s + (ptr[0] * s - width / 2), -(y * 1.6 * s) + (qh / 2 - ptr[1] * s))
+                pts = [(x * 1.6 * s + (ptr[0] * s - width / 2), -(y * 1.6 * sy) + (qh / 2 - ptr[1] * sy))
                        for x, y in ((0, 0), (0, 17), (4.5, 13), (12, 12))]
                 gl.glColor3f(1.0, 1.0, 1.0)
                 gl.glBegin(GL_TRIANGLE_FAN)

@@ -6,6 +6,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import fusion  # noqa: E402
 import imu  # noqa: E402
+import control  # noqa: E402
 
 
 def test_framer_splits_and_skips_junk():
@@ -90,6 +91,47 @@ def test_one_axes_flip():
     run(h, 1.0, (0.0, -math.radians(30), 0.0), accel=(0.0, -9.8, 0.0), t0=t)
     yaw, _ = yaw_pitch(h)
     assert 28 < yaw < 31, yaw
+
+
+def test_control_bytes_match_pocket_xr():
+    # Pocket XR ControlWire: header (type u16 BE, length u32 BE), RPC id u32 BE, then field 3 = request.
+    rid = control.rpc_id(0)
+    assert rid == 0x80000001
+    assert control.ultrawide_set(rid, True).hex() == "282600000008" + "80000001" + "1a020801"
+    assert control.anchor_set(rid, True).hex() == "28a5" + "00000008" + "80000001" + "1a020801"
+    # Off: proto3 leaves the zero out, so the request is empty (Pocket XR ProtoWriter.varint).
+    assert control.anchor_set(rid, False).hex() == "28a5" + "00000006" + "80000001" + "1a00"
+    # Screen size: field 1 as a float, "1a 05 0d <f32 LE>" as recorded for the Aura.
+    assert control.size_set(rid, 1.2).hex() == "289e" + "0000000b" + "80000001" + "1a050d" + "9a99993f"
+    assert control.rpc(control.ANCHOR_GET, rid).hex() == "28a4" + "00000006" + "80000001" + "1a00"
+    hb = control.heartbeat(5)
+    assert hb[:6].hex() == "271000000021" and hb[6] == 1 and hb[7] == 5 and len(hb) == 39
+
+
+def test_control_refuses_other_ids():
+    for bad in (10079, 10325, 10326, 10327, 10328, 10281, 12345):
+        try:
+            control.rpc(bad, 0x80000001)
+        except ValueError:
+            continue
+        raise AssertionError(bad)
+
+
+def test_control_reads_answers():
+    f = control.Framer()
+    # Answer to 10397: id with top bit clear, field 4 = { 1: 0, 2: f32 1.2 }
+    resp = control.pb_float(2, 1.2)
+    body = bytes.fromhex("00000001") + control.pb_message(4, resp)
+    rng = control.pb_float(2, 0.85) + control.pb_float(3, 1.2)
+    body2 = bytes.fromhex("00000002") + control.pb_message(4, rng)
+    # an empty answer: Ultrawide off is left out
+    body3 = bytes.fromhex("00000003") + control.pb_message(4, b"")
+    data = control.heartbeat(1) + control.header(10397, len(body)) + body + control.header(10396, len(body2)) + body2         + control.header(10277, len(body3)) + body3
+    out = f.feed(data[:20]) + f.feed(data[20:])
+    assert [a.type for a in out] == [10397, 10396, 10277]
+    assert abs(out[0].value - 1.2) < 1e-6 and out[0].result == 0
+    assert abs(out[1].value - 0.85) < 1e-6 and abs(out[1].value3 - 1.2) < 1e-6
+    assert out[2].value is None
 
 
 if __name__ == "__main__":

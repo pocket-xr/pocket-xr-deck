@@ -140,6 +140,20 @@ its own arrow on the window. The pointer is also kept on the Deck's screen: on t
 screen it could not be seen. Mike: "Pointer works." Holding the pointer at the right edge for
 a second recentres; it is in, but no recentre was used in that test.
 
-Not tried yet: 3D side by side, runs of an hour or more, Gaming Mode.
+**Fourth test, Steady mode in 6DoF on the Aura (`steady.py on`, then `--canvas`):**
+
+- The Deck sent its first commands to the glasses, only those Pocket XR proved on the Aura:
+  Ultrawide on (10278), then Spatial Anchor on (10405), each read back. The size was already
+  Ultrawide's largest (1.2). The bytes are checked offline against Pocket XR's, and every other
+  id is refused (never 10079 or 10325 to 10328).
+- An anchor set sent within a second of Ultrawide was refused with 5001. Spaced 3 s apart, as
+  Pocket XR does on the phone, it took first time.
+- The desktop is drawn flat on the 3840x1080 canvas at 60 Hz; the glasses hold it in the room.
+- Mike, leaning and stepping around: "Holds in 6DoF."
+- Other glasses follow Pocket XR's rules: the One series with the XREAL Eye gets the canvas and
+  is told to turn 6DoF on in its own menu (untested, Mike has no One); VITURE waits on its SDK;
+  others have no 6DoF source. Nothing is sent to them.
+
+Not tried yet: `steady.py off` on the Deck, 3D side by side, runs of an hour or more, Gaming Mode.
 
 So the main risk, whether the Aura works on the Deck at all, is gone.
