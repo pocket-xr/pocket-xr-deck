@@ -134,6 +134,8 @@ xf.XFixesCreateRegion.restype = ctypes.c_ulong
 xf.XFixesCreateRegion.argtypes = [Display, ctypes.c_void_p, ctypes.c_int]
 xf.XFixesSetWindowShapeRegion.argtypes = [Display, Window, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_ulong]
 xf.XFixesDestroyRegion.argtypes = [Display, ctypes.c_ulong]
+xf.XFixesHideCursor.argtypes = [Display, Window]
+xf.XFixesShowCursor.argtypes = [Display, Window]
 SHAPE_INPUT = 2
 # The one spot of the view on the glasses that takes clicks: the space pointer parks the real pointer here whenever
 # it is over Pocket XR's own things (title bars, handles, buttons, empty space), so those clicks come to the app.
@@ -211,6 +213,7 @@ class XCapture(threading.Thread):
         self.pointer_on_glasses = False
         self._raw_ok = False
         self._left_space = False
+        self._cursor_hidden = False
         self.restored = True
         self._handler = ERROR_HANDLER(self._on_error)
         self.own_pid = os.getpid()
@@ -576,6 +579,9 @@ class XCapture(threading.Thread):
         if self._placed:
             self.log(f"capture: {len(self._placed)} windows put back on the Deck's screen")
         self._placed = {}
+        if self._cursor_hidden:
+            xf.XFixesShowCursor(self.dpy, self.root)
+            self._cursor_hidden = False
         x11.XFlush(self.dpy)
 
     def _send_keys(self, combo):
@@ -676,6 +682,13 @@ class XCapture(threading.Thread):
             x11.XFlush(self.dpy)
         self.pointer_root = (px, py)
         self.pointer_on_glasses = on_glasses
+        # X draws its own arrow wherever the real pointer is, and on the glasses' output that shows in the glasses
+        # beside the space pointer's ring: hidden while the space pointer is in use, back on the Deck's screen.
+        hide = bool(on_glasses and self.space_pointer)
+        if hide != self._cursor_hidden:
+            (xf.XFixesHideCursor if hide else xf.XFixesShowCursor)(self.dpy, self.root)
+            x11.XFlush(self.dpy)
+            self._cursor_hidden = hide
         self.pointer_at_right_edge = not self.virtual and px >= dx + dw - 1
         # The window the pointer is over: the top one there in the stacking order (the view itself is above all of
         # them on the glasses' output, so asking X for the window under the pointer would answer the view).

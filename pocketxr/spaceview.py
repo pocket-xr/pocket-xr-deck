@@ -35,7 +35,11 @@ LAUNCHER_D, LAUNCHER_W, LAUNCHER_H, LAUNCHER_DROP = 1.0, 1.007, 0.66, 5.0
 CC_D, CC_WDEG = 1.8, 38.0
 CC_OPEN_S = 0.22
 COLS, ROWS = 5, 3
-LEAVE_PUSH_DEG = 8.0  # pushing this far past the left edge of the view goes back to the Deck's screen
+LEAVE_PUSH_DEG = 8.0
+# "Cursor follows head" off: the cursor stays in the room; once out of view, a 3 degree net swipe brings it back
+# to the edge of the view, 1.5 degrees in (Pocket XR SpatialPointer).
+BRING_BACK_DEG = 3.0
+BRING_BACK_IN_DEG = 1.5  # pushing this far past the left edge of the view goes back to the Deck's screen
 
 
 def deg_per_px(speed):
@@ -76,6 +80,9 @@ class SpaceView:
         self.app_list = None
         self.focus = None
         self.push_left = 0.0
+        self.cursor_world = None  # (yaw, pitch) in the room, with "Cursor follows head" off
+        self.bring_back = 0.0
+        self.room_motion = (0.0, 0.0)
 
     # ---------- textures ----------
     def _tex(self, key, make):
@@ -178,6 +185,8 @@ class SpaceView:
             k = deg_per_px(self.app.settings.get("cursor_speed", 5))
             if self.adjust_all is not None and (dx or dy):
                 self._adjust_all_turn(-dx * k, -dy * k)
+            elif not self.app.settings.get("cursor_follows_head", True):
+                self.room_motion = (self.room_motion[0] - dx * k, self.room_motion[1] - dy * k)
             else:
                 want = self.cursor[0] - dx * k
                 if want > CURSOR_LIMIT[0] and not self.drag and not self.resize:
@@ -189,8 +198,12 @@ class SpaceView:
                     self.push_left = 0.0  # a move to the right starts the push again; a still frame does not
                 self.cursor[0] = S.clamp(want, -CURSOR_LIMIT[0], CURSOR_LIMIT[0])
                 self.cursor[1] = S.clamp(self.cursor[1] - dy * k, -CURSOR_LIMIT[1], CURSOR_LIMIT[1])
-        local = S.direction(self.cursor[0], self.cursor[1])
-        self.ray = fusion.qrot(view_q, local)
+        if self.app.settings.get("cursor_follows_head", True):
+            self.cursor_world = None
+            local = S.direction(self.cursor[0], self.cursor[1])
+            self.ray = fusion.qrot(view_q, local)
+        else:
+            self._room_cursor(view_q, head_yaw, head_pitch)
         self.hover = self._hit(panels, now)
         if self.drag:
             self._drag_update()
@@ -199,6 +212,31 @@ class SpaceView:
         self._warp(panels, out_size)
         if self.hover and self.hover[0] == "window":
             self.ctl_seen[self.hover[1]] = now
+
+    def _room_cursor(self, view_q, head_yaw, head_pitch):
+        """The cursor stays where it is in the room as the head turns; the trackpad moves it there."""
+        if self.cursor_world is None:
+            self.cursor_world = [S.wrap(head_yaw + self.cursor[0]), head_pitch + self.cursor[1]]
+        dyaw, dpitch = self.room_motion
+        self.room_motion = (0.0, 0.0)
+        oy = S.wrap(self.cursor_world[0] - head_yaw)
+        op = self.cursor_world[1] - head_pitch
+        out = abs(oy) > CURSOR_LIMIT[0] or abs(op) > CURSOR_LIMIT[1]
+        if out:
+            self.bring_back += math.hypot(dyaw, dpitch)
+            if self.bring_back >= BRING_BACK_DEG:
+                self.bring_back = 0.0
+                oy = S.clamp(oy, -CURSOR_LIMIT[0] + BRING_BACK_IN_DEG, CURSOR_LIMIT[0] - BRING_BACK_IN_DEG)
+                op = S.clamp(op, -CURSOR_LIMIT[1] + BRING_BACK_IN_DEG, CURSOR_LIMIT[1] - BRING_BACK_IN_DEG)
+                self.cursor_world = [S.wrap(head_yaw + oy), head_pitch + op]
+        else:
+            self.bring_back = 0.0
+            self.cursor_world[0] = S.wrap(self.cursor_world[0] + dyaw)
+            self.cursor_world[1] = S.clamp(self.cursor_world[1] + dpitch, -89.0, 89.0)
+        # keep the head-relative offset current, for switching back
+        self.cursor = [S.clamp(S.wrap(self.cursor_world[0] - head_yaw), -CURSOR_LIMIT[0], CURSOR_LIMIT[0]),
+                       S.clamp(self.cursor_world[1] - head_pitch, -CURSOR_LIMIT[1], CURSOR_LIMIT[1])]
+        self.ray = S.direction(self.cursor_world[0], self.cursor_world[1])
 
     def _hit(self, panels, now):
         best = None
@@ -554,22 +592,23 @@ class SpaceView:
             r, c = divmod(i, 2)
             items.append(Item(0.04 + c * 0.23, y + r * 0.11, 0.25 + c * 0.23, y + r * 0.11 + 0.09,
                               "adjust_all" if name == "Adjust all" else "arrange", name, name))
-        toggles = [("snap", "Snap", s.get("snap", True)), ("locked", "Lock screens", s.get("locked", False))]
+        toggles = [("snap", "Snap", s.get("snap", True)), ("locked", "Lock screens", s.get("locked", False)),
+                   ("cursor_follows_head", "Cursor follows head", s.get("cursor_follows_head", True))]
         for i, (k, label, on) in enumerate(toggles):
             items.append(Item(0.54, 0.20 + i * 0.11, 0.96, 0.29 + i * 0.11, "toggle", k, label, on, kind="toggle"))
         sp = s.get("cursor_speed", 5)
-        items.append(Item(0.54, 0.42, 0.62, 0.51, "speed", -1, "-"))
-        items.append(Item(0.63, 0.42, 0.87, 0.51, "noop", None, f"Cursor speed {sp * 10}%", kind="text"))
-        items.append(Item(0.88, 0.42, 0.96, 0.51, "speed", 1, "+"))
+        items.append(Item(0.54, 0.53, 0.62, 0.62, "speed", -1, "-"))
+        items.append(Item(0.63, 0.53, 0.87, 0.62, "noop", None, f"Cursor speed {sp * 10}%", kind="text"))
+        items.append(Item(0.88, 0.53, 0.96, 0.62, "speed", 1, "+"))
         foc = self.poses.get(self.focus)
         cpct = int(round((foc.curve / S.CURVE_MAX) * 100)) if foc else 0
-        items.append(Item(0.54, 0.53, 0.62, 0.62, "curve", -1, "-"))
-        items.append(Item(0.63, 0.53, 0.87, 0.62, "noop", None, f"Curve {cpct}%", kind="text"))
-        items.append(Item(0.88, 0.53, 0.96, 0.62, "curve", 1, "+"))
-        for i, pr in enumerate(self.store.presets[:3]):
-            items.append(Item(0.54, 0.66 + i * 0.10, 0.96, 0.74 + i * 0.10, "preset", i, pr["name"]))
-        items.append(Item(0.54, 0.66 + min(3, len(self.store.presets)) * 0.10, 0.96,
-                          0.74 + min(3, len(self.store.presets)) * 0.10, "save_preset", None, "Save layout"))
+        items.append(Item(0.54, 0.64, 0.62, 0.72, "curve", -1, "-"))
+        items.append(Item(0.63, 0.64, 0.87, 0.72, "noop", None, f"Curve {cpct}%", kind="text"))
+        items.append(Item(0.88, 0.64, 0.96, 0.72, "curve", 1, "+"))
+        for i, pr in enumerate(self.store.presets[:2]):
+            items.append(Item(0.54, 0.75 + i * 0.08, 0.96, 0.82 + i * 0.08, "preset", i, pr["name"]))
+        n = min(2, len(self.store.presets))
+        items.append(Item(0.54, 0.75 + n * 0.08, 0.96, 0.82 + n * 0.08, "save_preset", None, "Save layout"))
         return items
 
     def _item(self, it):
@@ -593,7 +632,7 @@ class SpaceView:
             self.cc = None
             self.start_adjust_all()
         elif a == "toggle":
-            self.app.set_setting(it.arg, not self.app.settings.get(it.arg, it.arg == "snap"))
+            self.app.set_setting(it.arg, not self.app.settings.get(it.arg, it.arg in ("snap", "cursor_follows_head")))
         elif a == "speed":
             self.app.set_setting("cursor_speed", int(S.clamp(self.app.settings.get("cursor_speed", 5) + it.arg, 1, 10)))
         elif a == "curve":

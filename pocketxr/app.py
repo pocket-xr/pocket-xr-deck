@@ -35,7 +35,7 @@ STATE = os.path.join(os.environ.get("XDG_STATE_HOME", os.path.expanduser("~/.loc
 ACCENT = (0x5A / 255, 0x93 / 255, 1.0)
 
 DEFAULTS = {"view": "3dof", "source": "deck", "distance": 2.0, "scale": 1.0, "canvas_scale": 0.8, "look": True,
-            "snap": True, "locked": False, "cursor_speed": 5, "curve_default": 0.0,
+            "snap": True, "locked": False, "cursor_speed": 5, "curve_default": 0.0, "cursor_follows_head": True,
             "viture_tracking": None}
 
 # 3DoF: a window 1600 px wide is this wide at 1.0, in metres (the Deck's screen 1.28 m, an app's 1920 px screen 1.92 m:
@@ -297,6 +297,11 @@ class App:
                 gd, _ = split_displays(displays())
                 if gd is not None:
                     g = gmod.other_glasses()
+                    if "xreal" in gd[1].lower() or "ultra" in gd[1].lower():
+                        # The Aura's picture without its USB side: its glasses service has stopped (seen on the
+                        # phone too); a replug brings it back.
+                        g = gmod.Glasses("XREAL glasses, no USB link", "other", 0, 0)
+                        self.usb_down_hint = True
         if g != self.glasses:
             if self.glasses is not None:
                 self.log(f"glasses gone: {self.glasses.name}")
@@ -312,6 +317,11 @@ class App:
             if g is not None:
                 self.log(f"glasses: {g.name} ({g.family}, {g.vendor:04x}:{g.product:04x}{', XREAL Eye' if g.eye else ''})")
                 self._start_tracking()
+                if getattr(self, "usb_down_hint", False) and g.family == "other":
+                    self.usb_down_hint = False
+                    self.message = ("Your XREAL glasses show a picture but their USB link is down, so there is no head "
+                                    "tracking. Unplug them and plug them back in.")
+                    notify(self.message)
                 if g.control_link:
                     self.control = SettingsControl(g, self.log, self._on_control_state, self._on_message)
                     self.control.start()
@@ -438,7 +448,7 @@ class App:
             self.space.toggle_launcher()
         elif cmd == "cc":
             self.space.toggle_cc(time.monotonic())
-        elif cmd in ("snap", "locked"):
+        elif cmd in ("snap", "locked", "cursor_follows_head"):
             self.set_setting(cmd, bool(value))
         elif cmd == "look":
             self.settings["look"] = bool(value)
@@ -567,6 +577,7 @@ class App:
             "look": self.settings["look"],
             "snap": self.settings.get("snap", True),
             "locked": self.settings.get("locked", False),
+            "cursor_follows_head": self.settings.get("cursor_follows_head", True),
             "steady_ok": bool(g and g.steady_6dof),
             "flat": self._flat(),
             "viture": bool(g and g.family == "viture"),
