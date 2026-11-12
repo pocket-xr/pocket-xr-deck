@@ -572,6 +572,9 @@ class App:
         self.settings[key] = value
         save_settings(self.settings)
         if key == "sbs_3d" and self.control:
+            if value:  # the user asked: the glasses are asked again, however often they were before
+                self.control.sbs_tries = 0
+                self.control.sbs_first_at = None
             self.control.want(self._view())
         if key == "locked" and value:
             # Anything being moved or resized is dropped where it is.

@@ -238,7 +238,7 @@ class Room:
         title = key[0]
         gl.glBindTexture(GL_TEXTURE_2D, self.tex)
         gl.glTexImage2D(GL_TEXTURE_2D, 0, 0x1908, w, h, 0, 0x80E1, 0x1401, data)  # RGBA from BGRA bytes
-        self.log(f"pcvr: loading card: {title}")
+        self.log(f"pcvr: loading card: {title}" + (f" ({key[1]})" if key[1] else ""))
 
     def follow(self, head_q):
         """The card sits where you were looking; turned well away, it eases back in front of you. Yaw only."""
