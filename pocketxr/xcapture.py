@@ -22,6 +22,8 @@ import time
 x11 = ctypes.CDLL(ctypes.util.find_library("X11") or "libX11.so.6")
 xc = ctypes.CDLL(ctypes.util.find_library("Xcomposite") or "libXcomposite.so.1")
 xf = ctypes.CDLL(ctypes.util.find_library("Xfixes") or "libXfixes.so.3")
+xt = ctypes.CDLL(ctypes.util.find_library("Xtst") or "libXtst.so.6")
+xt.XTestFakeKeyEvent.argtypes = [ctypes.c_void_p, ctypes.c_uint, ctypes.c_int, ctypes.c_ulong]
 
 Display = ctypes.c_void_p
 Window = ctypes.c_ulong
@@ -93,6 +95,13 @@ xf.XFixesCreateRegion.argtypes = [Display, ctypes.c_void_p, ctypes.c_int]
 xf.XFixesSetWindowShapeRegion.argtypes = [Display, Window, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_ulong]
 xf.XFixesDestroyRegion.argtypes = [Display, ctypes.c_ulong]
 SHAPE_INPUT = 2
+# The one spot of the view on the glasses that takes clicks: the space pointer parks the real pointer here whenever
+# it is over Pocket XR's own things (title bars, handles, buttons, empty space), so those clicks come to the app.
+CHROME_SPOT = (0, 0, 24, 24)
+
+
+class XRectangle(ctypes.Structure):
+    _fields_ = [("x", ctypes.c_short), ("y", ctypes.c_short), ("width", ctypes.c_ushort), ("height", ctypes.c_ushort)]
 VIEW_TITLE = "Pocket XR Deck"
 # Each app's own screen: the glasses' output, at most this big (on Ultrawide's 3840 wide output, one 1920 wide screen).
 APP_SCREEN = (1920, 1080)
@@ -125,6 +134,7 @@ class Panel:
         self.pointer = None  # (x, y) in its picture, when the pointer is on it and nothing covers it there
         self.active = False
         self.frame_win = None  # KWin's frame around it, found with the list
+        self.cls = ""  # the app's WM_CLASS class, to keep its place across runs
         self.first_seen = time.monotonic()
 
 
@@ -151,6 +161,14 @@ class XCapture(threading.Thread):
         self._placed = {}  # client window -> (frame x, frame y, client w, client h, maximized) before it was moved
         self._stack = []  # client windows, bottom to top
         self._view_win = None  # the app's own view on the glasses, made click-through
+        # The space pointer: while the real pointer is on the glasses' output its moves are summed into .motion and
+        # it is put back on .warp_target (inside the app under the space pointer, or on the chrome spot).
+        self.space_pointer = False
+        self.warp_target = None
+        self.motion = [0, 0]
+        self._last_warp = None
+        self.raise_wanted = None
+        self.pointer_on_glasses = False
         self.restored = True
         self._handler = ERROR_HANDLER(self._on_error)
         self.own_pid = os.getpid()
@@ -183,12 +201,42 @@ class XCapture(threading.Thread):
         with self.lock:
             self.requests.append(("activate", key))
 
+    def raise_window(self, key):
+        """Put an app screen on top (no focus change), so the real pointer over it reaches it."""
+        with self.lock:
+            self.requests.append(("raise", key))
+
+    def close_window(self, key):
+        """Close an app window, as its own close button would (_NET_CLOSE_WINDOW)."""
+        with self.lock:
+            self.requests.append(("close", key))
+
+    def key_to(self, key, combo):
+        """Send a key combination ("alt+Left") to an app window: it is made active first."""
+        with self.lock:
+            self.requests.append(("key", (key, combo)))
+
+    def resize_app(self, key, cw, ch):
+        """Change an app's own screen size (its pixels), within the glasses' output."""
+        with self.lock:
+            self.requests.append(("resize", (key, cw, ch)))
+
     def restore_all(self):
         """Put every window back where it was (on quit). Sets .restored when done."""
         self.restored = not self._placed
         self.closing = True  # from now on nothing is moved onto the glasses again
         with self.lock:
             self.requests.append(("restore", None))
+
+    def take_motion(self):
+        with self.lock:
+            m = self.motion
+            self.motion = [0, 0]
+        return m
+
+    def chrome_spot(self):
+        g = self.glasses_rect
+        return (g[0] + CHROME_SPOT[0] + CHROME_SPOT[2] // 2, g[1] + CHROME_SPOT[1] + CHROME_SPOT[3] // 2) if g else None
 
     @property
     def virtual(self):
@@ -212,7 +260,7 @@ class XCapture(threading.Thread):
             "_NET_CLIENT_LIST", "_NET_ACTIVE_WINDOW", "_NET_WM_NAME", "UTF8_STRING", "WM_NAME", "_NET_WM_PID",
             "_NET_WM_WINDOW_TYPE", "_NET_WM_WINDOW_TYPE_NORMAL", "_NET_WM_WINDOW_TYPE_DIALOG", "_NET_WM_STATE",
             "_NET_WM_STATE_HIDDEN", "_NET_WM_STATE_SKIP_TASKBAR", "WM_CLASS", "_NET_CLIENT_LIST_STACKING",
-            "_NET_MOVERESIZE_WINDOW", "_NET_WM_STATE_MAXIMIZED_VERT", "_NET_WM_STATE_MAXIMIZED_HORZ")}
+            "_NET_MOVERESIZE_WINDOW", "_NET_RESTACK_WINDOW", "_NET_CLOSE_WINDOW", "_NET_WM_STATE_MAXIMIZED_VERT", "_NET_WM_STATE_MAXIMIZED_HORZ")}
         last_list = 0.0
         while not self.stop:
             now = time.monotonic()
@@ -221,6 +269,26 @@ class XCapture(threading.Thread):
             for kind, key in reqs:
                 if kind == "activate" and isinstance(key, int):
                     self._activate(key)
+                elif kind == "raise" and isinstance(key, int):
+                    self._client_message(key, "_NET_RESTACK_WINDOW", [2, 0, 0, 0, 0])  # from a pager, to the top
+                    x11.XFlush(self.dpy)
+                elif kind == "resize":
+                    w, cw, ch = key
+                    p = self._panels.get(w)
+                    g = self.glasses_rect
+                    if p is not None and g is not None:
+                        fx, fy = self._origin(p.frame_win) if p.frame_win else (g[0], g[1])
+                        self._move_resize(w, g[0], g[1], min(cw, g[2]), min(ch, g[3]))
+                        x11.XFlush(self.dpy)
+                elif kind == "close" and isinstance(key, int):
+                    self._client_message(key, "_NET_CLOSE_WINDOW", [0, 2, 0, 0, 0])
+                    x11.XFlush(self.dpy)
+                elif kind == "key":
+                    w, combo = key
+                    self._activate(w)
+                    x11.XSync(self.dpy, 0)
+                    time.sleep(0.05)
+                    self._send_keys(combo)
                 elif kind == "restore":
                     self._restore_all()
                     self.restored = True
@@ -229,7 +297,7 @@ class XCapture(threading.Thread):
                 self._refresh_list()
                 last_list = now
             self._pointer_and_frames(now)
-            time.sleep(0.008)
+            time.sleep(0.004)
 
     # ---- X helpers ----
     def _prop(self, w, atom, kind=0, length=1024):
@@ -325,6 +393,9 @@ class XCapture(threading.Thread):
                     continue
                 p = self._panels.get(w) or Panel(w, "")
                 p.title = self._title(w)
+                if not p.cls:
+                    raw = self._text(w, "WM_CLASS")
+                    p.cls = raw.split("\0")[1] if "\0" in raw and len(raw.split("\0")) > 1 else raw
                 p.root_x, p.root_y = self._origin(w)
                 p.w, p.h = a.width, a.height
                 p.active = w == active
@@ -406,20 +477,35 @@ class XCapture(threading.Thread):
         self._placed = {}
         x11.XFlush(self.dpy)
 
+    def _send_keys(self, combo):
+        x11.XStringToKeysym.restype = ctypes.c_ulong
+        x11.XStringToKeysym.argtypes = [ctypes.c_char_p]
+        x11.XKeysymToKeycode.restype = ctypes.c_ubyte
+        x11.XKeysymToKeycode.argtypes = [ctypes.c_void_p, ctypes.c_ulong]
+        names = {"alt": "Alt_L", "ctrl": "Control_L", "shift": "Shift_L", "super": "Super_L"}
+        codes = [x11.XKeysymToKeycode(self.dpy, x11.XStringToKeysym(names.get(k.lower(), k).encode()))
+                 for k in combo.split("+")]
+        for c in codes:
+            xt.XTestFakeKeyEvent(self.dpy, c, 1, 0)
+        for c in reversed(codes):
+            xt.XTestFakeKeyEvent(self.dpy, c, 0, 0)
+        x11.XFlush(self.dpy)
+
     def _find_view(self):
         """The app's own view on the glasses: clicks go through it to the app screens beneath."""
         for w in self._longs(self.root, "_NET_CLIENT_LIST"):
             pid = self._longs(w, "_NET_WM_PID")
             if pid and pid[0] == self.own_pid and self._title(w) == VIEW_TITLE:
                 if w != self._view_win:
-                    region = xf.XFixesCreateRegion(self.dpy, None, 0)
+                    rect = XRectangle(*CHROME_SPOT)
+                    region = xf.XFixesCreateRegion(self.dpy, ctypes.byref(rect), 1)
                     for win in {w, self._frame_of(w)}:
                         if win:
                             xf.XFixesSetWindowShapeRegion(self.dpy, win, SHAPE_INPUT, 0, 0, region)
                     xf.XFixesDestroyRegion(self.dpy, region)
                     x11.XFlush(self.dpy)
                     self._view_win = w
-                    self.log("capture: the view on the glasses lets clicks through to the app screens")
+                    self.log("capture: the view on the glasses lets clicks through to the app screens, but for its chrome spot")
                 return
 
     def _keep_off_glasses(self, w, p):
@@ -458,6 +544,19 @@ class XCapture(threading.Thread):
         dx, dy, dw, dh = self.deck_rect
         g = self.glasses_rect
         on_glasses = self.virtual and g[0] <= px < g[0] + g[2] and g[1] <= py < g[1] + g[3]
+        if on_glasses and self.space_pointer:
+            if self._last_warp is not None:
+                with self.lock:
+                    self.motion[0] += px - self._last_warp[0]
+                    self.motion[1] += py - self._last_warp[1]
+            t = self.warp_target or self.chrome_spot()
+            if t is not None and (t[0], t[1]) != (px, py):
+                x11.XWarpPointer(self.dpy, 0, self.root, 0, 0, 0, 0, int(t[0]), int(t[1]))
+                x11.XFlush(self.dpy)
+                px, py = int(t[0]), int(t[1])
+            self._last_warp = (px, py)
+        else:
+            self._last_warp = None
         if not on_glasses and not (dx <= px < dx + dw and dy <= py < dy + dh):
             px, py = min(max(px, dx), dx + dw - 1), min(max(py, dy), dy + dh - 1)
             x11.XWarpPointer(self.dpy, 0, self.root, 0, 0, 0, 0, px, py)

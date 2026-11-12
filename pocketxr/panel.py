@@ -27,7 +27,7 @@ class Panel:
         self.root = root
         root.title("Pocket XR")
         root.configure(bg=BG)
-        root.geometry("440x760+830+20")
+        root.geometry("440x790+830+5")
         root.minsize(380, 600)
         try:
             root.iconphoto(True, tk.PhotoImage(file=sys.argv[1])) if len(sys.argv) > 1 else None
@@ -46,7 +46,21 @@ class Panel:
         self.view_row = self.segment("View", [("3dof", "Window in space"), ("steady", "Steady 6DoF")], "view", self.view_buttons)
         self.segment("Show", [("deck", "Deck screen"), ("apps", "App windows")], "source", self.source_buttons)
 
-        row = self.card("Adjust")
+        space = self.card("Space")
+        self.button(space, "Launcher", lambda: send("launcher")).grid(row=0, column=0, sticky="ew", padx=4, pady=4)
+        self.button(space, "Control Center", lambda: send("cc")).grid(row=0, column=1, sticky="ew", padx=4, pady=4)
+        space.columnconfigure(0, weight=1)
+        space.columnconfigure(1, weight=1)
+        self.snap = tk.BooleanVar(value=True)
+        self.locked = tk.BooleanVar(value=False)
+        for i, (var, label, cmd) in enumerate(((self.snap, "Snap windows together", "snap"),
+                                               (self.locked, "Lock screens", "locked"))):
+            tk.Checkbutton(space, text=label, variable=var, command=lambda v=var, c=cmd: send(c, v.get()), bg=CARD,
+                           fg=TEXT, selectcolor=CARD, activebackground=CARD, activeforeground=TEXT, font=(FONT, 11),
+                           anchor="w", highlightthickness=0, bd=0).grid(row=1 + i, column=0, columnspan=2, sticky="w",
+                                                                        padx=4, pady=(4, 0))
+
+        row = self.card("Window in front")
         self.button(row, "Recentre", lambda: send("recentre"), wide=True).grid(row=0, column=0, columnspan=2, sticky="ew", padx=4, pady=4)
         self.button(row, "Smaller", lambda: send("size", -1)).grid(row=1, column=0, sticky="ew", padx=4, pady=4)
         self.button(row, "Bigger", lambda: send("size", 1)).grid(row=1, column=1, sticky="ew", padx=4, pady=4)
@@ -57,10 +71,6 @@ class Panel:
         row.columnconfigure(0, weight=1)
         row.columnconfigure(1, weight=1)
         self.look = tk.BooleanVar(value=True)
-        tk.Checkbutton(row, text="Look at a window to bring it to the front", variable=self.look,
-                       command=lambda: send("look", self.look.get()), bg=CARD, fg=TEXT, selectcolor=CARD,
-                       activebackground=CARD, activeforeground=TEXT, font=(FONT, 11), anchor="w",
-                       highlightthickness=0, bd=0).grid(row=3, column=0, columnspan=2, sticky="w", padx=4, pady=(6, 2))
         self.viture = tk.BooleanVar(value=False)
         self.viture_box = tk.Checkbutton(row, text="VITURE head tracking", variable=self.viture,
                                          command=lambda: send("viture", self.viture.get()), bg=CARD, fg=TEXT,
@@ -73,7 +83,8 @@ class Panel:
         legend = ("Back buttons\n"
                   "L4  recentre          hold L4  switch view\n"
                   "R4  next app           hold R4  Deck screen / apps\n"
-                  "L5  smaller            R5  bigger")
+                  "L5  launcher           hold L5  lock screens\n"
+                  "R5  Control Center     hold R5  adjust all")
         tk.Label(root, text=legend, bg=BG, fg=DIM, font=(FONT, 10), justify="left", anchor="w").pack(fill="x", padx=18, pady=(4, 8))
 
         self.button(root, "Quit and put the glasses back", self.quit, wide=True).pack(fill="x", padx=18, pady=(0, 14), side="bottom")
@@ -137,8 +148,10 @@ class Panel:
         flat = st.get("flat", False)
         for b in (self.near, self.far):
             b.configure(state="disabled" if flat else "normal", disabledforeground="#55585E")
-        if self.look.get() != st.get("look", True):
-            self.look.set(st.get("look", True))
+        if self.snap.get() != st.get("snap", True):
+            self.snap.set(st.get("snap", True))
+        if self.locked.get() != st.get("locked", False):
+            self.locked.set(st.get("locked", False))
         if st.get("viture"):
             self.viture_box.configure(text=st.get("viture_label", "VITURE head tracking"))
             self.viture_box.grid(row=4, column=0, columnspan=2, sticky="w", padx=4, pady=(2, 2))

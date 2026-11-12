@@ -26,6 +26,7 @@ from .gl import (GL_BGRA, GL_BLEND, GL_CLAMP_TO_EDGE, GL_COLOR_BUFFER_BIT, GL_LI
                  SDL_WINDOW_FULLSCREEN_DESKTOP, SDL_WINDOW_OPENGL, SDL_WINDOW_SKIP_TASKBAR, displays, gl, sdl,
                  split_displays)
 from .settingsctl import SettingsControl
+from .spaceview import SpaceView
 from .xcapture import XCapture
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -34,6 +35,7 @@ STATE = os.path.join(os.environ.get("XDG_STATE_HOME", os.path.expanduser("~/.loc
 ACCENT = (0x5A / 255, 0x93 / 255, 1.0)
 
 DEFAULTS = {"view": "3dof", "source": "deck", "distance": 2.0, "scale": 1.0, "canvas_scale": 0.8, "look": True,
+            "snap": True, "locked": False, "cursor_speed": 5, "curve_default": 0.0,
             "viture_tracking": None}
 
 # 3DoF: a window 1600 px wide is this wide at 1.0, in metres (the Deck's screen 1.28 m, an app's 1920 px screen 1.92 m:
@@ -98,6 +100,8 @@ class App:
     def __init__(self):
         self.log = Log()
         self.settings = load_settings()
+        self.space_path = os.path.join(CONFIG, "space.json")
+        self.space = SpaceView(self)
         self.events = queue.Queue()
         self.glasses = None
         self.window = None
@@ -237,6 +241,12 @@ class App:
                 mod = int.from_bytes(bytes(ev[24:26]), "little")
                 if sym == ord("q") and mod & KMOD_CTRL:
                     self.request_quit("Ctrl+Q")
+            elif etype in (0x401, 0x402) and self.capture.space_pointer:  # mouse button down / up
+                self.space.mouse(ev[16], etype == 0x401, time.monotonic())
+            elif etype == 0x403 and self.capture.space_pointer:  # wheel
+                dy = int.from_bytes(bytes(ev[20:24]), "little", signed=True)
+                if dy:
+                    self.space.wheel(dy)
 
     # ---------- glasses come and go ----------
     def _viture_on(self):
@@ -356,6 +366,7 @@ class App:
         self.log(f"view: open on '{name}' {w}x{h}")
 
     def _close_window(self):
+        self.space.forget_textures()
         if self.window:
             for tex, *_ in self.textures.values():
                 t = ctypes.c_uint(tex)
@@ -397,9 +408,14 @@ class App:
         elif name == "R4" and how == "hold":
             self.set_source("apps" if self.settings["source"] == "deck" else "deck")
         elif name == "L5" and how == "tap":
-            self.resize(-1)
+            self.space.toggle_launcher()
         elif name == "R5" and how == "tap":
-            self.resize(1)
+            self.space.toggle_cc(time.monotonic())
+        elif name == "L5" and how == "hold":
+            self.set_setting("locked", not self.settings.get("locked", False))
+            self.message = "Screens are locked." if self.settings["locked"] else "Screens are unlocked."
+        elif name == "R5" and how == "hold":
+            self.space.start_adjust_all()
 
     def _panel_cmd(self, cmd, value):
         if cmd == "view":
@@ -409,10 +425,21 @@ class App:
         elif cmd == "recentre":
             self.recentre()
         elif cmd == "size":
-            self.resize(int(value))
+            if self._flat():
+                self.resize(int(value))
+            else:
+                self.space.scale_all_or_focused(int(value))
         elif cmd == "distance":
-            self.settings["distance"] = min(5.0, max(0.8, self.settings["distance"] + 0.2 * int(value)))
-            save_settings(self.settings)
+            key = self.space.focus if self.space.focus in self.space.poses else next(iter(self.space.poses), None)
+            if key is not None and not self.settings.get("locked", False):
+                self.space.depth(key, 2 * int(value))
+                self.space.save_places()
+        elif cmd == "launcher":
+            self.space.toggle_launcher()
+        elif cmd == "cc":
+            self.space.toggle_cc(time.monotonic())
+        elif cmd in ("snap", "locked"):
+            self.set_setting(cmd, bool(value))
         elif cmd == "look":
             self.settings["look"] = bool(value)
             save_settings(self.settings)
@@ -440,6 +467,15 @@ class App:
             self.control.want(view)
         if self.head:
             self.head.recentre()
+
+    def set_setting(self, key, value):
+        self.settings[key] = value
+        save_settings(self.settings)
+        if key == "locked" and value:
+            # Anything being moved or resized is dropped where it is.
+            self.space.drag = None
+            self.space.resize = None
+            self.space.adjust_all = None
 
     def set_source(self, source):
         self.settings["source"] = source
@@ -474,6 +510,7 @@ class App:
         self.log(f"quit: {why}")
         self.message = "Putting your glasses back..."
         self._send_status()
+        self.space.save_places()
         self.capture.restore_all()
         if self.control and self.control.link and not self.control.link.closed:
             self.control.restore(lambda: setattr(self, "done", True))
@@ -528,6 +565,8 @@ class App:
             "view": self._view(),
             "source": self.settings["source"],
             "look": self.settings["look"],
+            "snap": self.settings.get("snap", True),
+            "locked": self.settings.get("locked", False),
             "steady_ok": bool(g and g.steady_6dof),
             "flat": self._flat(),
             "viture": bool(g and g.family == "viture"),
@@ -643,10 +682,12 @@ class App:
         eyes = [(-0.032, 0, w // 2), (0.032, w // 2, w // 2)] if sbs else [(0.0, 0, w)]
         view = self.head.view() if self.head else (1.0, 0.0, 0.0, 0.0)
         m = (ctypes.c_float * 16)(*fusion.matrix(fusion.qconj(view)))
-        items = self._layout_arc(panels)
-        d = self.settings["distance"]
-        self._look(items, view, now)
+        live = self.capture.virtual
+        self.capture.space_pointer = live
+        g = self.capture.glasses_rect
+        self.space.frame(now, view, panels, (g[2], g[3]) if g else None, live and self.capture.pointer_on_glasses)
         self._edge_recentre(now)
+        tex = lambda p: (self.textures.get(p.key) or (None,))[0]  # noqa: E731
         for eye_x, vx, vw in eyes:
             gl.glViewport(vx, 0, vw, h)
             gl.glMatrixMode(GL_PROJECTION)
@@ -654,14 +695,37 @@ class App:
             near = 0.05
             top = near * math.tan(math.radians(FOV_V_DEG) / 2)
             gl.glFrustum(-top * vw / h, top * vw / h, -top, top, near, 100.0)
-            for p, wm, hm, ang, yaw in items:
-                gl.glMatrixMode(GL_MODELVIEW)
-                gl.glLoadIdentity()
-                gl.glTranslatef(-eye_x, 0.0, 0.0)
-                gl.glMultMatrixf(m)
-                gl.glRotatef(yaw, 0.0, 1.0, 0.0)
-                gl.glTranslatef(0.0, 0.0, -d)
-                self._quad(p, -wm / 2, hm / 2, wm, hm, 0.0, wm / p.frame.w, hm / p.frame.h)
+            gl.glMatrixMode(GL_MODELVIEW)
+            gl.glLoadIdentity()
+            gl.glTranslatef(-eye_x, 0.0, 0.0)
+            gl.glMultMatrixf(m)
+            self.space.draw(panels, now, tex)
+        self._edge_fade(w, h, sbs)
+
+    def _edge_fade(self, w, h, sbs):
+        """EdgeFade "Soft", Pocket XR's default: a smooth fade to black at each eye's edges (96 px outer, 48 inner,
+        48 top and bottom; with one picture both sides are outer)."""
+        gl.glViewport(0, 0, w, h)
+        gl.glMatrixMode(GL_PROJECTION)
+        gl.glLoadIdentity()
+        gl.glMatrixMode(GL_MODELVIEW)
+        gl.glLoadIdentity()
+        gl.glEnable(GL_BLEND)
+        gl.glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
+        eyes = [(0, w // 2, 96, 48), (w // 2, w // 2, 48, 96)] if sbs else [(0, w, 96, 96)]
+        for x0, ew, left_px, right_px in eyes:
+            for (ax, bx, ay, by, fade_at) in (
+                    (x0, x0 + left_px, 0, h, "left"), (x0 + ew - right_px, x0 + ew, 0, h, "right"),
+                    (x0, x0 + ew, 0, 48, "bottom"), (x0, x0 + ew, h - 48, h, "top")):
+                X0, X1 = 2 * ax / w - 1, 2 * bx / w - 1
+                Y0, Y1 = 2 * ay / h - 1, 2 * by / h - 1
+                a = {"left": (1, 0, 0, 1), "right": (0, 1, 1, 0), "bottom": (1, 1, 0, 0), "top": (0, 0, 1, 1)}[fade_at]
+                gl.glBegin(GL_QUADS)
+                for (vx, vy), al in zip(((X0, Y0), (X1, Y0), (X1, Y1), (X0, Y1)), a):
+                    gl.glColor4f(0.0, 0.0, 0.0, al)
+                    gl.glVertex3f(vx, vy, 0.0)
+                gl.glEnd()
+        gl.glDisable(GL_BLEND)
 
     def _quad(self, p, left, top, pw, ph, z, sx, sy):
         """One panel with its top left at (left, top), size pw x ph; sx, sy: units per window pixel (for the pointer)."""
