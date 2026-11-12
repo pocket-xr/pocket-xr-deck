@@ -1,0 +1,111 @@
+# Pocket XR on the Steam Deck: is it worth it?
+
+Written 11 Nov 2026, before any test on the Deck. The test result goes at the end.
+
+## The short answer
+
+Yes, a first version is quick. Reading the glasses and holding one window still in Desktop Mode is
+a few days, not weeks. A version that sits under Gaming Mode games is harder, and Breezy Desktop
+already does that for most glasses, but not for the XREAL Aura.
+
+It is a new Linux app. It shares Pocket XR's knowledge of the glasses, not its Android code.
+
+## What the Deck version is
+
+- The glasses plug into the Deck's USB-C port. They get the picture over DisplayPort and send
+  their motion back over the same cable.
+- The Deck reads head tracking itself. No phone is involved.
+- The Deck draws its game or desktop windows as screens that stay put in space while the head
+  turns (3DoF). Later, on the Aura, the glasses' own Spatial Anchor can hold a wide canvas in
+  6DoF, as Pocket XR's Steady mode does on the phone.
+
+## Desktop Mode or Gaming Mode
+
+| | Desktop Mode (KDE Plasma) | Gaming Mode (gamescope) |
+|---|---|---|
+| Who owns the screen | KDE. Our app is one fullscreen window on the glasses' output. | gamescope. Nothing else can draw on top without hooking into it. |
+| Getting window pictures | X11 or PipeWire screen capture of a window or the whole desktop. Ordinary, documented. | Only by being inside the frame path: a gamescope effect, a Vulkan layer, or a patched gamescope. |
+| Input | Normal mouse and keyboard; Steam Input as a desktop controller. | Steam Input belongs to the game. |
+| Who wants it | People using the Deck as a small PC with a big virtual screen. | People playing games, which is most Deck owners. |
+| Effort | Small. The prototype here is this path. | Large. Breezy did it with a Vulkan layer. |
+
+So the plan is Desktop Mode first, because it can be built and tested fast. Gaming Mode is a
+separate decision, made after seeing whether Desktop Mode is good enough to use.
+
+## Breezy Desktop already exists
+
+Breezy Desktop (GPL-3.0, by Wayne Heaney) and its Decky plugin, Decky XR Gaming, already do
+this on the Deck.
+
+- **Desktop:** Breezy Desktop runs on KDE Plasma 6 and GNOME. Its virtual displays need Wayland.
+  After a two month trial, the many-screens features need a paid licence ($10 a year or $25
+  once for 3DoF, more for 6DoF).
+- **Gaming Mode:** Decky XR Gaming installs Breezy's Vulkan layer. Virtual display, VR-lite
+  mouse look and Follow are free. Smooth Follow, auto recentre and side by side 3D are a
+  supporter tier ($10 a year or $25 once).
+- **Glasses:** its driver, XRLinuxDriver, lists VITURE, RayNeo, Rokid, the XREAL Air family and
+  the XREAL One, One Pro and 1S. It marks XREAL as "not recommended". **The Aura is not listed.**
+
+What Pocket XR on the Deck could do that Breezy does not:
+
+1. **The Aura, done properly.** Pocket XR already knows the Aura's control link: 2D and 3D,
+   Ultrawide, screen size, and turning Spatial Anchor on and off. That gives 6DoF on the Aura
+   for free, from the glasses themselves.
+2. **Free and open.** No paid tier. Same GPL-3.0 as Pocket XR.
+3. **The same app on phone and Deck.** One set of settings words, one Glasses report, one place
+   to send logs.
+
+What Breezy does that we would not have for a long time: Gaming Mode games, many glasses
+brands, years of testing. For a non-Aura user on Gaming Mode, Breezy is the better answer
+today, and we should say so.
+
+## The stack
+
+- **Language:** Python 3 for the prototype, because SteamOS has it and nothing must be
+  installed. It talks to SDL2 and OpenGL through `ctypes`, both already on SteamOS. A real app
+  would likely move to C or Rust with SDL2 or Vulkan, and ship as a Flatpak or AppImage, since
+  the SteamOS system folders are read only and wiped on updates.
+- **Head tracking:** a plain TCP read of the glasses' sensor stream, then our own fusion filter.
+- **Picture:** one fullscreen window on the glasses' output, drawing a textured quad with the
+  head's rotation undone. Window contents come from X11 capture now, PipeWire later.
+- **Glasses link:** the Linux kernel's own `cdc_ncm` network driver brings up the glasses'
+  USB network, as Android does on the phone.
+
+## What ports from Pocket XR
+
+Rewritten in our own words for the new language. These are protocol facts, so they move over
+cleanly.
+
+| Pocket XR piece | What it is | On the Deck |
+|---|---|---|
+| `OneImuProtocol` | One family and Aura sensor stream on 169.254.2.1:52998: magic 0x28 0x36, 128 byte reports, gyro, accel, mag, temperature | Ports directly. Done in the prototype. |
+| `GlassesWire` | Control link on 169.254.2.1:52999: u16 type, u32 length, u32 id, protobuf body | Ports directly. Needed for 2D/3D and Spatial Anchor. Not used in the prototype. |
+| Aura commands | 10273/10274 2D and 3D, 10277/10278 Ultrawide, 10397/10398 size, 10404/10405 Spatial Anchor, 10015 calibration | Ports directly, only the proven ones. |
+| `AirImuProtocol`, `AirDisplayMode` | Air family HID stream and display mode | Ports, through Linux hidraw. |
+| `VitureImuProtocol` | VITURE HID stream | Ports, through hidraw. |
+| `HeadFusion`, `FactoryCalibration`, `AxisMap` | Fusion filter, factory gyro matrix and display mount, sensor axes per model | The ideas port. The code is 2400 lines of Kotlin tied to the phone's timing, so it is a rewrite. |
+| Steady mode, `WideCanvas` | Aura 6DoF through Spatial Anchor | Ports as a sequence of proven commands. |
+
+What does not port: virtual displays and Shizuku, Android apps as windows, DeX, the phone's
+Presentation display, Joy-Con pairing through Android, the Play Store build, and the OpenXR
+runtime as packaged for Android. Linux has its own answers to each (X11 or PipeWire capture,
+BlueZ for Joy-Cons, Monado runs natively on Linux).
+
+## Testing
+
+There is no real Steam Deck emulator. A SteamOS virtual machine shows that the app starts, but
+not the glasses' USB network, the DisplayPort picture, or gamescope. So every test runs on
+Mike's Deck, over SSH, with Mike wearing the glasses.
+
+## Risks
+
+- **Aura on Linux is untried.** If the Deck's kernel does not bring up the glasses' USB
+  network, there is no head tracking. The prototype finds this out first.
+- **Spatial Anchor and 3D.** The glasses' own anchor fights our tracking, so it must be off for
+  3DoF (the prototype asks Mike to turn it off in the glasses' menu; it sends no commands).
+- **Gaming Mode is the real prize** and the costly part.
+- **Time.** Every hour here is an hour not spent on the phone app and its testers.
+
+## Prototype test result
+
+(Filled in after Mike's test.)
