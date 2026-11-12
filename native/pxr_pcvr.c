@@ -238,9 +238,13 @@ int pxr_init(int view_w, int view_h, float refresh_hz) {
 
 void pxr_destroy(void) {
     if (!g_initialized) return;
+    // The decoder goes first: decoder_input() runs on ALVR's thread and calls back into ALVR
+    // (alvr_report_frame_decoded), while alvr_destroy() holds ALVR's lock and waits for that thread. Destroying
+    // ALVR first froze the app when PC VR was left (12 Nov 2026). Taking g_dec_lock waits for a frame in progress;
+    // with no decoder, later frames return at once without calling ALVR.
+    pxr_destroy_decoder();
     alvr_pause();
     alvr_destroy();
-    pxr_destroy_decoder();
     g_initialized = 0;
 }
 

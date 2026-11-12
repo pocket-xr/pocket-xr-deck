@@ -540,8 +540,9 @@ class App:
     def stop_pcvr(self):
         if self.pcvr is None:
             return
-        self.pcvr.close()
-        self.pcvr = None
+        # ALVR's shutdown waits for its threads: off the drawing thread, so the view never stalls.
+        pc, self.pcvr = self.pcvr, None
+        threading.Thread(target=pc.close, daemon=True).start()
         self.space.toast("Back to your windows")
         self.log("pcvr: stopped")
 
