@@ -56,6 +56,22 @@ In PC VR the Deck is a pair of controllers: its left half the left hand, its rig
 L1 and R1 (grip), both sticks, A, B, X, Y and the menu button go to the game. Drag on a trackpad to aim that hand,
 for pointing at a menu; press the pad in to point it straight ahead again.
 
+Joy-Cons work as PC VR's controllers too, and turn with your hands. Pair them with the Deck in Desktop Mode's Bluetooth
+settings first. A connected Joy-Con takes over its hand, so one Joy-Con and the Deck's other half work together.
+
+| Joy-Con | Controller |
+| --- | --- |
+| ZL, ZR | Triggers |
+| L, R | Grip |
+| Stick, and pressing it in | Thumbstick |
+| A, B on the right; right and up arrows on the left | A, B; X, Y |
+| Minus, Plus | Menu |
+| Capture (left), Home (right) | Point that Joy-Con straight ahead again |
+
+Hold them like remotes, pointing forward. Each one points ahead by itself when it starts. Over time its aim drifts
+sideways a little; press Capture or Home to point it ahead again. Steam turns the Joy-Cons' motion sensors off;
+Pocket XR turns them on while PC VR runs, and off again after.
+
 Holding the pointer against the right edge of the Deck's screen for a second also recentres.
 
 The mouse pointer is drawn in the glasses on the window it is over. It stays on the Deck's screen: past its right

@@ -19,6 +19,7 @@ import threading
 import time
 
 from . import fusion
+from . import joycon
 from . import pcvr_pads as pads
 from . import pcvr_scene as scene
 from .gl import GL_LINEAR, GL_QUADS, GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_TEXTURE_MIN_FILTER, gl
@@ -150,6 +151,7 @@ class PcVr:
         self.loc = None
         self.size = 0.0
         self.hands = pads.DeckHands()
+        self.joycons = joycon.JoyCons(self.log)
         self.pad_report_seen = False
         self.token_path = os.path.join(os.path.expanduser("~/.config/pocket-xr-deck"), "pc-helper.json")
         h, v = math.atan(math.tan(math.radians(19)) * 16 / 9), math.radians(19)
@@ -243,6 +245,7 @@ class PcVr:
                 lib.pxr_send_view_params(IPD, self.fovs)
                 lib.pxr_send_controller_profile()
                 self.hands.recentre()
+                self.joycons.start()
                 self.log(f"pcvr: streaming {int(ev[0])}x{int(ev[1])} per eye at {ev[2]:.0f} Hz")
             elif t == 2:  # stopped
                 self.streaming = False
@@ -270,21 +273,30 @@ class PcVr:
         if not self.streaming:
             lib.pxr_send_head(now + ahead, head)
             return
-        hands = (ctypes.c_float * 28)(*self.hands.poses(view_q, HEAD_HEIGHT))
+        poses = self.hands.poses(view_q, HEAD_HEIGHT)
+        joy = [self.joycons.hand(side, view_q) for side in (0, 1)]
+        for side, j in enumerate(joy):
+            if j is not None:  # a Joy-Con on this hand: its own turn, from the shoulder
+                pose = list(j[0])
+                pose[6] += HEAD_HEIGHT
+                poses[14 * side:14 * side + 14] = pose
+        hands = (ctypes.c_float * 28)(*poses)
         lib.pxr_send_tracking(now + ahead, head, hands)
-        self._send_buttons()
+        self._send_buttons(joy)
 
-    def _send_buttons(self):
-        """The Deck's controls as both hands' buttons (pcvr_pads.py); nothing while L5 or R5 is held to leave."""
+    def _send_buttons(self, joy):
+        """Each hand's buttons: its Joy-Con's when one is connected, else the Deck's controls (pcvr_pads.py); nothing
+        while L5 or R5 is held to leave."""
         dp = getattr(self.app, "deckpad", None)
         report = dp.report if dp is not None else None
-        if report is None or len(report) < 56:
-            return
-        if not self.pad_report_seen:
-            self.pad_report_seen = True
-            self.log("pcvr: the Deck's controls are both hands")
-        self.hands.steer(report)
-        hands = pads.deck_buttons(report)
+        hands = [(0, 0.0, 0.0, 0.0, 0.0)] * 2
+        if report is not None and len(report) >= 56:
+            if not self.pad_report_seen:
+                self.pad_report_seen = True
+                self.log("pcvr: the Deck's controls are both hands")
+            self.hands.steer(report)
+            hands = pads.deck_buttons(report)
+        hands = [j[1] if j is not None else hands[side] for side, j in enumerate(joy)]
         if self.leave_down_at is not None or self.closing_at is not None:
             hands = [(0, 0.0, 0.0, 0.0, 0.0)] * 2
         for side, (b, trig, sq, sx, sy) in enumerate(hands):
@@ -479,6 +491,7 @@ class PcVr:
 
     def close(self):
         self.stop = True
+        self.joycons.stop()
         if self.started:
             try:
                 self.lib.pxr_destroy()

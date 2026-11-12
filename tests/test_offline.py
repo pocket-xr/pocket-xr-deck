@@ -207,6 +207,39 @@ def test_glasses_families():
     assert hidimu.air_interface(0x0426) == 2 and hidimu.air_interface(0x0428) == 3
 
 
+def test_joycon_pose_and_buttons():
+    import math
+    from pocketxr import joycon
+    # lying flat, face up: points forward once lined up with a head facing forward
+    pose = joycon.Pose(False)
+    t = 0.0
+    for _ in range(300):
+        t += 0.005
+        pose.update(0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.005, t)
+    pose.recentre((1.0, 0.0, 0.0, 0.0))
+    f = joycon._rotate(pose.orientation, (0.0, 0.0, -1.0))
+    assert f[2] < -0.99, f
+    # turning about the face's axis (z, out of the face) by 90 degrees turns the hand to the left
+    for _ in range(200):
+        t += 0.005
+        pose.update(0.0, 0.0, math.radians(90.0), 0.0, 0.0, 1.0, 0.005, t)
+    f = joycon._rotate(pose.orientation, (0.0, 0.0, -1.0))
+    assert f[0] < -0.9, f
+    # buttons: A is the right hand's primary, ZL the left trigger, capture the left recentre
+    report = bytearray(49)
+    report[0] = 0x30
+    report[3] = 0x08
+    report[5] = 0x80
+    report[4] = 0x20
+    b, trig, sq, rec = joycon.buttons_of(report, 1)
+    assert b & 1 and trig == 0.0 and not rec
+    b, trig, sq, rec = joycon.buttons_of(report, 0)
+    assert b & 0x40 and trig == 1.0 and rec and not b & 1
+    # sticks: 12 bit pairs
+    report[6:9] = bytes([0x00, 0x08, 0x80])  # x 0x800, y 0x800
+    assert joycon.stick_raw(report, 0) == (0x800, 0x800)
+
+
 if __name__ == "__main__":
     for name, fn in list(globals().items()):
         if name.startswith("test_"):
