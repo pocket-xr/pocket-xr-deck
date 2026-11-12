@@ -37,7 +37,16 @@ VERT = b"""
 void main() { gl_TexCoord[0] = gl_MultiTexCoord0; gl_Position = ftransform(); }
 """
 # NV12 to RGB, BT.709 limited range (what ALVR's encoders send).
-FRAG = b"""
+FRAG_DEBUG = b"""
+#version 120
+uniform sampler2D ty;
+uniform sampler2D tuv;
+void main() {
+    vec2 t = gl_TexCoord[0].st;
+    gl_FragColor = vec4(texture2D(tuv, t).r, texture2D(tuv, t).a, texture2D(ty, t).r, 1.0);
+}
+"""
+FRAG = FRAG_DEBUG if os.environ.get("POCKETXR_PCVR_DEBUG") == "1" else b"""
 #version 120
 uniform sampler2D ty;
 uniform sampler2D tuv;
@@ -238,11 +247,29 @@ class PcVr:
         gl.glAttachShader(p, shader(GL_VERTEX_SHADER, VERT))
         gl.glAttachShader(p, shader(GL_FRAGMENT_SHADER, FRAG))
         gl.glLinkProgram(p)
+        ok = ctypes.c_int()
+        gl.glGetProgramiv(p, 0x8B82, ctypes.byref(ok))  # GL_LINK_STATUS
         gl.glUseProgram(p)
-        gl.glUniform1i(gl.glGetUniformLocation(p, b"ty"), 0)
-        gl.glUniform1i(gl.glGetUniformLocation(p, b"tuv"), 1)
+        ly, luv = gl.glGetUniformLocation(p, b"ty"), gl.glGetUniformLocation(p, b"tuv")
+        gl.glUniform1i(ly, 0)
+        gl.glUniform1i(luv, 1)
         gl.glUseProgram(0)
+        self.log(f"pcvr: shader program {p} linked {ok.value}, samplers at {ly} and {luv}")
         self.prog = p
+
+    def _debug_textures(self):
+        """Reads the frame's textures back once, to see what the decoder gave (a check while bringing PC VR up)."""
+        w, h = self.frame_size
+        for name, tex, cw, ch, comps, fmt in (("Y", self.tex[0], w, h, 1, 0x1909), ("UV", self.tex[1], w // 2, h // 2, 2, 0x190A)):
+            buf = (ctypes.c_ubyte * (cw * ch * comps))()
+            gl.glBindTexture(GL_TEXTURE_2D, tex)
+            gl.glPixelStorei(0x0D05, 1)  # GL_PACK_ALIGNMENT
+            gl.glGetTexImage(GL_TEXTURE_2D, 0, fmt, 0x1401, buf)
+            gl.glPixelStorei(0x0D05, 4)
+            step = max(1, len(buf) // 4096)
+            sample = buf[::step]
+            self.log(f"pcvr: {name} texture {cw}x{ch}: min {min(sample)} max {max(sample)} mean {sum(sample) / len(sample):.0f}")
+        self.log(f"pcvr: frame pose {self.frame_pose}")
 
     def forget_gl(self):
         self.tex = None
@@ -264,6 +291,8 @@ class PcVr:
                 if pose[3] != 0 or pose[0] != 0 or pose[1] != 0 or pose[2] != 0:
                     self.frame_pose = ((pose[3], pose[0], pose[1], pose[2]), list(pose[4:12]))
                 self.frames += 1
+                if self.frames == 30 and os.environ.get("POCKETXR_PCVR_DEBUG") == "1":
+                    self._debug_textures()
         if not self.frame_ts or self.frame_pose is None:
             return False
         q, f = self.frame_pose

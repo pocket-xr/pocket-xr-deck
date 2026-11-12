@@ -73,3 +73,18 @@ The library has to be built on Linux, for Linux.
 - **The ALVR build.** ALVR is developed on Linux, so this should be easier than Android's, but its build pulls in a lot.
 - **Steam Input.** While a game runs, Steam still turns the Deck's controls into desktop mouse and keys. Pocket XR may
   need to ask Steam for a "Pocket XR" controller layout, or read the Joy-Cons only at first.
+
+## Proof, 12 November 2026
+
+On Mike's Deck with his Aura in 3D, and his PC running the Pocket XR PC helper:
+
+- The Deck found the helper, Mike allowed it on the PC, and the helper started SteamVR and trusted the Deck in ALVR.
+- ALVR streamed HEVC at 1920 x 1056 per eye, 60 a second. The Deck decoded it on its GPU (VA-API) with no errors:
+  1,797 frames decoded and 1,740 drawn in 30 s, the view at 60 fps.
+- SteamVR's dashboard and Home showed in both eyes with the right colours, turned to the head as it moved.
+- Pocket XR's process used about one of the Deck's four cores, mostly copying each decoded frame to OpenGL. A
+  zero-copy path (VA-API to EGL images) is the way to bring that down.
+- Building ALVR at full speed (16 jobs) ran the PC out of memory and took the session down; native/build.sh uses two
+  jobs and no debug info (under 4 minutes).
+
+Next: controllers (Joy-Cons, then the Deck's own), the microphone, and a Glasses report line for PC VR.
