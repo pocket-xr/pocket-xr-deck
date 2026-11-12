@@ -187,8 +187,10 @@ class Panel:
         row.pack(fill="x", padx=4, pady=(4, 2))
         self.space_buttons = {}
         for i, (label, cmd) in enumerate((("Launcher", "launcher"), ("Control Center", "cc"), ("PC VR", "pcvr"), ("Record", "record"))):
-            b = Button(row, label, lambda c=cmd: send(c), height=38)
-            b.grid(row=0, column=i, sticky="ew", padx=4)
+            # four in a row in the Window in front row's smaller type, so "Control Center" fits and the panel keeps its
+            # height (two rows hid the back buttons' guide behind Quit)
+            b = Button(row, label, lambda c=cmd: send(c), height=38, font=(FONT, 10), radius=10)
+            b.grid(row=0, column=i, sticky="ew", padx=3)
             row.columnconfigure(i, weight=1)
             self.space_buttons[cmd] = b
         self.switches = {}
