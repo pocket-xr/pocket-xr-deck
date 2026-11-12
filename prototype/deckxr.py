@@ -8,7 +8,7 @@ The screen shows a test card, or with --capture the Deck's own desktop.
 Needs nothing installed: SDL2, OpenGL and X11 come with SteamOS and are used through ctypes.
 
 Keys: Enter, Space, R or a click = recentre. Up / Down = nearer / further. Left / Right = smaller / bigger.
-Escape or Q = quit.
+Ctrl+Q = quit (Escape is left alone: the Deck's B button sends it).
 """
 import argparse
 import ctypes
@@ -38,6 +38,8 @@ SDL_QUIT = 0x100
 SDL_KEYDOWN = 0x300
 SDL_MOUSEBUTTONDOWN = 0x401
 SDL_GL_DOUBLEBUFFER = 5
+SDL_WINDOW_ALWAYS_ON_TOP = 0x8000
+KMOD_CTRL = 0x00C0
 
 sdl.SDL_GetDisplayName.restype = ctypes.c_char_p
 sdl.SDL_GetError.restype = ctypes.c_char_p
@@ -49,6 +51,7 @@ sdl.SDL_GL_SwapWindow.argtypes = [ctypes.c_void_p]
 sdl.SDL_GL_GetDrawableSize.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_int), ctypes.POINTER(ctypes.c_int)]
 sdl.SDL_DestroyWindow.argtypes = [ctypes.c_void_p]
 sdl.SDL_ShowCursor.argtypes = [ctypes.c_int]
+sdl.SDL_SetHint.argtypes = [ctypes.c_char_p, ctypes.c_char_p]
 
 # ---------- OpenGL (fixed function, enough for a prototype) ----------
 gl = ctypes.CDLL(ctypes.util.find_library("GL") or "libGL.so.1")
@@ -168,6 +171,8 @@ def main():
     reader = imu.FakeImu(head.report) if args.fake else imu.ImuReader(head.report, log=log)
     reader.start()
 
+    # Clicking the Deck's own screen must not hide the window on the glasses.
+    sdl.SDL_SetHint(b"SDL_VIDEO_MINIMIZE_ON_FOCUS_LOSS", b"0")
     if sdl.SDL_Init(SDL_INIT_VIDEO) != 0:
         log("SDL_Init failed: " + sdl.SDL_GetError().decode())
         return 1
@@ -176,7 +181,7 @@ def main():
     sdl.SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1)
     pos = 0x2FFF0000 | di
     win = sdl.SDL_CreateWindow(b"Pocket XR Deck", pos, pos, dw, dh,
-                               SDL_WINDOW_OPENGL | SDL_WINDOW_BORDERLESS | SDL_WINDOW_FULLSCREEN_DESKTOP)
+                               SDL_WINDOW_OPENGL | SDL_WINDOW_BORDERLESS | SDL_WINDOW_FULLSCREEN_DESKTOP | SDL_WINDOW_ALWAYS_ON_TOP)
     if not win:
         log("SDL_CreateWindow failed: " + sdl.SDL_GetError().decode())
         return 1
@@ -220,15 +225,19 @@ def main():
     last_count = 0
     last_cap = 0.0
     running = True
-    log("hold the glasses still for 2 s while the gyro settles")
+    log("hold still for a moment now and then: the gyro learns its zero from quiet half seconds")
     while running:
         while sdl.SDL_PollEvent(ctypes.byref(event)):
             etype = int.from_bytes(bytes(event[0:4]), "little")
             if etype == SDL_QUIT:
+                log("quit: the window was closed")
                 running = False
             elif etype == SDL_KEYDOWN:
                 sym = int.from_bytes(bytes(event[20:24]), "little")
-                if sym in (27, ord("q")):
+                mod = int.from_bytes(bytes(event[24:26]), "little")
+                log(f"key {sym:#x} mod {mod:#x}")
+                if sym == ord("q") and mod & KMOD_CTRL:
+                    log("quit: Ctrl+Q")
                     running = False
                 elif sym in (13, 32, ord("r")):
                     head.recentre()
@@ -297,12 +306,13 @@ def main():
             gyro = math.degrees(math.sqrt(sum(c * c for c in head.last_gyro)))
             fr = reader.framer
             log(f"fps {frames / dt:5.1f}  imu {(count - last_count) / dt:6.0f}/s  link {reader.connected_to}  "
-                f"yaw {yaw:6.1f}  pitch {pitch:5.1f}  turn {gyro:5.1f} deg/s  bias_ready {head.bias_ready}  "
+                f"yaw {yaw:6.1f}  pitch {pitch:5.1f}  turn {gyro:5.1f} deg/s  bias {', '.join(f'{math.degrees(b):.2f}' for b in head.bias)} deg/s rests {head.rest_blocks}  "
                 f"dropped {fr.dropped} badlen {fr.bad_length}  {w}x{h}{' SBS' if sbs else ''}")
             frames = 0
             t_log = now
             last_count = count
         if args.seconds and now - t_start > args.seconds:
+            log("quit: time is up")
             running = False
 
     reader.stop = True

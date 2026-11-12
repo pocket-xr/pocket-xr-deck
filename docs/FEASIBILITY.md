@@ -121,7 +121,21 @@ the Deck's USB-C port, in 2D, Spatial Anchor off.
   while he turned and nodded.
 - **Nothing was sent to the glasses.**
 
-Not tried yet: `--capture` (the Deck's own desktop as the window), 3D side by side, long runs
-for yaw drift, Gaming Mode.
+**Second test, the Deck's own desktop as the window (`--capture`):**
+
+- The Deck's screen (1280x800) is copied 30 times a second through X11 and shown on the
+  glasses at 90 fps.
+- Two faults found and fixed on the day:
+  - The window closed a few seconds in. SDL treats the hang-up from a closing SSH session as
+    "quit". The prototype now runs as a user service (`start.sh`).
+  - The window crept right, about 3 deg/s. The gyro zero was learnt from the first 1.5 s while
+    Mike's head was turning. The Aura's stream is already close to zero at rest (under
+    0.5 deg/s, about 0.3 deg/s of noise), so the zero is now learnt only from quiet half
+    seconds, all the time.
+- Mike, after the fixes: "Stays put now."
+- Mike chose to go on after reading this write-up.
+
+Not tried yet: the mouse pointer in the glasses (X11 capture leaves it out), 3D side by side,
+runs of an hour or more, Gaming Mode.
 
 So the main risk, whether the Aura works on the Deck at all, is gone.

@@ -46,10 +46,32 @@ def test_turn_left_is_positive_yaw():
 def test_bias_removed():
     h = fusion.HeadFusion("aura")
     bias = (0.01, -0.02, 0.005)
-    t = run(h, 2.0, bias)
+    t = run(h, 3.0, bias)  # learnt from quiet half seconds; a fraction of a degree goes by first
+    y0, _ = yaw_pitch(h)
     run(h, 10.0, bias, t0=t)
     yaw, pitch = yaw_pitch(h)
-    assert abs(yaw) < 0.5 and abs(pitch) < 0.5, (yaw, pitch)
+    assert abs(yaw - y0) < 0.2 and abs(pitch) < 0.5, (y0, yaw, pitch)
+
+
+def test_moving_at_start_then_still_does_not_creep():
+    # 11 Nov 2026 on the Deck: a head turning during the first seconds was learnt as bias.
+    import random
+    random.seed(1)
+    h = fusion.HeadFusion("aura")
+    ts = 0
+    for k in range(3000):  # 3 s of a wobbling head turn
+        ts += 1_000_000
+        h.report(ts, (0.0, 0.3 * math.sin(k / 300) + random.gauss(0, 0.05), 0.0), (0.0, 9.8, 0.0))
+    bias = (0.004, 0.006, -0.003)
+    for _ in range(4000):  # then still, with noise and a small real bias
+        ts += 1_000_000
+        h.report(ts, tuple(b + random.gauss(0, 0.004) for b in bias), (0.0, 9.8, 0.0))
+    y0, _ = yaw_pitch(h)
+    for _ in range(20000):
+        ts += 1_000_000
+        h.report(ts, tuple(b + random.gauss(0, 0.004) for b in bias), (0.0, 9.8, 0.0))
+    y1, _ = yaw_pitch(h)
+    assert abs(y1 - y0) < 1.0, (y0, y1)
 
 
 def test_tilt_follows_gravity():

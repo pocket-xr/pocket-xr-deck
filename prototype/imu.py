@@ -96,6 +96,8 @@ class ImuReader(threading.Thread):
         delay = 1.0
         while not self.stop:
             for host in self.hosts:
+                if self.stop:
+                    return
                 try:
                     s = socket.create_connection((host, PORT), timeout=3)
                 except OSError as e:
