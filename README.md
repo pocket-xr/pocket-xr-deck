@@ -65,9 +65,10 @@ The Deck's back buttons work at any time, alongside Steam's controls:
 
 ## PC VR
 
-Play SteamVR games from your Windows PC on your glasses, streamed over Wi-Fi. It's new, so it's a beta.
+Play SteamVR games from your Windows gaming PC on your glasses, streamed over Wi-Fi. The PC runs the game; the Deck
+only shows it, so nothing extra goes on the Deck. It's new, so it's a beta.
 
-1. On your PC, install Steam and SteamVR, then the
+1. On your **Windows PC** (not the Deck), install Steam and SteamVR, then the
    [Pocket XR PC helper](https://github.com/pocket-xr/pocket-xr/releases/tag/pc-helper-v1.0), the same one
    Pocket XR on Android uses. Keep it running.
 2. Put the PC and the Deck on the same network. A PC on a cable to the router and the Deck on 5 GHz Wi-Fi works best.
