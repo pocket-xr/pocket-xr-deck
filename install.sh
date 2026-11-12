@@ -29,6 +29,12 @@ chmod +x "$BIN/pocket-xr"
 
 cp "$SRC/assets/pocket-xr.png" "$ICONS/pocket-xr.png"
 
+# Inter, Pocket XR's font (SIL Open Font License), for this user only
+FONTS="$HOME/.local/share/fonts/pocket-xr"
+mkdir -p "$FONTS"
+cp "$SRC/assets/fonts/"*.ttf "$FONTS/"
+fc-cache -f "$FONTS" >/dev/null 2>&1 || true
+
 entry() {
   cat <<EOF
 [Desktop Entry]

@@ -7,6 +7,7 @@ rm -f "$HOME/.local/bin/pocket-xr" \
       "$HOME/.local/share/applications/pocket-xr.desktop" \
       "$HOME/Desktop/pocket-xr.desktop" \
       "$HOME/.local/share/icons/hicolor/512x512/apps/pocket-xr.png"
+rm -rf "$HOME/.local/share/fonts/pocket-xr"
 update-desktop-database "$HOME/.local/share/applications" >/dev/null 2>&1 || true
 if [ "${1:-}" = "--all" ]; then
   rm -rf "$HOME/.config/pocket-xr-deck" "$HOME/.local/state/pocket-xr-deck"

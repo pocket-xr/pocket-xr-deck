@@ -14,12 +14,20 @@ import time
 from . import apps as appsmod
 from . import fusion
 from . import space as S
+from . import look as L
 from . import text
+from . import ui
 from .gl import (GL_BLEND, GL_LINEAR, GL_LINE_LOOP, GL_ONE_MINUS_SRC_ALPHA, GL_QUADS, GL_RGBA, GL_BGRA,
                  GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_TEXTURE_MIN_FILTER, GL_UNSIGNED_BYTE, gl)
 
 GL_ONE = 1
+GL_SRC_ALPHA = 0x0302
 GL_QUAD_STRIP = 0x0008
+DIM_BEHIND = 0.9  # windows not in focus dim slightly (Light on glass)
+TOAST_S = 2.6
+TOAST_D = 1.2
+TOAST_DROP_DEG = 13.0
+RIPPLE_S = 0.32
 ACCENT = (0x5A / 255, 0x93 / 255, 1.0)
 HELD = (0x8F / 255, 0xB6 / 255, 1.0)
 INK2 = (0.62, 0.62, 0.66)
@@ -31,7 +39,9 @@ CURSOR_IDLE_M = 2.5
 CURSOR_LIMIT = (28.0, 17.0)  # the space pointer stays inside the glasses' view (degrees from the centre)
 DIM_UNDER_CC = 0.3
 WHEEL_DEPTH_STEPS = 2  # one wheel notch = Further/Closer x2 (distance x (1 + 0.03 x 2))
-LAUNCHER_D, LAUNCHER_W, LAUNCHER_H, LAUNCHER_DROP = 1.0, 1.007, 0.66, 5.0
+# Pocket XR's launcher is 1450 x 950 dp at 1440 dp a metre, 1.0 m away, 5 degrees down. On the Aura that card is as tall
+# as the whole view (about 36 degrees) and its bottom row was cut off, so on the Deck it sits a little further, level.
+LAUNCHER_D, LAUNCHER_W, LAUNCHER_H, LAUNCHER_DROP = 1.15, 1.007, 0.66, 1.0
 CC_D, CC_WDEG = 1.8, 38.0
 CC_OPEN_S = 0.22
 COLS, ROWS = 5, 3
@@ -59,6 +69,7 @@ class Item:
 
 class SpaceView:
     def __init__(self, app):
+        gl.glScalef.argtypes = [ctypes.c_float] * 3
         self.app = app
         self.log = app.log
         self.store = S.Store(app.space_path)
@@ -81,6 +92,13 @@ class SpaceView:
         self.app_list = None
         self.focus = None
         self.push_left = 0.0
+        self.card_specs = {}
+        self.closing = []
+        self.appeared = {}
+        self.toasts = []
+        self.ripple = None
+        self.cursor_deg = CURSOR_DEG
+        self.cursor_t = None
         self.wheel_hold = None  # (key, until)
         self.cursor_world = None  # (yaw, pitch) in the room, with "Cursor follows head" off
         self.bring_back = 0.0
@@ -245,6 +263,8 @@ class SpaceView:
     def _hit(self, panels, now):
         best = None
         if self.cc is not None:
+            if self.cc[0] is None:
+                self._spec("cc")
             h = self._card_hit(self.cc[0], "cc")
             if h:
                 return h
@@ -267,19 +287,6 @@ class SpaceView:
             if best is None or depth < best[6] - 0.01:
                 best = ("window", p.key, zn, name, u, v, depth)
         return best
-
-    def _card_hit(self, pose, kind):
-        r = S.surface_uv(pose, self.ray)
-        if r is None:
-            return None
-        u, v, depth = r
-        if not (0 <= u <= 1 and 0 <= v <= 1):
-            return None
-        items = self._launcher_items() if kind == "launcher" else self._cc_items()
-        for it in items:
-            if it.u0 <= u <= it.u1 and it.v0 <= v <= it.v1:
-                return (kind, it, "item", it.action, u, v, depth)
-        return (kind, None, "card", None, u, v, depth)
 
     def _warp(self, panels, out_size):
         cap = self.app.capture
@@ -311,6 +318,7 @@ class SpaceView:
             return
         if button != 1:
             return
+        self.ripple = (self.ray, now)
         if self.adjust_all is not None:
             self.adjust_all = None  # a click lets go
             self.save_places()
@@ -401,7 +409,7 @@ class SpaceView:
         q.yaw = S.wrap(ry + self.drag["off"][0])
         q.pitch = S.clamp(rp + self.drag["off"][1], -S.MAX_PITCH, S.MAX_PITCH)
         self.fit = None
-        if self.app.settings.get("snap", True):
+        if self.app.settings.get("snap", False):
             others = [o for k, o in self.poses.items() if k != key]
             yaw, pitch, part, fit = S.snap(q, others, self.snap_partner)
             q.yaw, q.pitch = yaw, pitch
@@ -494,6 +502,7 @@ class SpaceView:
         if wins:
             name = self.store.add_preset(wins)
             self.app.message = f"Saved this layout as {name}."
+            self.toast(f"Saved as {name}")
 
     def recall_preset(self, i, now):
         if i >= len(self.store.presets) or self.app.settings.get("locked", False):
@@ -510,12 +519,14 @@ class SpaceView:
                 self.tweens[k] = (self.poses[k].copy(), S.Pose.from_json(w["pose"]), now)
                 self.poses[k] = S.Pose.from_json(w["pose"])
         self.app.message = f"{pr['name']}"
+        self.toast(pr["name"])
         self.save_places()
 
     def start_adjust_all(self):
         if self.app.settings.get("locked", False) or not self.poses:
             return
         self.adjust_all = {}
+        self.toast("Adjust all: move to turn, scroll to push or pull, click to let go")
         self.app.message = "Adjust all: move to turn every window, scroll to push or pull, Smaller or Bigger to resize. Click to let go."
 
     def _apply_all(self, **kw):
@@ -549,16 +560,17 @@ class SpaceView:
 
     # ---------- launcher ----------
     def toggle_launcher(self):
+        now = time.monotonic()
         if self.launcher is not None:
-            self.launcher = None
+            self._close_card("launcher", now)
             return
         if self.app_list is None:
             self.app_list = appsmod.list_apps()
         yaw, pitch = S.angles(fusion.qrot(self.app.head.view(), (0.0, 0.0, -1.0))) if self.app.head else (0.0, 0.0)
-        pose = S.Pose(yaw, pitch - LAUNCHER_DROP, LAUNCHER_D, S.m_to_deg(LAUNCHER_W, LAUNCHER_D),
-                      S.m_to_deg(LAUNCHER_H, LAUNCHER_D))
-        self.launcher = [pose, 0]
-        self.cc = None
+        self.launcher = [None, 0, now]
+        self.launcher[0] = self._card_pose(yaw, pitch - LAUNCHER_DROP, LAUNCHER_D, LAUNCHER_W, 1450, 950)
+        if self.cc is not None:
+            self._close_card("cc", now)
 
     def _page(self, step):
         if self.launcher is None or not self.app_list:
@@ -566,62 +578,75 @@ class SpaceView:
         pages = max(1, math.ceil(len(self.app_list) / (COLS * ROWS)))
         self.launcher[1] = (self.launcher[1] + step) % pages
 
-    def _launcher_items(self):
-        items = [Item(0.92, 0.03, 0.98, 0.12, "launcher_close", label="close")]
-        if not self.app_list:
-            return items
-        per = COLS * ROWS
-        page = self.launcher[1]
-        shown = self.app_list[page * per:(page + 1) * per]
-        for i, a in enumerate(shown):
-            r, c = divmod(i, COLS)
-            u0 = 0.06 + c * 0.18
-            v0 = 0.17 + r * 0.25
-            items.append(Item(u0, v0, u0 + 0.16, v0 + 0.23, "launch", a, a.name, kind="app"))
-        pages = max(1, math.ceil(len(self.app_list) / per))
-        if pages > 1:
-            items.append(Item(0.30, 0.92, 0.42, 0.99, "page", -1, "<"))
-            items.append(Item(0.58, 0.92, 0.70, 0.99, "page", 1, ">"))
-        return items
+    @staticmethod
+    def _card_pose(yaw, pitch, d, width_m, wpx, hpx):
+        return S.Pose(yaw, pitch, d, S.m_to_deg(width_m, d), S.m_to_deg(width_m * hpx / wpx, d))
+
+    def _close_card(self, kind, now):
+        """Cards fade out over EXIT_S, as Pocket XR's do."""
+        card = self.launcher if kind == "launcher" else self.cc
+        if card is not None:
+            self.closing.append((kind, card[0], self.card_specs.get(kind), now))
+        if kind == "launcher":
+            self.launcher = None
+        else:
+            self.cc = None
 
     # ---------- Control Center ----------
     def toggle_cc(self, now):
         if self.cc is not None:
-            self.cc = None
+            self._close_card("cc", now)
             return
         yaw, pitch = S.angles(fusion.qrot(self.app.head.view(), (0.0, 0.0, -1.0))) if self.app.head else (0.0, 0.0)
-        pose = S.Pose(yaw, pitch, CC_D, CC_WDEG, CC_WDEG * 0.72)
-        self.cc = (pose, now)
-        self.launcher = None
+        self.cc = [None, now, yaw, pitch]
+        if self.launcher is not None:
+            self._close_card("launcher", now)
 
-    def _cc_items(self):
+    def _cc_state(self):
         s = self.app.settings
-        items = [Item(0.04, 0.04, 0.30, 0.13, "recenter", label="Recenter view"),
-                 Item(0.88, 0.04, 0.96, 0.13, "cc_close", label="close")]
-        n = len([k for k in self.poses if k != "deck"]) or len(self.poses)
-        y = 0.20
-        for i, name in enumerate(S.layout_choices(max(1, n)) + ["Adjust all"]):
-            r, c = divmod(i, 2)
-            items.append(Item(0.04 + c * 0.23, y + r * 0.11, 0.25 + c * 0.23, y + r * 0.11 + 0.09,
-                              "adjust_all" if name == "Adjust all" else "arrange", name, name))
-        toggles = [("snap", "Snap", s.get("snap", True)), ("locked", "Lock screens", s.get("locked", False)),
-                   ("cursor_follows_head", "Cursor follows head", s.get("cursor_follows_head", True))]
-        for i, (k, label, on) in enumerate(toggles):
-            items.append(Item(0.54, 0.20 + i * 0.11, 0.96, 0.29 + i * 0.11, "toggle", k, label, on, kind="toggle"))
-        sp = s.get("cursor_speed", 5)
-        items.append(Item(0.54, 0.53, 0.62, 0.62, "speed", -1, "-"))
-        items.append(Item(0.63, 0.53, 0.87, 0.62, "noop", None, f"Cursor speed {sp * 10}%", kind="text"))
-        items.append(Item(0.88, 0.53, 0.96, 0.62, "speed", 1, "+"))
+        keys = self._ordered()
+        n = len(keys)
         foc = self.poses.get(self.focus)
-        cpct = int(round((foc.curve / S.CURVE_MAX) * 100)) if foc else 0
-        items.append(Item(0.54, 0.64, 0.62, 0.72, "curve", -1, "-"))
-        items.append(Item(0.63, 0.64, 0.87, 0.72, "noop", None, f"Curve {cpct}%", kind="text"))
-        items.append(Item(0.88, 0.64, 0.96, 0.72, "curve", 1, "+"))
-        for i, pr in enumerate(self.store.presets[:2]):
-            items.append(Item(0.54, 0.75 + i * 0.08, 0.96, 0.82 + i * 0.08, "preset", i, pr["name"]))
-        n = min(2, len(self.store.presets))
-        items.append(Item(0.54, 0.75 + n * 0.08, 0.96, 0.82 + n * 0.08, "save_preset", None, "Save layout"))
-        return items
+        return {
+            "n": n, "focus": bool(foc), "locked": s.get("locked", False), "snap": s.get("snap", False),
+            "cursor_follows_head": s.get("cursor_follows_head", True), "speed": s.get("cursor_speed", 5),
+            "curve": int(round((foc.curve / S.CURVE_MAX) * 100)) if foc else 0,
+            "presets": [p["name"] for p in self.store.presets],
+        }
+
+    def _spec(self, kind):
+        """The card's painted texture and its items, painted again only when what it shows changes."""
+        if kind == "launcher":
+            key = ("launcher", self.launcher[1], len(self.app_list or []), ui.clock12())
+        else:
+            st = self._cc_state()
+            key = ("cc",) + tuple((k, tuple(v) if isinstance(v, list) else v) for k, v in sorted(st.items()))
+        cur = self.card_specs.get(kind)
+        if cur is not None and cur[0] == key:
+            return cur
+        if kind == "launcher":
+            spec = ui.launcher_card(self.app_list or [], self.launcher[1], lambda a: a.icon, COLS, ROWS)
+        else:
+            st = self._cc_state()
+            keys = self._ordered()
+            main = keys.index(self.focus) if self.focus in keys else max(0, len(keys) - 1)
+            poses = [self.poses[k] for k in keys]
+            layouts = [(name, S.arrange(name, poses, main, 0.0) if poses else [], main)
+                       for name in S.layout_choices(max(1, len(keys)))]
+            st["layouts"] = layouts
+            spec = ui.cc_card(st)
+        old = self.tex.pop(("card", kind), None)
+        if old:
+            gl.glDeleteTextures(1, ctypes.byref(ctypes.c_uint(old[0])))
+        tid = self._tex(("card", kind), lambda: (spec.data, spec.w, spec.h))
+        cur = (key, spec, tid)
+        self.card_specs[kind] = cur
+        if kind == "cc" and self.cc is not None and self.cc[0] is None:
+            self.cc[0] = self._card_pose(self.cc[2], self.cc[3], CC_D, S.deg_to_m(CC_WDEG, CC_D), spec.w, spec.h)
+        elif kind == "cc" and self.cc is not None:
+            p = self.cc[0]
+            self.cc[0] = self._card_pose(p.yaw, p.pitch, CC_D, S.deg_to_m(CC_WDEG, CC_D), spec.w, spec.h)
+        return cur
 
     def _item(self, it):
         now = time.monotonic()
@@ -629,22 +654,31 @@ class SpaceView:
         if a == "launch":
             self.pending_spot = (self.launcher[0].yaw, self.launcher[0].pitch + LAUNCHER_DROP, now + 20.0)
             appsmod.launch(it.arg, self.log)
-            self.launcher = None
+            self.toast(f"Opening {it.arg.name}")
+            self._close_card("launcher", now)
         elif a == "page":
             self._page(it.arg)
         elif a == "launcher_close":
-            self.launcher = None
+            self._close_card("launcher", now)
         elif a == "cc_close":
-            self.cc = None
+            self._close_card("cc", now)
         elif a == "recenter":
             self.app.recentre()
+            self.toast("View recentred")
         elif a == "arrange":
-            self.arrange(it.arg, now)
+            if self.app.settings.get("locked", False):
+                self.toast("Screens are locked. Unlock them from the Control Center.")
+            else:
+                self.arrange(it.arg, now)
+                self.toast(it.arg)
         elif a == "adjust_all":
-            self.cc = None
+            self._close_card("cc", now)
             self.start_adjust_all()
         elif a == "toggle":
-            self.app.set_setting(it.arg, not self.app.settings.get(it.arg, it.arg in ("snap", "cursor_follows_head")))
+            on = not self.app.settings.get(it.arg, it.arg == "cursor_follows_head")
+            self.app.set_setting(it.arg, on)
+            names = {"snap": "Snap", "locked": "Lock screens", "cursor_follows_head": "Cursor follows head"}
+            self.toast(f"{names.get(it.arg, it.arg)} {'on' if on else 'off'}")
         elif a == "speed":
             self.app.set_setting("cursor_speed", int(S.clamp(self.app.settings.get("cursor_speed", 5) + it.arg, 1, 10)))
         elif a == "curve":
@@ -655,38 +689,49 @@ class SpaceView:
         elif a == "save_preset":
             self.save_preset()
 
+    def toast(self, msg):
+        self.toasts = [(msg, time.monotonic())]
+
     # ---------- drawing ----------
     def draw(self, panels, now, texture_of):
-        dim = DIM_UNDER_CC if self.cc is not None else 1.0
-        multi = len([p for p in panels if p.key in self.poses]) > 1
-        hover_key = self.hover[1] if self.hover and self.hover[0] == "window" else None
+        # windows dim to 0.3 under a card (the Control Center, as in Pocket XR, and the launcher)
+        dim_cc = DIM_UNDER_CC if (self.cc is not None or self.launcher is not None) else 1.0
+        shown = [p for p in panels if p.key in self.poses]
+        multi = len(shown) > 1
         locked = self.app.settings.get("locked", False)
-        for p in panels:
-            if p.key not in self.poses:
-                continue
+        for p in shown:
             pose = self._pose(p.key, now)
-            tex = texture_of(p)
+            # appear: brightness and size ease in (black is see-through on the glasses, so dark is faded)
+            t0 = self.appeared.setdefault(p.key, now)
+            k = L.ease_enter((now - t0) / L.ENTER_S)
+            scale = L.ENTER_SCALE + (1 - L.ENTER_SCALE) * k
+            focused = p.key == self.focus
+            held = bool((self.drag and self.drag["key"] == p.key) or (self.resize and self.resize["key"] == p.key) or
+                        (self.wheel_hold and now < self.wheel_hold[1] and self.wheel_hold[0] == p.key))
+            dim = dim_cc * k * (1.0 if (focused or not multi) else DIM_BEHIND)
             gl.glPushMatrix()
             gl.glRotatef(pose.yaw, 0.0, 1.0, 0.0)
             gl.glRotatef(pose.pitch, 1.0, 0.0, 0.0)
-            focused = p.key == self.focus
-            held = (self.drag and self.drag["key"] == p.key) or (self.resize and self.resize["key"] == p.key)
-            if focused and multi:
-                self._halo(pose, HELD if held else ACCENT, HALO_ALPHA * dim)
-            self._surface(pose, tex, dim)
-            self._rim(pose, (HELD if held else ACCENT) if (focused or held) else (0.35, 0.36, 0.4), dim)
+            if scale != 1.0:
+                gl.glTranslatef(0.0, 0.0, -pose.distance)
+                gl.glScalef(scale, scale, 1.0)
+                gl.glTranslatef(0.0, 0.0, pose.distance)
+            if (focused and multi) or held:
+                self._halo(pose, L.HELD if held else L.ACCENT, HALO_ALPHA * dim_cc * k)
+            self._surface(pose, texture_of(p), dim)
+            self._rim(pose, (L.HELD[:3] + (0.9,)) if held else (L.RIM_FOCUS if focused else L.RIM), k * dim_cc)
             seen = self.ctl_seen.get(p.key)
             if seen is not None:
                 age = now - seen
                 alpha = 1.0 if age < S.CONTROLS_STAY_S else max(0.0, 1 - (age - S.CONTROLS_STAY_S) / S.CONTROLS_FADE_S)
                 if alpha > 0:
-                    self._controls(p.key, pose, alpha * dim, hover_key == p.key, locked)
+                    self._controls(p.key, pose, alpha * dim_cc, locked, held, now)
             if p.key == "deck" and p.pointer is not None and p.w > 0:
                 # The Deck screen's own pointer, where it is on that screen.
                 u, v = p.pointer[0] / p.w, p.pointer[1] / p.h
                 x, f = S.column(pose, u)
                 y = (0.5 - v) * pose.height_m()
-                t = self._tex(("ring",), lambda: (text.ring(64), 64, 64))
+                t = self._tex(("cursor", False), lambda: ui.cursor(96))
                 if t:
                     sz = 2 * pose.distance * math.tan(math.radians(CURSOR_DEG) / 2)
                     self._quad_tex(t[0], x, y, -f + 0.004, sz, sz)
@@ -699,78 +744,119 @@ class SpaceView:
             gl.glPushMatrix()
             gl.glRotatef(q.yaw, 0.0, 1.0, 0.0)
             gl.glRotatef(q.pitch, 1.0, 0.0, 0.0)
-            self._rim(q, ACCENT, 1.0, width=3.0)
+            self._rim(q, L.ACCENT, 1.0, width=3.0)
             gl.glPopMatrix()
+        for kind, pose, spec, t0 in list(self.closing):
+            a = 1 - L.ease_exit((now - t0) / L.EXIT_S)
+            if a <= 0:
+                self.closing.remove((kind, pose, spec, t0))
+                continue
+            if spec:
+                self._draw_card(pose, spec, kind, a, 1.0, None)
         if self.launcher is not None:
-            self._draw_card(self.launcher[0], self._launcher_items(), "launcher", now)
+            spec = self._spec("launcher")
+            k = L.ease_enter((now - self.launcher[2]) / L.ENTER_S)
+            self._draw_card(self.launcher[0], spec, "launcher", k, L.ENTER_SCALE + (1 - L.ENTER_SCALE) * k, now)
         if self.cc is not None:
-            self._draw_card(self.cc[0], self._cc_items(), "cc", now)
-        self._cursor()
+            spec = self._spec("cc")
+            k = L.ease_enter((now - self.cc[1]) / L.ENTER_S)
+            self._draw_card(self.cc[0], spec, "cc", k, L.ENTER_SCALE + (1 - L.ENTER_SCALE) * k, now)
+        self._draw_toast(now)
+        self._cursor(now)
+
+    def _columns(self, pose, geo):
+        """u values across the window: dense near the edges for round corners, every 1/32 in between."""
+        W = pose.width_m()
+        r = self._corner(pose)
+        edge = min(0.5, r / W)
+        us = {0.0, 1.0}
+        for i in range(1, 7):
+            us.add(edge * (1 - math.cos(math.pi / 2 * i / 6)))
+            us.add(1 - edge * (1 - math.cos(math.pi / 2 * i / 6)))
+        n = S.CURVE_COLUMNS if geo else 16
+        for i in range(1, n):
+            us.add(i / n)
+        return sorted(us)
+
+    @staticmethod
+    def _corner(pose):
+        """Corner radius: 3 % of the shorter side, 5 to 25 mm (Pocket XR WindowGlow)."""
+        return S.clamp(0.03 * min(pose.width_m(), pose.height_m()), 0.005, 0.025)
+
+    def _inset(self, pose, u):
+        """How far the top and bottom come in at u, for round corners."""
+        W = pose.width_m()
+        r = self._corner(pose)
+        dx = min(u, 1 - u) * W
+        if dx >= r:
+            return 0.0
+        return r - math.sqrt(max(0.0, r * r - (r - dx) ** 2))
 
     def _surface(self, pose, tex, dim):
         geo = S.curve_geometry(pose)
-        hh = pose.height_m() / 2
+        H = pose.height_m()
+        hh = H / 2
         if tex:
             gl.glEnable(GL_TEXTURE_2D)
             gl.glBindTexture(GL_TEXTURE_2D, tex)
             gl.glColor3f(dim, dim, dim)
         else:
-            gl.glColor3f(0.11 * dim, 0.12 * dim, 0.14 * dim)
-        if geo is None:
-            x0, f = S.column(pose, 0.0)
-            x1, _ = S.column(pose, 1.0)
-            gl.glBegin(GL_QUADS)
-            gl.glTexCoord2f(0, 1); gl.glVertex3f(x0, -hh, -f)  # noqa: E702
-            gl.glTexCoord2f(1, 1); gl.glVertex3f(x1, -hh, -f)  # noqa: E702
-            gl.glTexCoord2f(1, 0); gl.glVertex3f(x1, hh, -f)  # noqa: E702
-            gl.glTexCoord2f(0, 0); gl.glVertex3f(x0, hh, -f)  # noqa: E702
-            gl.glEnd()
-        else:
-            gl.glBegin(GL_QUAD_STRIP)
-            for i in range(S.CURVE_COLUMNS + 1):
-                u = i / S.CURVE_COLUMNS
-                x, f = S.column(pose, u, geo)
-                gl.glTexCoord2f(u, 1); gl.glVertex3f(x, -hh, -f)  # noqa: E702
-                gl.glTexCoord2f(u, 0); gl.glVertex3f(x, hh, -f)  # noqa: E702
-            gl.glEnd()
+            c = L.GLASS
+            gl.glColor3f(c[0] * dim, c[1] * dim, c[2] * dim)
+        gl.glBegin(GL_QUAD_STRIP)
+        for u in self._columns(pose, geo):
+            x, f = S.column(pose, u, geo)
+            ins = self._inset(pose, u)
+            vt, vb = ins / H, 1 - ins / H
+            gl.glTexCoord2f(u, vb); gl.glVertex3f(x, -hh + ins, -f)  # noqa: E702
+            gl.glTexCoord2f(u, vt); gl.glVertex3f(x, hh - ins, -f)  # noqa: E702
+        gl.glEnd()
         gl.glDisable(GL_TEXTURE_2D)
 
-    def _outline_pts(self, pose, grow_m=0.0):
+    def _outline(self, pose, grow=0.0, z=0.002):
         geo = S.curve_geometry(pose)
-        hh = pose.height_m() / 2 + grow_m
-        n = S.CURVE_COLUMNS if geo else 1
+        hh = pose.height_m() / 2 + grow
         top, bot = [], []
-        for i in range(n + 1):
-            u = i / n
+        for u in self._columns(pose, geo):
             x, f = S.column(pose, u, geo)
-            if i == 0:
-                x -= grow_m
-            if i == n:
-                x += grow_m
-            top.append((x, hh, -f + 0.002))
-            bot.append((x, -hh, -f + 0.002))
+            if u == 0.0:
+                x -= grow
+            elif u == 1.0:
+                x += grow
+            ins = self._inset(pose, u)
+            top.append((x, hh - ins, -f + z))
+            bot.append((x, -hh + ins, -f + z))
         return top, bot
 
-    def _rim(self, pose, colour, dim, width=None):
-        top, bot = self._outline_pts(pose)
-        gl.glLineWidth(width or max(1.0, RIM_PER_M * 1500))
-        gl.glColor3f(colour[0] * dim, colour[1] * dim, colour[2] * dim)
+    def _rim(self, pose, col, alpha, width=None):
+        """The hairline light rim (white 14 %, 32 % in focus)."""
+        top, bot = self._outline(pose)
+        gl.glEnable(GL_BLEND)
+        gl.glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
+        gl.glLineWidth(width or 1.5)
+        gl.glColor4f(col[0], col[1], col[2], (col[3] if len(col) > 3 else 1.0) * alpha)
         gl.glBegin(GL_LINE_LOOP)
         for v in top + bot[::-1]:
             gl.glVertex3f(*v)
         gl.glEnd()
         gl.glLineWidth(1.0)
+        gl.glDisable(GL_BLEND)
 
-    def _halo(self, pose, colour, alpha):
+    def _halo(self, pose, col, alpha):
+        """A faint accent halo just outside the edge, fading out (one band, no blur)."""
         grow = HALO_PER_M * pose.distance
-        top, bot = self._outline_pts(pose, grow)
+        t0, b0 = self._outline(pose, 0.0, -0.003)
+        t1, b1 = self._outline(pose, grow, -0.003)
         gl.glEnable(GL_BLEND)
-        gl.glBlendFunc(0x0302, GL_ONE_MINUS_SRC_ALPHA)  # src alpha
-        gl.glColor4f(colour[0], colour[1], colour[2], alpha)
+        gl.glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
+        ring_in = t0 + b0[::-1] + [t0[0]]
+        ring_out = t1 + b1[::-1] + [t1[0]]
         gl.glBegin(GL_QUAD_STRIP)
-        for a, b in zip(top, bot):
-            gl.glVertex3f(a[0], a[1], a[2] - 0.004)
-            gl.glVertex3f(b[0], b[1], b[2] - 0.004)
+        for a, b in zip(ring_in, ring_out):
+            gl.glColor4f(col[0], col[1], col[2], alpha)
+            gl.glVertex3f(*a)
+            gl.glColor4f(col[0], col[1], col[2], 0.0)
+            gl.glVertex3f(*b)
         gl.glEnd()
         gl.glDisable(GL_BLEND)
 
@@ -790,147 +876,130 @@ class SpaceView:
         gl.glDisable(GL_TEXTURE_2D)
         gl.glDisable(GL_BLEND)
 
-    def _controls(self, key, pose, alpha, hovered, locked):
+    def _controls(self, key, pose, alpha, locked, held, now):
+        """The window's controls as glass capsules above it: Back, the Move pill, then Reset and Close."""
         btns, v0, v1 = S.buttons(pose, app=key != "deck")
-        H = pose.height_m()
-        W = pose.width_m()
-        hb_m = H * (v1 - v0)
+        by = {n: (u0, u1) for n, u0, u1 in btns}
+        H, W = pose.height_m(), pose.width_m()
+        hb = H * (v1 - v0)
+        pad = 0.16 * hb
+        y = (0.5 - (v0 + v1) / 2) * H
         hname = self.hover[3] if self.hover and self.hover[0] == "window" and self.hover[1] == key else None
-        for name, u0, u1 in btns:
-            if locked and name in ("move", "reset"):
-                continue
-            uc = (u0 + u1) / 2
-            x, f = S.column(pose, uc)
-            y = (0.5 - (v0 + v1) / 2) * H
-            wpx = int(256 * (u1 - u0) * W / hb_m) if name == "move" else None
-            on = hname == name
-            t = self._tex(("btn", name, on, wpx), lambda: text.icon(
-                name, 64, fg=(1, 1, 1, 1) if on else (0.89, 0.886, 0.902, 1),
-                bg=(0.23, 0.48, 1.0, 0.9) if on else (0.114, 0.125, 0.141, 0.85), pill_w=(wpx // 4) if wpx else None))
-            if t:
-                self._quad_tex(t[0], x, y, -f + 0.003, (u1 - u0) * W, hb_m, alpha)
-        # the resize handle: an L just outside the bottom right corner, or a lock while locked
-        if hovered:
-            hb = hb_m
-            x, f = S.column(pose, 1.0)
-            y = -H / 2
-            z = -f + 0.003
-            if locked:
-                t = self._tex(("btn", "lock", False, None), lambda: text.icon("lock", 64))
-                if t:
-                    self._quad_tex(t[0], x - 0.4 * hb, y + 0.4 * hb, z, 0.8 * hb, 0.8 * hb, alpha)
+        groups = []
+        if "back" in by:
+            groups.append((["back"], by["back"]))
+        if not locked:
+            groups.append((["move"], by["move"]))
+        groups.append((["reset", "close"] if not locked else ["close"],
+                       (by["reset"][0] if not locked else by["close"][0], by["close"][1])))
+        for names, (u0, u1) in groups:
+            wm = (u1 - u0) * W + 2 * pad
+            hm = hb + 2 * pad
+            px_h = 72
+            px_w = int(round(px_h * wm / hm))
+            hov = hname if hname in names else None
+            if names == ["move"]:
+                key_ = ("cap", "move", px_w, hov is not None or held)
+                t = self._tex(key_, lambda: ui.capsule(["move"], "move" if (hov or held) else None, h=px_h,
+                                                        pill_w=px_w - 2 * round(px_h * 0.16), held=held))
             else:
-                active = self.hover and self.hover[2] == S.HANDLE or self.resize is not None
-                c = ACCENT if active else INK2
-                off, th = 0.25 * hb, 0.2 * hb
-                gl.glColor3f(c[0] * alpha, c[1] * alpha, c[2] * alpha)
-                gl.glBegin(GL_QUADS)
-                # horizontal bar under the corner
-                gl.glVertex3f(x - hb + off, y - off - th, z)
-                gl.glVertex3f(x + off, y - off - th, z)
-                gl.glVertex3f(x + off, y - off, z)
-                gl.glVertex3f(x - hb + off, y - off, z)
-                # vertical bar right of the corner
-                gl.glVertex3f(x + off, y - off - th, z)
-                gl.glVertex3f(x + off + th, y - off - th, z)
-                gl.glVertex3f(x + off + th, y - off + hb, z)
-                gl.glVertex3f(x + off, y - off + hb, z)
-                gl.glEnd()
+                key_ = ("cap", tuple(names), px_w, hov)
+                t = self._tex(key_, lambda names=names, hov=hov: ui.capsule(names, hov, h=px_h))
+            if t:
+                xc, f = S.column(pose, (u0 + u1) / 2)
+                self._quad_tex(t[0], xc, y, -f + 0.003, wm, hm, alpha)
+        # the resize handle, or a lock while screens are locked, when the pointer is on this window
+        if self.hover and self.hover[0] == "window" and self.hover[1] == key or self.resize and self.resize["key"] == key:
+            x, f = S.column(pose, 1.0)
+            active = (self.hover and self.hover[2] == S.HANDLE) or self.resize is not None
+            t = self._tex(("handle", bool(active), locked), lambda: ui.handle(60, active, locked))
+            if t:
+                s_ = hb * (0.8 if locked else 1.0)
+                off = 0.25 * hb
+                self._quad_tex(t[0], x + off - s_ / 2 + (0 if locked else 0.2 * hb), -H / 2 - off + s_ / 2 -
+                               (0 if locked else 0.2 * hb), -f + 0.003, s_, s_, alpha)
 
-    def _draw_card(self, pose, items, kind, now):
+    def _draw_card(self, pose, spec_entry, kind, alpha, scale, now):
+        key, spec, tid = spec_entry
+        if not tid:
+            return
         W, H = pose.width_m(), pose.height_m()
         gl.glPushMatrix()
         gl.glRotatef(pose.yaw, 0.0, 1.0, 0.0)
         gl.glRotatef(pose.pitch, 1.0, 0.0, 0.0)
         z = -pose.distance
-        grow = 1.0
-        if kind == "cc":
-            grow = min(1.0, (now - self.cc[1]) / CC_OPEN_S)
-        gl.glEnable(GL_BLEND)
-        gl.glBlendFunc(0x0302, GL_ONE_MINUS_SRC_ALPHA)
-        gl.glColor4f(0.086, 0.086, 0.086, 0.88)
-        gl.glBegin(GL_QUADS)
-        gl.glVertex3f(-W / 2 * grow, -H / 2 * grow, z)
-        gl.glVertex3f(W / 2 * grow, -H / 2 * grow, z)
-        gl.glVertex3f(W / 2 * grow, H / 2 * grow, z)
-        gl.glVertex3f(-W / 2 * grow, H / 2 * grow, z)
-        gl.glEnd()
-        gl.glDisable(GL_BLEND)
-        if grow < 1.0:
-            gl.glPopMatrix()
-            return
-        title = "Apps" if kind == "launcher" else "Control Center"
-        t = self._tex(("title", title), lambda: text.label(title, 40, bg=(0, 0, 0, 0), bold=True))
-        if t:
-            h = 0.06 * H
-            self._quad_tex(t[0], -W / 2 + 0.04 * W + h * t[1] / t[2] / 2, H / 2 - 0.08 * H, z + 0.002, h * t[1] / t[2], h)
-        clock = time.strftime("%H:%M  %a %d %b")
-        if kind == "launcher":
-            t = self._tex(("clock", clock), lambda: text.label(clock, 30, bg=(0, 0, 0, 0)))
-            if t:
-                h = 0.045 * H
-                self._quad_tex(t[0], 0.0, H / 2 - 0.08 * H, z + 0.002, h * t[1] / t[2], h)
-        hit = self.hover[1] if self.hover and self.hover[0] == kind else None
-        for it in items:
-            cx = (it.u0 + it.u1) / 2 * W - W / 2
-            cy = H / 2 - (it.v0 + it.v1) / 2 * H
-            w, h = (it.u1 - it.u0) * W, (it.v1 - it.v0) * H
-            on = hit is it
-            if it.kind == "app":
-                a = it.arg
-                isz = min(w, h * 0.62)
-                tid = self._tex(("appicon", a.id), lambda a=a: self._app_icon(a))
-                if on:
-                    gl.glEnable(GL_BLEND)
-                    gl.glBlendFunc(0x0302, GL_ONE_MINUS_SRC_ALPHA)
-                    gl.glColor4f(ACCENT[0], ACCENT[1], ACCENT[2], 0.25)
-                    gl.glBegin(GL_QUADS)
-                    gl.glVertex3f(cx - w / 2, cy - h / 2, z + 0.001)
-                    gl.glVertex3f(cx + w / 2, cy - h / 2, z + 0.001)
-                    gl.glVertex3f(cx + w / 2, cy + h / 2, z + 0.001)
-                    gl.glVertex3f(cx - w / 2, cy + h / 2, z + 0.001)
-                    gl.glEnd()
-                    gl.glDisable(GL_BLEND)
-                if tid:
-                    self._quad_tex(tid[0], cx, cy + h * 0.14, z + 0.002, isz, isz)
-                name = a.name if len(a.name) <= 18 else a.name[:17] + "..."
-                lt = self._tex(("applabel", name), lambda name=name: text.label(name, 26, bg=(0, 0, 0, 0)))
-                if lt:
-                    lh = h * 0.16
-                    lw = min(w, lh * lt[1] / lt[2])
-                    self._quad_tex(lt[0], cx, cy - h * 0.34, z + 0.002, lw, lw * lt[2] / lt[1])
-                continue
-            if it.label == "close":
-                tid = self._tex(("btn", "close", on, None), lambda on=on: text.icon(
-                    "close", 64, bg=(0.23, 0.48, 1.0, 0.9) if on else (0.16, 0.17, 0.19, 0.9)))
-                if tid:
-                    s = min(w, h)
-                    self._quad_tex(tid[0], cx, cy, z + 0.002, s, s)
-                continue
-            bg = (0.23, 0.48, 1.0, 0.95) if (it.on or on) else (0.16, 0.17, 0.19, 0.95)
-            if it.kind == "text":
-                bg = (0, 0, 0, 0)
-            lab = it.label + ("  On" if it.kind == "toggle" and it.on else "  Off" if it.kind == "toggle" else "")
-            tid = self._tex(("item", lab, bg), lambda lab=lab, bg=bg: text.label(lab, 30, bg=bg, min_w=int(30 * 7)))
-            if tid:
-                th = h
-                tw = min(w, th * tid[1] / tid[2])
-                self._quad_tex(tid[0], cx, cy, z + 0.002, tw, tw * tid[2] / tid[1])
+        # fade and rise about 2 %
+        rise = (1 - scale) / (1 - L.ENTER_SCALE) * 0.02 * H if scale < 1 else 0.0
+        self._quad_tex(tid[0], 0.0, rise, z, W * scale, H * scale, alpha)
+        # hover overlay on the item under the pointer
+        if now is not None and self.hover and self.hover[0] == kind and self.hover[1] is not None:
+            it = self.hover[1]
+            x, y, w, h, r = it.x, it.y, it.w, it.h, it.r
+            ov = self._tex(("ov", int(w), int(h), int(r)), lambda: ui.overlay(w, h, r, (1, 1, 1, 1), 0.08))
+            if ov:
+                cx = (x + w / 2) / spec.w * W - W / 2
+                cy = H / 2 - (y + h / 2) / spec.h * H
+                self._quad_tex(ov[0], cx * scale, cy * scale + rise, z + 0.002, w / spec.w * W * scale,
+                               h / spec.h * H * scale, alpha)
+            # app icons and labels sit on the card itself; launcher tiles also take a soft accent wash
         gl.glPopMatrix()
 
-    def _app_icon(self, a):
-        size = 128
-        data = text.png(a.icon, size) if a.icon else None
-        if data is None:
-            data = text.letter_tile(a.name, size)
-        return data, size, size
+    def _card_hit(self, pose, kind):
+        if pose is None:
+            return None
+        r = S.surface_uv(pose, self.ray)
+        if r is None:
+            return None
+        u, v, depth = r
+        if not (0 <= u <= 1 and 0 <= v <= 1):
+            return None
+        entry = self.card_specs.get(kind)
+        if entry is None:
+            return (kind, None, "card", None, u, v, depth)
+        spec = entry[1]
+        px, py = u * spec.w, v * spec.h
+        for (x, y, w, h, action, arg, rad) in spec.items:
+            if x <= px <= x + w and y <= py <= y + h:
+                return (kind, CardItem(x, y, w, h, action, arg, rad), "item", action, u, v, depth)
+        return (kind, None, "card", None, u, v, depth)
 
-    def _cursor(self):
+    def _draw_toast(self, now):
+        if not self.toasts:
+            return
+        msg, t0 = self.toasts[0]
+        age = now - t0
+        if age > TOAST_S + L.EXIT_S:
+            self.toasts = []
+            return
+        a = L.ease_enter(age / L.ENTER_S) if age < TOAST_S else 1 - L.ease_exit((age - TOAST_S) / L.EXIT_S)
+        t = self._tex(("toast", msg), lambda: ui.toast(msg))
+        if not t:
+            return
+        view = self.app.head.view() if self.app.head else (1.0, 0.0, 0.0, 0.0)
+        yaw, pitch = S.angles(fusion.qrot(view, S.direction(0.0, -TOAST_DROP_DEG)))
+        h = 2 * TOAST_D * math.tan(math.radians(2.2) / 2)
+        w = h * t[1] / t[2]
+        gl.glPushMatrix()
+        gl.glRotatef(yaw, 0.0, 1.0, 0.0)
+        gl.glRotatef(pitch, 1.0, 0.0, 0.0)
+        self._quad_tex(t[0], 0.0, (1 - a) * -0.01, -TOAST_D, w, h, a)
+        gl.glPopMatrix()
+
+    def _cursor(self, now):
         h = self.hover
+        if h is None:
+            target = CURSOR_DEG
+        elif h[0] == "window" and h[2] == S.BODY:
+            target = CURSOR_DEG * 0.85
+        else:
+            target = CURSOR_DEG * 1.3  # over controls, the frame, the handle, a card
+        # eases to its size over HOVER_S
+        k = min(1.0, (now - self.cursor_t) / L.HOVER_S) if self.cursor_t else 1.0
+        self.cursor_t = now
+        self.cursor_deg += (target - self.cursor_deg) * k
         depth = (h[6] - 0.005) if h else CURSOR_IDLE_M
-        p = tuple(k * depth for k in self.ray)
-        size = 2 * depth * math.tan(math.radians(CURSOR_DEG) / 2)
-        t = self._tex(("ring",), lambda: (text.ring(64), 64, 64))
+        size = 2 * depth * math.tan(math.radians(self.cursor_deg) / 2)
+        t = self._tex(("cursor", False), lambda: ui.cursor(96))
         if not t:
             return
         yaw, pitch = S.angles(self.ray)
@@ -938,5 +1007,23 @@ class SpaceView:
         gl.glRotatef(yaw, 0.0, 1.0, 0.0)
         gl.glRotatef(pitch, 1.0, 0.0, 0.0)
         self._quad_tex(t[0], 0.0, 0.0, -depth, size, size)
+        if self.ripple and now - self.ripple[1] < RIPPLE_S:
+            rk = (now - self.ripple[1]) / RIPPLE_S
+            rt = self._tex(("ripple",), lambda: ui.ripple(128))
+            if rt:
+                rs = size * (1.0 + 1.6 * L.ease_enter(rk))
+                self._quad_tex(rt[0], 0.0, 0.0, -depth + 0.001, rs, rs, 1 - rk)
         gl.glPopMatrix()
-        del p
+
+
+class CardItem:
+    __slots__ = ("x", "y", "w", "h", "action", "arg", "r")
+
+    def __init__(self, x, y, w, h, action, arg, r):
+        self.x, self.y, self.w, self.h, self.action, self.arg, self.r = x, y, w, h, action, arg, r
+
+    def __eq__(self, o):
+        return isinstance(o, CardItem) and (self.x, self.y, self.action) == (o.x, o.y, o.action)
+
+    def __hash__(self):
+        return hash((self.x, self.y, self.action))

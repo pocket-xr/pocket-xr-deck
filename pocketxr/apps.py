@@ -17,7 +17,7 @@ ICON_DIRS = [
     "/usr/share/icons",
 ]
 ICON_SIZES = ["256x256", "192x192", "128x128", "96x96", "64x64", "48x48"]
-THEMES = ["hicolor", "breeze", "Adwaita"]
+THEMES = ["breeze", "hicolor", "Adwaita"]
 
 
 class App:
@@ -28,19 +28,32 @@ class App:
 
 
 def _icon_path(name):
-    """A PNG for an icon name, largest first; None when there is only an SVG or nothing (the launcher draws a letter)."""
+    """A PNG or SVG for an icon name, best first; None when there is nothing (the launcher draws a letter)."""
     if not name:
         return None
     if os.path.isabs(name):
-        return name if name.endswith(".png") and os.path.exists(name) else None
+        return name if os.path.exists(name) and name.endswith((".png", ".svg")) else None
     for base in ICON_DIRS:
         for theme in THEMES:
             for size in ICON_SIZES:
                 p = os.path.join(base, theme, size, "apps", name + ".png")
                 if os.path.exists(p):
                     return p
-    p = os.path.join("/usr/share/pixmaps", name + ".png")
-    return p if os.path.exists(p) else None
+            for p in (os.path.join(base, theme, "scalable", "apps", name + ".svg"),
+                      os.path.join(base, theme, "apps", "48", name + ".svg"),
+                      os.path.join(base, theme, "apps", "64", name + ".svg")):
+                if os.path.exists(p):
+                    return p
+    for ext in (".png", ".svg"):
+        p = os.path.join("/usr/share/pixmaps", name + ext)
+        if os.path.exists(p):
+            return p
+    return None
+
+
+# System plumbing the app menu lists that nobody opens from a launcher in space.
+HIDE_IDS = ("avahi-", "org.kde.drkonqi", "bssh", "bvnc", "org.freedesktop.IBus", "qv4l2", "qvidcap", "lstopo",
+            "electron", "jshell", "jconsole")
 
 
 def list_apps():
@@ -65,6 +78,10 @@ def list_apps():
                 continue
             name = e.get("Name")
             if not name or not e.get("Exec") or id_ == "pocket-xr.desktop":
+                continue
+            if e.get("Terminal", "false").lower() == "true" or "ConsoleOnly" in e.get("Categories", ""):
+                continue
+            if id_.lower().startswith(HIDE_IDS):
                 continue
             seen[id_] = App(id_, name, _icon_path(e.get("Icon", "")), f, e.get("StartupWMClass", ""))
     return sorted(seen.values(), key=lambda a: a.name.lower())

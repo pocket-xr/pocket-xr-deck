@@ -35,7 +35,7 @@ STATE = os.path.join(os.environ.get("XDG_STATE_HOME", os.path.expanduser("~/.loc
 ACCENT = (0x5A / 255, 0x93 / 255, 1.0)
 
 DEFAULTS = {"view": "3dof", "source": "deck", "distance": 2.0, "scale": 1.0, "canvas_scale": 0.8, "look": True,
-            "snap": True, "locked": False, "cursor_speed": 5, "curve_default": 0.0, "cursor_follows_head": True,
+            "snap": False, "locked": False, "cursor_speed": 5, "curve_default": 0.0, "cursor_follows_head": True,
             "viture_tracking": None}
 
 # 3DoF: a window 1600 px wide is this wide at 1.0, in metres (the Deck's screen 1.28 m, an app's 1920 px screen 1.92 m:
@@ -43,6 +43,7 @@ DEFAULTS = {"view": "3dof", "source": "deck", "distance": 2.0, "scale": 1.0, "ca
 WINDOW_M_PER_1600 = 1.6
 GAP_DEG = 3.0
 GONE_GRACE_S = 12.0
+DEV = os.environ.get("POCKETXR_DEV") == "1"
 LOOK_DWELL_S = 0.6
 FOV_V_DEG = 38.0  # the Aura's picture, vertical, per eye (about 70 degrees diagonal)
 
@@ -219,6 +220,24 @@ class App:
             if now - last_status > 0.5:
                 last_status = now
                 self._send_status()
+                if DEV:
+                    self._dev_commands()
+
+    def _dev_commands(self):
+        """POCKETXR_DEV=1 only: panel commands from a file, one JSON per line, for testing without the Deck's hands."""
+        path = os.path.join(STATE, "dev-cmd")
+        try:
+            with open(path) as f:
+                lines = f.read().splitlines()
+            os.remove(path)
+        except OSError:
+            return
+        for line in lines:
+            try:
+                m = json.loads(line)
+                self._panel_cmd(m.get("cmd"), m.get("value"))
+            except (ValueError, AttributeError):
+                pass
 
     def _health(self):
         h = self.head
@@ -547,8 +566,7 @@ class App:
         g = self.glasses
         hint = ""
         if self.capture.virtual and self.window:
-            hint = ("Move the pointer right, past the Deck's screen, to use the app in front. "
-                    "Look at another window or tap R4 to bring it to the front.")
+            hint = "Move the pointer off the right of the Deck's screen to use the Space."
         if g is None:
             status = "No glasses found."
         else:
@@ -577,7 +595,7 @@ class App:
             "view": self._view(),
             "source": self.settings["source"],
             "look": self.settings["look"],
-            "snap": self.settings.get("snap", True),
+            "snap": self.settings.get("snap", False),
             "locked": self.settings.get("locked", False),
             "cursor_follows_head": self.settings.get("cursor_follows_head", True),
             "steady_ok": bool(g and g.steady_6dof),

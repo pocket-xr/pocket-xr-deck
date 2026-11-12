@@ -46,8 +46,8 @@ The Deck's back buttons work at any time, alongside Steam's controls:
 | --- | --- | --- |
 | L4 | Recentre | Switch between Window in space and Steady 6DoF |
 | R4 | Next app window | Switch between Deck screen and App windows |
-| L5 | Smaller | |
-| R5 | Bigger | |
+| L5 | Launcher | Lock screens |
+| R5 | Control Center | Adjust all |
 
 Holding the pointer against the right edge of the Deck's screen for a second also recentres.
 
@@ -101,3 +101,7 @@ results on a real Deck.
 
 GPL-3.0, the same as Pocket XR. The glasses' protocols are written in our own words from Pocket XR's notes, which
 credit the public, MIT licensed write-ups they come from.
+
+The font is Inter 4.1, Copyright (c) 2016 The Inter Project Authors (https://github.com/rsms/inter), under the SIL
+Open Font License 1.1 (https://openfontlicense.org): `assets/fonts/` holds its static Regular and Medium files,
+unmodified, as Pocket XR on Android bundles them.
