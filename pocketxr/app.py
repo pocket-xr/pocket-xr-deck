@@ -35,6 +35,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 CONFIG = os.path.join(os.environ.get("XDG_CONFIG_HOME", os.path.expanduser("~/.config")), "pocket-xr-deck")
 STATE = os.path.join(os.environ.get("XDG_STATE_HOME", os.path.expanduser("~/.local/state")), "pocket-xr-deck")
 ACCENT = (0x5A / 255, 0x93 / 255, 1.0)
+GL_LINEAR_MIPMAP_LINEAR = 0x2703
+GL_TEXTURE_MAX_ANISOTROPY = 0x84FE  # EXT_texture_filter_anisotropic, core in GL 4.6 (Mesa on the Deck)
 
 DEFAULTS = {"view": "3dof", "source": "deck", "distance": 2.0, "scale": 1.0, "canvas_scale": 0.8, "look": True,
             "snap": False, "locked": False, "cursor_speed": 5, "curve_default": 0.0, "cursor_follows_head": True, "sbs_3d": True,
@@ -740,16 +742,23 @@ class App:
             tex = ctypes.c_uint(0)
             gl.glGenTextures(1, ctypes.byref(tex))
             gl.glBindTexture(GL_TEXTURE_2D, tex)
-            gl.glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
+            # Mipmapped, as Pocket XR on Android draws panels, with anisotropic filtering: a window is shown smaller than
+            # its picture, and plain linear sampling skips pixels of text unevenly. In 2D both eyes see the same
+            # skips; in 3D each eye sees the window from its own place, gets different skips, and text looked fuzzy
+            # (Mike, 12 Nov 2026: "harder to read text" in full SBS).
+            gl.glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR)
             gl.glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
             gl.glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE)
             gl.glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE)
+            gl.glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY, ctypes.c_float(8.0))
             gl.glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, f.w, f.h, 0, GL_BGRA, GL_UNSIGNED_BYTE, f.data)
+            gl.glGenerateMipmap(GL_TEXTURE_2D)
             t = (tex.value, f.w, f.h, f.serial)
             self.textures[p.key] = t
         elif t[3] != f.serial:
             gl.glBindTexture(GL_TEXTURE_2D, t[0])
             gl.glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, f.w, f.h, GL_BGRA, GL_UNSIGNED_BYTE, f.data)
+            gl.glGenerateMipmap(GL_TEXTURE_2D)
             t = (t[0], t[1], t[2], f.serial)
             self.textures[p.key] = t
         return t[0]

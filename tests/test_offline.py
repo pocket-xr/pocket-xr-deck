@@ -219,6 +219,9 @@ def test_joycon_pose_and_buttons():
     pose.recentre((1.0, 0.0, 0.0, 0.0))
     f = joycon._rotate(pose.orientation, (0.0, 0.0, -1.0))
     assert f[2] < -0.99, f
+    # held level, the hand is at a held hand's height, well below the eyes (12 Nov 2026: it was a foot too high)
+    p = pose.position((1.0, 0.0, 0.0, 0.0))
+    assert -0.62 < p[1] < -0.5 and p[2] < -0.2, p
     # turning about the face's axis (z, out of the face) by 90 degrees turns the hand to the left
     for _ in range(200):
         t += 0.005

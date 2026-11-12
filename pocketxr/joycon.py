@@ -52,9 +52,14 @@ GAIN = 2.0
 BIAS_GAIN = 0.05
 SETTLE_S = 0.5
 SETTLE_GAIN = 20.0
-SHOULDER_SIDE_M = 0.2
-SHOULDER_DROP_M = -0.3
-ARM_M = 0.4
+# The arm, with an elbow (Mike, 12 Nov 2026: the hands sat "a foot or so" above his real hands). Android's arm reaches
+# 0.4 m from a shoulder 0.3 m below the eyes along the Joy-Con's own direction, so a Joy-Con held tilted up a little,
+# as one is, put the hand at the chin. Now the upper arm hangs from the shoulder and the forearm follows the Joy-Con:
+# held level the hand is 0.58 m below the eyes, tilted up 20 degrees about 0.48 m, as hands holding Joy-Cons are.
+SHOULDER_SIDE_M = 0.18
+SHOULDER_DROP_M = -0.22
+UPPER_ARM_M = 0.36  # straight down from the shoulder to the elbow
+FOREARM_M = 0.28  # from the elbow along the Joy-Con
 # A Joy-Con lying still: its gyro's resting offset is taken from it (the factory offset is not read)
 REST_RAD = math.radians(2.0)
 REST_S = 0.8
@@ -160,9 +165,9 @@ class Pose:
         """The grip's place relative to the head, metres, for a head turned to [head]."""
         body = _yaw_quat(_yaw_of(head))
         side = SHOULDER_SIDE_M if self.right else -SHOULDER_SIDE_M
-        shoulder = _rotate(body, (side, SHOULDER_DROP_M, 0.0))
-        reach = _rotate(self.orientation, (0.0, 0.0, -ARM_M))
-        return tuple(shoulder[i] + reach[i] for i in range(3))
+        elbow = _rotate(body, (side, SHOULDER_DROP_M - UPPER_ARM_M, 0.0))
+        reach = _rotate(self.orientation, (0.0, 0.0, -FOREARM_M))
+        return tuple(elbow[i] + reach[i] for i in range(3))
 
 
 def _stick(raw, centre):
