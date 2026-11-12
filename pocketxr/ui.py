@@ -379,6 +379,11 @@ def launcher_card(apps, page, icon_for, cols=5, rows=3):
     cv.glass(cx - r, cy - r, 2 * r, 2 * r, r, fill=L.GLASS_RAISED)
     cv.icon("close", cx, cy, 26, L.INK)
     items.append((cx - r, cy - r, 2 * r, 2 * r, "launcher_close", None, r))
+    # PC VR, as the tile in Pocket XR's launcher: SteamVR from the PC
+    px, py, pw, ph = 230, 42, 170, 56
+    cv.glass(px, py, pw, ph, ph / 2, fill=L.ACCENT_DEEP, rim=L.ACCENT)
+    cv.text(px + pw / 2, py + ph / 2, "PC VR", 22, (1, 1, 1, 1), medium=True, align="center")
+    items.append((px, py, pw, ph, "pcvr", None, ph / 2))
     per = cols * rows
     pages = max(1, math.ceil(len(apps) / per))
     shown = apps[page * per:(page + 1) * per]

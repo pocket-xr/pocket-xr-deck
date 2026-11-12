@@ -663,6 +663,10 @@ class SpaceView:
             appsmod.launch(it.arg, self.log)
             self.toast(f"Opening {it.arg.name}")
             self._close_card("launcher", now)
+        elif a == "pcvr":
+            self._close_card("launcher", now)
+            self._close_card("cc", now)
+            self.app.start_pcvr()
         elif a == "page":
             self._page(it.arg)
         elif a == "launcher_close":

@@ -16,8 +16,9 @@ fi
 
 echo "Installing Pocket XR to $DEST"
 mkdir -p "$DEST" "$APPS" "$ICONS" "$BIN"
-rm -rf "$DEST/pocketxr" "$DEST/assets"
+rm -rf "$DEST/pocketxr" "$DEST/assets" "$DEST/native"
 cp -r "$SRC/pocketxr" "$SRC/assets" "$DEST/"
+[ -d "$SRC/native" ] && cp -r "$SRC/native" "$DEST/"
 cp "$SRC/uninstall.sh" "$SRC/VERSION" "$DEST/"
 find "$DEST" -name '__pycache__' -prune -exec rm -rf {} +
 

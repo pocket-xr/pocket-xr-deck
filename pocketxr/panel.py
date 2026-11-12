@@ -185,10 +185,12 @@ class Panel:
         sp = Card(root, "Space")
         row = tk.Frame(sp.body, bg=C["card"])
         row.pack(fill="x", padx=4, pady=(4, 2))
-        for i, (label, cmd) in enumerate((("Launcher", "launcher"), ("Control Center", "cc"))):
+        self.space_buttons = {}
+        for i, (label, cmd) in enumerate((("Launcher", "launcher"), ("Control Center", "cc"), ("PC VR", "pcvr"))):
             b = Button(row, label, lambda c=cmd: send(c), height=38)
             b.grid(row=0, column=i, sticky="ew", padx=4)
             row.columnconfigure(i, weight=1)
+            self.space_buttons[cmd] = b
         self.switches = {}
         for key, title, sub in (("sbs_3d", "3D side by side", "Each eye its own view: windows at a real depth"),
                                 ("snap", "Snap windows together", "Line up and dock as you move them"),
@@ -280,6 +282,7 @@ class Panel:
         self.view["steady"].set(enabled=st.get("steady_ok", False) or st.get("view") == "steady")
         for k, b in self.source.items():
             b.set(selected=st.get("source") == k)
+        self.space_buttons["pcvr"].set(selected=bool(st.get("pcvr")))
         for k, s in self.switches.items():
             s.set(bool(st.get(k, k in ("cursor_follows_head", "sbs_3d"))))
         flat = st.get("flat", False)

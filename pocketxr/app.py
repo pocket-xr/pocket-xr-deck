@@ -25,6 +25,7 @@ from .gl import (GL_BGRA, GL_BLEND, GL_CLAMP_TO_EDGE, GL_COLOR_BUFFER_BIT, GL_LI
                  SDL_INIT_VIDEO, SDL_KEYDOWN, SDL_QUIT, SDL_WINDOW_ALWAYS_ON_TOP, SDL_WINDOW_BORDERLESS,
                  SDL_WINDOW_FULLSCREEN_DESKTOP, SDL_WINDOW_OPENGL, SDL_WINDOW_SKIP_TASKBAR, displays, gl, sdl,
                  split_displays)
+from . import pcvr as pcvrmod
 from .settingsctl import SettingsControl
 from .spaceview import SpaceView
 from .xcapture import XCapture
@@ -102,6 +103,7 @@ class App:
         self.log = Log()
         self.settings = load_settings()
         self.space_path = os.path.join(CONFIG, "space.json")
+        self.pcvr = None
         self.space = SpaceView(self)
         self.events = queue.Queue()
         self.glasses = None
@@ -254,6 +256,11 @@ class App:
         self._last_imu = imu_n
         bias = ", ".join(f"{math.degrees(b):.2f}" for b in h.bias) if h else "-"
         panels = self.capture.snapshot()
+        if self.pcvr is not None:
+            st = (ctypes.c_uint64 * 3)()
+            if self.pcvr.started:
+                self.pcvr.lib.pxr_stats(st)
+            self.log(f"pcvr: {self.pcvr.state}, {st[0]} decoded, {st[1]} errors, {self.pcvr.frames} shown")
         self.log(f"health: {self.fps:.0f} fps, imu {rate:.0f}/s, gyro zero {bias} deg/s ({h.rest_blocks if h else 0} rests), "
                  f"{self._view()}, {self.settings['source']} ({len(panels)} panels), x errors {self.capture.errors} {self.capture.error_kinds}")
 
@@ -407,6 +414,8 @@ class App:
 
     def _close_window(self):
         self.space.forget_textures()
+        if self.pcvr is not None:
+            self.pcvr.forget_gl()
         if self.window:
             for tex, *_ in self.textures.values():
                 t = ctypes.c_uint(tex)
@@ -438,6 +447,10 @@ class App:
                 self._panel_cmd(a, b)
 
     def _button(self, name, how):
+        if self.pcvr is not None and name in ("L5", "R5") and how == "tap":
+            self.log(f"button {name} {how}")
+            self.stop_pcvr()
+            return
         self.log(f"button {name} {how}")
         if name == "L4" and how == "tap":
             self.recentre()
@@ -474,6 +487,8 @@ class App:
             if key is not None and not self.settings.get("locked", False):
                 self.space.depth(key, 2 * int(value))
                 self.space.save_places()
+        elif cmd == "pcvr":
+            self.stop_pcvr() if self.pcvr is not None else self.start_pcvr()
         elif cmd == "launcher":
             self.space.toggle_launcher()
         elif cmd == "cc":
@@ -507,6 +522,28 @@ class App:
             self.control.want(view)
         if self.head:
             self.head.recentre()
+
+    def start_pcvr(self):
+        """PC VR: SteamVR from the PC, as Pocket XR's PC VR tile on Android. L5 or R5 brings the Space back."""
+        if self.pcvr is not None:
+            return
+        if not pcvrmod.available():
+            self.space.toast("PC VR's parts are missing from this install")
+            return
+        if self._view() == "steady":
+            self.set_view("3dof")  # a game needs both eyes, not the glasses' flat canvas
+        self.space.launcher = None
+        self.space.cc = None
+        self.pcvr = pcvrmod.PcVr(self)
+        self.log("pcvr: starting")
+
+    def stop_pcvr(self):
+        if self.pcvr is None:
+            return
+        self.pcvr.close()
+        self.pcvr = None
+        self.space.toast("Back to your windows")
+        self.log("pcvr: stopped")
 
     def set_setting(self, key, value):
         self.settings[key] = value
@@ -553,6 +590,8 @@ class App:
         self.message = "Putting your glasses back..."
         self._send_status()
         self.space.save_places()
+        if self.pcvr is not None:
+            self.pcvr.close()
         self.capture.restore_all()
         if self.control and self.control.link and not self.control.link.closed:
             self.control.restore(lambda: setattr(self, "done", True))
@@ -613,6 +652,7 @@ class App:
             "cursor_follows_head": self.settings.get("cursor_follows_head", True),
             "sbs_3d": self.settings.get("sbs_3d", True),
             "sbs_ok": bool(g and g.control_link),
+            "pcvr": self.pcvr is not None,
             "steady_ok": bool(g and g.steady_6dof),
             "flat": self._flat(),
             "viture": bool(g and g.family == "viture"),
@@ -701,6 +741,8 @@ class App:
         else:
             self._draw_space(panels, w, h, now)
         sdl.SDL_GL_SwapWindow(self.window)
+        if self.pcvr is not None:
+            self.pcvr.submitted()
 
     def _draw_flat(self, panels, w, h):
         """Steady mode: panels side by side across the glasses' canvas, drawn flat; the glasses hold the canvas."""
@@ -728,8 +770,13 @@ class App:
         eyes = [(-0.032, 0, w // 2), (0.032, w // 2, w // 2)] if sbs else [(0.0, 0, w)]
         view = self.head.view() if self.head else (1.0, 0.0, 0.0, 0.0)
         m = (ctypes.c_float * 16)(*fusion.matrix(fusion.qconj(view)))
-        live = self.capture.virtual
+        live = self.capture.virtual and self.pcvr is None
         self.capture.space_pointer = live
+        if self.pcvr is not None:
+            self.pcvr.frame(view, self.head.last_gyro if self.head else (0.0, 0.0, 0.0))
+            if not self.pcvr.streaming and self.pcvr.message and (not self.space.toasts or
+                                                                   self.space.toasts[0][0] != self.pcvr.message):
+                self.space.toast(self.pcvr.message)
         g = self.capture.glasses_rect
         self.space.frame(now, view, panels, (g[2], g[3]) if g else None, live and self.capture.pointer_on_glasses)
         self._edge_recentre(now)
@@ -745,6 +792,8 @@ class App:
             gl.glLoadIdentity()
             gl.glTranslatef(-eye_x, 0.0, 0.0)
             gl.glMultMatrixf(m)
+            if self.pcvr is not None and self.pcvr.draw_eye(0 if (not sbs or vx == 0) else 1):
+                continue
             self.space.draw(panels, now, tex)
         self._edge_fade(w, h, sbs)
 
