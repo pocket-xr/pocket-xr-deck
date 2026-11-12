@@ -1,7 +1,7 @@
 # Pocket XR for Steam Deck
 
-Your Steam Deck's screen and apps on your XR glasses, held still in space as you turn your head. On the
-XREAL Aura, the glasses can hold them in place as you move around too.
+Your Steam Deck's screen and apps on your XR glasses, held still in space as you turn your head. On glasses that
+track position, they stay in place as you move around too.
 
 It is the Steam Deck version of [Pocket XR](https://github.com/pocket-xr/pocket-xr), the free and open
 source spatial desktop for Android phones. Same glasses, same rules, no account and no paid tier.
@@ -15,8 +15,9 @@ source spatial desktop for Android phones. Same glasses, same rules, no account 
 > [discussion](https://github.com/pocket-xr/pocket-xr-deck/discussions). I put out updates almost every day, and
 > your feedback decides what comes first. To update, run the install line again.
 
-It runs in Desktop Mode. Gaming Mode is not supported yet. It has been tested on a Steam Deck with the XREAL Aura;
-the other glasses below should work, but haven't been tried on a Deck yet.
+It runs in Desktop Mode. Gaming Mode is not supported yet. It's set up for the same XREAL and VITURE glasses as
+Pocket XR on Android (see [Glasses](#glasses)). Most haven't been tried on a Deck yet, so if you have any of them,
+please give it a go and send a "works" or "doesn't" with your log: that's the fastest way to make it great on yours.
 
 ## Install
 
@@ -108,14 +109,14 @@ edge you could not see or use it.
 
 The same glasses as Pocket XR on Android:
 
-| Glasses | Head tracking | Steady mode in 6DoF | Tested on a Deck |
+| Glasses | Head tracking | Steady mode in 6DoF | Tried on a Deck |
 | --- | --- | --- | --- |
 | XREAL Aura | Yes | Yes. Pocket XR turns the Aura's Spatial Anchor on and off for you. | Yes |
-| XREAL One, One Pro, One Pro+, 1S | Yes | With the XREAL Eye. You turn 6DoF on in the glasses' menu when asked. | Not yet |
-| XREAL Air, Air 2, Air 2 Pro, Air 2 Ultra | Yes | No | Not yet |
+| XREAL One, One Pro, One Pro+, 1S | Yes | With the XREAL Eye. You turn 6DoF on in the glasses' menu when asked. | Not yet: please try it |
+| XREAL Air, Air 2, Air 2 Pro, Air 2 Ultra | Yes | No | Not yet: please try it |
 | VITURE Beast | Yes | No (waits on VITURE's SDK) | Not yet |
-| Other VITURE glasses | Experimental, off until you turn it on in the panel | No | Not yet |
-| Other glasses | No, the windows are shown flat | No | Not yet |
+| Other VITURE glasses | Experimental, off until you turn it on in the panel | No | Not yet: please try it |
+| Other glasses | No, the windows are shown flat | No | Not yet: please try it |
 
 Settings on the glasses themselves, as on Android:
 
