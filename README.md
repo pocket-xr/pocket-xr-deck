@@ -114,7 +114,7 @@ The same glasses as Pocket XR on Android:
 | XREAL Aura | Yes | Yes. Pocket XR turns the Aura's Spatial Anchor on and off for you. | Yes |
 | XREAL One, One Pro, One Pro+, 1S | Yes | With the XREAL Eye. You turn 6DoF on in the glasses' menu when asked. | Not yet: please try it |
 | XREAL Air, Air 2, Air 2 Pro, Air 2 Ultra | Yes | No | Not yet: please try it |
-| VITURE Beast | Yes | No (waits on VITURE's SDK) | Not yet |
+| VITURE Beast | Yes | No (waits on VITURE's SDK) | Not yet: please try it |
 | Other VITURE glasses | Experimental, off until you turn it on in the panel | No | Not yet: please try it |
 | Other glasses | No, the windows are shown flat | No | Not yet: please try it |
 
