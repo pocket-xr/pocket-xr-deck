@@ -58,5 +58,25 @@ if [ -d "$HOME/Desktop" ]; then
 fi
 update-desktop-database "$APPS" >/dev/null 2>&1 || true
 
+# Gaming Mode: a small service that starts with the session and acts only while Gaming Mode runs (pocketxr/gaming.py)
+UNITS="$HOME/.config/systemd/user"
+mkdir -p "$UNITS"
+cat > "$UNITS/pocket-xr-gaming.service" <<EOF
+[Unit]
+Description=Pocket XR in Gaming Mode: your games on a screen held still in your XR glasses
+
+[Service]
+WorkingDirectory=$DEST
+ExecStart=/usr/bin/python3 -m pocketxr.gaming
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target
+EOF
+systemctl --user daemon-reload >/dev/null 2>&1 || true
+systemctl --user enable pocket-xr-gaming.service >/dev/null 2>&1 || true
+systemctl --user restart pocket-xr-gaming.service >/dev/null 2>&1 || true
+
 echo "Done. Pocket XR $(cat "$SRC/VERSION") is on the desktop and in the app menu."
-echo "Plug in your glasses and open it from Desktop Mode."
+echo "Plug in your glasses and open it from Desktop Mode. In Gaming Mode it starts by itself."

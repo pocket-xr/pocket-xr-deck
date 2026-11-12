@@ -61,6 +61,9 @@ class SettingsControl(threading.Thread):
         self.last_follow_check = 0.0
         self.follow_sent_at = 0.0
         self.want_3d = lambda: True  # the app's "3D side by side" setting
+        # Steady mode on a wide canvas (Ultrawide, largest size), as on the desktop; Gaming Mode keeps the game 16:9
+        # and only asks for Spatial Anchor.
+        self.steady_wide = True
         self.sbs_tries = 0
         self.sbs_first_at = None
         self.we_set_3d = False
@@ -249,14 +252,14 @@ class SettingsControl(threading.Thread):
         if st["stereo"] == 1 and not self._set_and_check(c.stereo_set, False, c.STEREO_GET, 0, "2D, on the way to Ultrawide"):
             self.on_message("The glasses stayed in 3D, so Steady mode could not start.")
             return
-        if st["ultrawide"] != 1:
+        if self.steady_wide and st["ultrawide"] != 1:
             if not self._set_and_check(c.ultrawide_set, True, c.ULTRAWIDE_GET, 1, "Ultrawide on"):
                 self.on_message("Ultrawide did not come on, so Steady mode could not start.")
                 return
             self.we_set_ultrawide = True
         st = self._read()
         top, size = st.get("size_max"), st.get("size")
-        if top is not None and size is not None and size < top - SIZE_SAME:
+        if self.steady_wide and top is not None and size is not None and size < top - SIZE_SAME:
             self.log(f"settings: screen size {size:.2f} -> {top:.2f}")
             self.link.request(c.size_set, float(top))
             time.sleep(SET_GAP_S)
