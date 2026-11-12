@@ -6,7 +6,17 @@ XREAL Aura, the glasses can hold them in place as you move around too.
 It is the Steam Deck version of [Pocket XR](https://github.com/pocket-xr/pocket-xr), the free and open
 source spatial desktop for Android phones. Same glasses, same rules, no account and no paid tier.
 
-**Early version.** It runs in Desktop Mode. Gaming Mode is not supported yet.
+[![Pocket XR for Steam Deck](assets/pocket-xr-steam-deck.png)](https://youtu.be/wG-jDG43XUo)
+
+**Watch it in action:** [Pocket XR for Steam Deck on YouTube](https://youtu.be/wG-jDG43XUo) (52 seconds).
+
+> **This is the first version, so expect bugs.** Please tell me what breaks and what you'd like next: open an
+> [issue](https://github.com/pocket-xr/pocket-xr-deck/issues), or start a
+> [discussion](https://github.com/pocket-xr/pocket-xr-deck/discussions). I put out updates almost every day, and
+> your feedback decides what comes first. To update, run the install line again.
+
+It runs in Desktop Mode. Gaming Mode is not supported yet. It has been tested on a Steam Deck with the XREAL Aura;
+the other glasses below should work, but haven't been tried on a Deck yet.
 
 ## Install
 
@@ -52,6 +62,18 @@ The Deck's back buttons work at any time, alongside Steam's controls:
 | L5 | Launcher | Lock screens |
 | R5 | Control Center | Adjust all |
 
+## PC VR
+
+Play SteamVR games from your Windows PC on your glasses, streamed over Wi-Fi. It's new, so it's a beta.
+
+1. On your PC, install Steam and SteamVR, then the
+   [Pocket XR PC helper](https://github.com/pocket-xr/pocket-xr/releases?q=pc-helper&expanded=true), the same one
+   Pocket XR on Android uses. Keep it running.
+2. Put the PC and the Deck on the same network. A PC on a cable to the router and the Deck on 5 GHz Wi-Fi works best.
+3. On the Deck, open PC VR from the launcher, the Control Center or the control panel. The first time, your PC asks
+   whether to allow this Steam Deck: say yes.
+4. Pocket XR shows a loading room while SteamVR starts, then opens into the game.
+
 In PC VR the buttons belong to the game, except one: hold L5 or R5 for two seconds to go back to your Space. A ring
 fills on the card while you hold; let go before it fills to stay in the game.
 
@@ -74,6 +96,8 @@ settings first. A connected Joy-Con takes over its hand, so one Joy-Con and the 
 Hold them like remotes, pointing forward. Each one points ahead by itself when it starts. Over time its aim drifts
 sideways a little; press Capture or Home to point it ahead again. Steam turns the Joy-Cons' motion sensors off;
 Pocket XR turns them on while PC VR runs, and off again after.
+
+## More
 
 Holding the pointer against the right edge of the Deck's screen for a second also recentres.
 
@@ -113,6 +137,22 @@ One series), and only the commands Pocket XR on Android has already proven: 2D a
 Spatial Anchor and the canvas recentre. It never sends a firmware command or a guessed one. On the Air and VITURE
 glasses it sends only the start and stop of the motion stream.
 
+## Feedback
+
+This is the first version, and I put out updates almost every day. Bug reports, glasses reports ("it works on my
+One Pro", or "it doesn't"), and ideas all help:
+
+- **Something broke?** Open an [issue](https://github.com/pocket-xr/pocket-xr-deck/issues) and attach
+  `~/.local/state/pocket-xr-deck/pocket-xr.log`.
+- **An idea or a question?** Start a [discussion](https://github.com/pocket-xr/pocket-xr-deck/discussions).
+
+## Support
+
+[![Buy me a beer on Ko-fi](https://img.shields.io/badge/Buy%20me%20a%20beer-Ko--fi-FF5E5B?style=for-the-badge&logo=ko-fi&logoColor=white)](https://ko-fi.com/mikehaye)
+
+Enjoying Pocket XR? You can buy me a beer on [Ko-fi](https://ko-fi.com/mikehaye). It's never required; a star or a
+glasses report helps just as much.
+
 ## Build and test
 
 ```bash
@@ -131,3 +171,6 @@ credit the public, MIT licensed write-ups they come from.
 The font is Inter 4.1, Copyright (c) 2016 The Inter Project Authors (https://github.com/rsms/inter), under the SIL
 Open Font License 1.1 (https://openfontlicense.org): `assets/fonts/` holds its static Regular and Medium files,
 unmodified, as Pocket XR on Android bundles them.
+
+PC VR uses ALVR's client library (https://github.com/alvr-org/ALVR, MIT licence), built from the same source as
+Pocket XR on Android, and the Deck's own FFmpeg to decode the video.
