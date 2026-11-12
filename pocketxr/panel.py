@@ -282,7 +282,13 @@ class Panel:
         self.view["steady"].set(enabled=st.get("steady_ok", False) or st.get("view") == "steady")
         for k, b in self.source.items():
             b.set(selected=st.get("source") == k)
-        self.space_buttons["pcvr"].set(selected=bool(st.get("pcvr")))
+        on = bool(st.get("pcvr"))
+        b = self.space_buttons["pcvr"]
+        label = "Leave PC VR" if on else "PC VR"
+        if b.text != label:
+            b.text = label
+            b.draw()
+        b.set(selected=on)
         for k, s in self.switches.items():
             s.set(bool(st.get(k, k in ("cursor_follows_head", "sbs_3d"))))
         flat = st.get("flat", False)
