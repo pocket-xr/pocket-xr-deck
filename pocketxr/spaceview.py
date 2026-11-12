@@ -36,6 +36,7 @@ CC_D, CC_WDEG = 1.8, 38.0
 CC_OPEN_S = 0.22
 COLS, ROWS = 5, 3
 LEAVE_PUSH_DEG = 8.0
+WHEEL_HOLD_S = 0.8  # a pause this long in scrolling lets go of the window being pushed or pulled
 # "Cursor follows head" off: the cursor stays in the room; once out of view, a 3 degree net swipe brings it back
 # to the edge of the view, 1.5 degrees in (Pocket XR SpatialPointer).
 BRING_BACK_DEG = 3.0
@@ -80,6 +81,7 @@ class SpaceView:
         self.app_list = None
         self.focus = None
         self.push_left = 0.0
+        self.wheel_hold = None  # (key, until)
         self.cursor_world = None  # (yaw, pitch) in the room, with "Cursor follows head" off
         self.bring_back = 0.0
         self.room_motion = (0.0, 0.0)
@@ -212,6 +214,8 @@ class SpaceView:
         self._warp(panels, out_size)
         if self.hover and self.hover[0] == "window":
             self.ctl_seen[self.hover[1]] = now
+        if self.wheel_hold and now < self.wheel_hold[1]:
+            self.ctl_seen[self.wheel_hold[0]] = now
 
     def _room_cursor(self, view_q, head_yaw, head_pitch):
         """The cursor stays where it is in the room as the head turns; the trackpad moves it there."""
@@ -355,10 +359,16 @@ class SpaceView:
         if self.launcher is not None and self.hover and self.hover[0] == "launcher":
             self._page(-1 if dy > 0 else 1)
             return
+        now = time.monotonic()
         key = self.drag["key"] if self.drag else (self.hover[1] if self.hover and self.hover[0] == "window" and
                                                    self.hover[2] in (S.FRAME, S.BUTTON) else None)
+        # A window being pushed or pulled stays the one until the scrolling pauses: as it changes size the Move pill
+        # slides out from under the pointer, and the scroll must not stop there.
+        if self.wheel_hold and now < self.wheel_hold[1] and self.wheel_hold[0] in self.poses:
+            key = self.wheel_hold[0]
         if key is None or key not in self.poses or self.app.settings.get("locked", False):
             return
+        self.wheel_hold = (key, now + WHEEL_HOLD_S)
         self.depth(key, WHEEL_DEPTH_STEPS if dy > 0 else -WHEEL_DEPTH_STEPS)
 
     def depth(self, key, step):
