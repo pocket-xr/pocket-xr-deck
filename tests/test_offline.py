@@ -3,10 +3,8 @@ import math
 import os
 import sys
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import fusion  # noqa: E402
-import imu  # noqa: E402
-import control  # noqa: E402
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+from pocketxr import control, fusion, glasses, hidimu, imu  # noqa: E402
 
 
 def test_framer_splits_and_skips_junk():
@@ -132,6 +130,75 @@ def test_control_reads_answers():
     assert abs(out[0].value - 1.2) < 1e-6 and out[0].result == 0
     assert abs(out[1].value - 0.85) < 1e-6 and abs(out[1].value3 - 1.2) < 1e-6
     assert out[2].value is None
+
+
+def test_glasses_detect():
+    aura = [(0x3318, 0x043A, [0x03, 0x0E, 0x0E, 0x02, 0x0A], "XREAL Aura")]
+    g = glasses.detect(aura)
+    assert g.family == "aura" and g.steady_6dof and g.app_anchor and g.network_imu and not g.eye
+    one = [(0x3318, 0x0438, [0x02, 0x0A, 0x03], "XREAL One")]
+    g = glasses.detect(one)
+    assert g.family == "one" and not g.steady_6dof and g.axes == "one"
+    assert "XREAL Eye" in g.why_no_6dof()
+    one_eye = one + [(0x3318, 0x0450, [0x0E, 0x0E], "XREAL Eye")]
+    g = glasses.detect(one_eye)
+    assert g.steady_6dof and not g.app_anchor
+    vit = [(0x35CA, 0x101D, [0x03], "VITURE Luma")]
+    g = glasses.detect(vit)
+    assert g.family == "viture" and not g.network_imu and "SDK" in g.why_no_6dof()
+    assert glasses.detect([(0x28DE, 0x1205, [0x03], "Steam Deck Controller")]) is None
+
+
+def test_recenter_bytes():
+    assert control.recenter(0x80000001).hex() == "2827" + "00000006" + "80000001" + "1a00"
+
+
+def test_air_command_and_report():
+    c = hidimu.air_stream(True)
+    assert len(c) == 64 and c[0] == 0xAA and c[5:9] == bytes([4, 0, 0x19, 1])
+    import zlib, struct
+    assert struct.unpack_from("<I", c, 1)[0] == zlib.crc32(c[5:9])
+    # Sensor axes x left, y back, z up: a turn about the sensor's z is a turn about the head's y (up).
+    rep = hidimu.air_parse(hidimu.air_report(1000, (0.0, 0.0, 30.0), (0.0, 0.0, 1.0)))
+    ts, g, a = rep
+    assert ts == 1000 and abs(g[1] - math.radians(30)) < 1e-3 and abs(g[0]) < 1e-6 and abs(g[2]) < 1e-6
+    assert abs(a[1] - 9.81) < 1e-2  # gravity's reaction along head up, in m/s2
+    assert hidimu.air_parse(c) is None  # a command answer is not a report
+    t = hidimu.AirTimestamp()
+    t.to_ns(1000)
+    assert t.to_ns(2000) == 2000 * 1000  # 1 kHz in microseconds
+
+
+def test_viture_frames():
+    st = hidimu.v_start()
+    assert len(st) == 64 and st[:10].hex() == "1000" + "0103" + "0200" + "0400" + "0202"
+    raw = hidimu.v_raw(7, (0.1, 0.2, 0.3), (0.0, -1.0, 0.0))
+    mid, payload = hidimu.v_read(raw)
+    assert mid == 0x7309
+    counter, g, a = hidimu.v_parse_raw(payload)
+    assert counter == 7 and abs(g[1] - 0.2) < 1e-6 and abs(a[1] + 1.0) < 1e-6
+    bad = bytearray(raw)
+    bad[12] ^= 0xFF
+    assert hidimu.v_read(bytes(bad)) is None  # checksum
+    c = hidimu.VitureClock()
+    t0 = c.to_ns(0, 10_000_000)
+    for k in range(1, 121):
+        c.to_ns(k, 10_000_000 + k * 10_000_000)  # 100 Hz really
+    assert c.learned and abs(c.period - 10_000_000) < 1
+
+
+def test_glasses_families():
+    beast = [(0x35CA, 0x1102, [0x01, 0x03], "VITURE Microphone"), (0x35CA, 0x1211, [0x03] * 6, "VITURE Beast XR Glasses")]
+    g = glasses.detect(beast)
+    assert g.beast and g.imu == "viture" and g.axes == "one" and g.viture_tracking_default()
+    assert g.why_no_tracking() is None
+    pro2 = glasses.detect([(0x35CA, 0x1301, [0x03], "VITURE Pro 2")])
+    assert not pro2.beast and not pro2.viture_tracking_default() and "off" in pro2.why_no_tracking()
+    air2 = glasses.detect([(0x3318, 0x0428, [0x03] * 4, "XREAL Air 2")])
+    assert air2.family == "air" and air2.imu == "air" and air2.axes == "aura" and not air2.control_link
+    helen = glasses.detect([(0x3318, 0x043F, [0x03] * 4, "")])
+    assert helen.family == "air" and helen.imu is None
+    assert hidimu.air_interface(0x0426) == 2 and hidimu.air_interface(0x0428) == 3
 
 
 if __name__ == "__main__":

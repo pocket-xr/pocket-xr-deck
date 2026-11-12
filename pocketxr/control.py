@@ -21,11 +21,13 @@ ULTRAWIDE_GET, ULTRAWIDE_SET = 10277, 10278
 SIZE_RANGE, SIZE_GET, SIZE_SET = 10396, 10397, 10398
 ANCHOR_GET, ANCHOR_SET = 10404, 10405  # Spatial Anchor
 SERIAL_GET = 10025
+RECENTER = 10279  # empty request: in Ultrawide the glasses bring their canvas in front (Pocket XR 1.1.18 on)
 
 SENDABLE = {HEARTBEAT, STEREO_GET, STEREO_SET, ULTRAWIDE_GET, ULTRAWIDE_SET, SIZE_RANGE, SIZE_GET, SIZE_SET,
-            ANCHOR_GET, ANCHOR_SET, SERIAL_GET}
+            ANCHOR_GET, ANCHOR_SET, SERIAL_GET, RECENTER}
 FORBIDDEN = {10079, 10325, 10326, 10327, 10328}
 assert not (SENDABLE & FORBIDDEN)
+SETS = {STEREO_SET, ULTRAWIDE_SET, SIZE_SET, ANCHOR_SET, RECENTER}
 
 
 # ---------- protobuf, just enough ----------
@@ -188,6 +190,10 @@ class Framer:
         return out
 
 
+def recenter(rid):
+    return rpc(RECENTER, rid)
+
+
 class Link:
     """One open control link: a heartbeat every 50 ms (as Pocket XR does), and request() waits for its answer."""
 
@@ -239,7 +245,9 @@ class Link:
         while time.monotonic() < end and not self.closed:
             a = self.answers.pop(rid & 0x7FFFFFFF, None)
             if a is not None:
-                self.log(f"  {mtype} -> {a}")
+                # Sets and refusals are logged; plain reads only when they fail, to keep the log readable.
+                if mtype in SETS or a.result != 0:
+                    self.log(f"  {mtype} -> {a}")
                 return a
             time.sleep(0.01)
         self.log(f"  {mtype} -> no answer")

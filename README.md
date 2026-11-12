@@ -1,40 +1,99 @@
-# Pocket XR for the Steam Deck (prototype)
+# Pocket XR for Steam Deck
 
-An early look at Pocket XR on the Steam Deck. Read [docs/FEASIBILITY.md](docs/FEASIBILITY.md) first.
+Your Steam Deck's screen and apps on your XR glasses, held still in space as you turn your head. On the
+XREAL Aura, the glasses can hold them in place as you move around too.
 
-## Run the prototype
+It is the Steam Deck version of [Pocket XR](https://github.com/pocket-xr/pocket-xr), the free and open
+source spatial desktop for Android phones. Same glasses, same rules, no account and no paid tier.
 
-On the Deck, in Desktop Mode, with the XREAL glasses plugged in:
+**Early version.** It runs in Desktop Mode. Gaming Mode is not supported yet.
 
-1. In the glasses' own menu, turn **Spatial Anchor off**. It fights the app's head tracking.
-2. Copy the `prototype` folder to the Deck.
-3. In Konsole: `./prototype/run.sh`. From SSH use `./prototype/start.sh`, which keeps it running
-   after SSH closes.
-4. Hold still for a moment now and then. The gyro learns its zero from quiet half seconds.
+## Install
 
-Add `--capture` to show the Deck's own screen instead of the test card. The pointer is drawn in
-the glasses and kept on the Deck's screen; hold it at the right edge for a second to recentre.
+On the Deck, switch to Desktop Mode, open Konsole and paste:
 
-Keys: Enter, Space, R or a click recentres. Up and Down move the screen nearer or further.
-Left and Right make it smaller or bigger. Ctrl+Q quits.
+```bash
+curl -L https://github.com/pocket-xr/pocket-xr-deck/releases/latest/download/pocket-xr-deck.tar.gz | tar xz -C /tmp && /tmp/pocket-xr-deck/install.sh
+```
 
-### Steady mode in 6DoF (XREAL Aura)
+Pocket XR then appears on the desktop and in the app menu. No password is needed. It installs into your home
+folder, so SteamOS updates leave it alone. Run the same line again to update.
 
-The glasses hold the picture in the room as you move, as Pocket XR's Steady mode does on the phone.
+To remove it: `~/.local/share/pocket-xr-deck/uninstall.sh`
 
-1. `python3 prototype/steady.py on` (2D, Ultrawide, largest size, then Spatial Anchor on)
-2. `./prototype/start.sh --capture --canvas`
-3. To leave: `python3 prototype/steady.py off`, then start without `--canvas`.
+## Use
 
-`python3 prototype/steady.py status` reads the glasses' settings and changes nothing.
+1. Plug your glasses into the Deck's USB-C port.
+2. Open **Pocket XR**. Your glasses show the Deck's screen in front of you. A control panel opens on the Deck.
+3. Hold still for a moment now and then. The head tracking learns its zero point while you are still.
 
-Only `steady.py` sends anything to the glasses, and only commands Pocket XR has proven on the Aura.
-The 3DoF view only reads the glasses' motion.
+The control panel:
 
-## Checks without glasses
+- **View**
+  - **Window in space**: the screen stays where it is while you turn your head.
+  - **Steady 6DoF**: the glasses hold the picture in place as you lean and walk around (see below).
+- **Show**
+  - **Deck screen**: the whole Deck screen as one window.
+  - **App windows**: each open app as its own window, side by side around you.
+- **Adjust**: Recentre, Smaller and Bigger, Nearer and Further.
+- **Look at a window to bring it to the front.** In App windows, look at a window for a moment and it comes to
+  the front on the Deck's screen, so touch, the trackpads and the keyboard work on it.
+- **Quit and put the glasses back.** Every setting Pocket XR changed on the glasses is put back as it was.
 
-`python3 prototype/test_offline.py`
+The Deck's back buttons work at any time, alongside Steam's controls:
+
+| Button | Tap | Hold |
+| --- | --- | --- |
+| L4 | Recentre | Switch between Window in space and Steady 6DoF |
+| R4 | Next app window | Switch between Deck screen and App windows |
+| L5 | Smaller | |
+| R5 | Bigger | |
+
+Holding the pointer against the right edge of the Deck's screen for a second also recentres.
+
+The mouse pointer is drawn in the glasses on the window it is over. It stays on the Deck's screen: past its right
+edge you could not see or use it.
+
+## Glasses
+
+The same glasses as Pocket XR on Android:
+
+| Glasses | Head tracking | Steady mode in 6DoF | Tested on a Deck |
+| --- | --- | --- | --- |
+| XREAL Aura | Yes | Yes. Pocket XR turns the Aura's Spatial Anchor on and off for you. | Yes |
+| XREAL One, One Pro, One Pro+, 1S | Yes | With the XREAL Eye. You turn 6DoF on in the glasses' menu when asked. | Not yet |
+| XREAL Air, Air 2, Air 2 Pro, Air 2 Ultra | Yes | No | Not yet |
+| VITURE Beast | Yes | No (waits on VITURE's SDK) | Not yet |
+| Other VITURE glasses | Experimental, off until you turn it on in the panel | No | Not yet |
+| Other glasses | No, the windows are shown flat | No | Not yet |
+
+Settings on the glasses themselves, as on Android:
+
+- **XREAL Aura:** nothing to do. Pocket XR turns Spatial Anchor off in Window in space, and on in Steady 6DoF.
+- **XREAL One series:** use **Follow** mode and turn **Stabilizer off** in the glasses' menu. Otherwise the glasses
+  and Pocket XR both move the picture.
+
+If your glasses are on the list but don't work, please open an issue with the log from
+`~/.local/state/pocket-xr-deck/pocket-xr.log`.
+
+## What it sends to the glasses
+
+Pocket XR reads the glasses' motion. It sends a setting only on XREAL glasses with a control link (the Aura and the
+One series), and only the commands Pocket XR on Android has already proven: 2D and 3D, Ultrawide, screen size,
+Spatial Anchor and the canvas recentre. It never sends a firmware command or a guessed one. On the Air and VITURE
+glasses it sends only the start and stop of the motion stream.
+
+## Build and test
+
+```bash
+python3 tests/test_offline.py   # checks that need no glasses or screen
+./make-release.sh               # dist/pocket-xr-deck.tar.gz
+```
+
+`docs/FEASIBILITY.md` covers why the Deck version is built this way, how it compares to Breezy Desktop, and the test
+results on a real Deck.
 
 ## Licence
 
-GPL-3.0, the same as Pocket XR.
+GPL-3.0, the same as Pocket XR. The glasses' protocols are written in our own words from Pocket XR's notes, which
+credit the public, MIT licensed write-ups they come from.
