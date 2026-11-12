@@ -16,11 +16,20 @@ length with the trailing NUL then the bytes, an array as its length then the byt
     gamescope_reshade      requests: 0 destroy, 1 set_effect(path), 2 enable_effect,
                                      3 set_uniform_variable(key, array value), 4 disable_effect
                            events:   0 effect_ready(path)
+    gamescope_private      requests: 0 destroy, 1 execute(cvar_name, value)
+                           events:   0 log(text), 1 command_executed
+
+Why gamescope_private too: setting a uniform asks gamescope to repaint (force_repaint), but in gamescope 3.16 that
+request is cleared on the compositor's next wake whether or not it paints, and it only paints on a vblank. Updates
+arriving between vblanks were dropped, so the screen redrew only when the game did: it lagged far behind the head.
+Its "debug_force_repaint" command sets the flag that waits for the next painted frame, so every frame paints with
+the newest head turn. (The effect's "gamescope_always_paint" flag isn't read by gamescope 3.16.)
 """
 import os
 import select
 import socket
 import struct
+import time
 
 
 def _string(s):
@@ -70,6 +79,9 @@ class Reshade:
         self.globals = {}
         self.ready = None
         self.error = None
+        self.pace_cb = None  # the callback of the last paced update, while gamescope hasn't handled it
+        self.pace_sent = 0.0
+        self.pace_ms = []  # how long gamescope took to handle paced updates, for the log
         registry = self._new_id()
         self._send(1, 1, struct.pack("<I", registry))
         done = self._roundtrip()
@@ -81,6 +93,11 @@ class Reshade:
         name, version = found
         self.obj = self._new_id()
         self._send(registry, 0, struct.pack("<I", name) + _string("gamescope_reshade") + struct.pack("<II", 1, self.obj))
+        self.private = None
+        if "gamescope_private" in self.globals:
+            pname, _ = self.globals["gamescope_private"]
+            self.private = self._new_id()
+            self._send(registry, 0, struct.pack("<I", pname) + _string("gamescope_private") + struct.pack("<II", 1, self.private))
         self._registry = registry
         self._roundtrip()
         if self.error:
@@ -137,6 +154,9 @@ class Reshade:
             self.globals[iface] = (name, version)
         elif obj == getattr(self, "_cb", None) and opcode == 0:  # wl_callback.done
             self._cb_done = True
+        elif obj == self.pace_cb and opcode == 0:  # a paced update was handled
+            self.pace_ms.append((time.monotonic() - self.pace_sent) * 1000)
+            self.pace_cb = None
         elif obj == getattr(self, "obj", None) and opcode == 0:  # effect_ready
             self.ready, _ = _read_string(body, 0)
 
@@ -162,6 +182,20 @@ class Reshade:
 
     def disable(self):
         self._send(self.obj, 4)
+
+    def paced_floats(self, key, values):
+        """Sets a uniform only when gamescope has handled the last one (a wl_display.sync after it), so updates never
+        queue up behind each other: a queue of old head turns is what made the screen lag far behind the head.
+        Returns whether it was sent."""
+        if self.pace_cb is not None:
+            return False
+        self.set_floats(key, values)
+        if self.private is not None:
+            self._send(self.private, 1, _string("debug_force_repaint") + _string(""))
+        self.pace_cb = self._new_id()
+        self.pace_sent = time.monotonic()
+        self._send(1, 0, struct.pack("<I", self.pace_cb))
+        return True
 
     def set_floats(self, key, values):
         """Sets a float uniform (by its "source" name) to these values."""

@@ -36,7 +36,8 @@ LOG = os.path.expanduser("~/.local/state/pocket-xr-deck/gaming.log")
 FOV_V_DEG = 38.0  # the glasses' picture, vertical (as the desktop app)
 ASPECT = 16 / 9
 DEFAULTS = {"mode": "space", "size": 0.8}
-SEND_HZ = 250
+SEND_HZ = 500  # how often the loop looks; updates go out as fast as gamescope takes them (paced)
+PREDICT_S = 0.020  # head prediction: gamescope's composite and the glasses' display
 GONE_GRACE_S = 12.0
 EDGE = 0.004  # the screen's soft edge, in screen widths
 
@@ -214,11 +215,18 @@ class Gaming:
         if self.reader:
             self.reader.start()
         if g.control_link:
-            self.control = SettingsControl(g, self.log, lambda st: None, lambda text: self.log("gaming: " + text))
+            self.control = SettingsControl(g, self.log, self._glasses_state, lambda text: self.log("gaming: " + text))
             self.control.want_3d = lambda: False  # the effect draws one picture: the glasses stay 2D
             self.control.steady_wide = False
             self.control.start()
         self._apply_mode()
+
+    def _glasses_state(self, st):
+        """The glasses' own settings as their control link reads them, logged when they change."""
+        shown = {k: st.get(k) for k in ("space", "stereo", "anchor", "ultrawide")}
+        if shown != getattr(self, "_last_glasses_state", None):
+            self._last_glasses_state = shown
+            self.log(f"gaming: glasses state {shown}")
 
     def _stop_glasses(self, put_back=True):
         self.log(f"gaming: glasses gone: {self.glasses.name}" if self.glasses else "gaming: glasses off")
@@ -254,10 +262,22 @@ class Gaming:
             if g is not None:
                 self._start_glasses(g)
 
+    def _predicted_view(self):
+        """The head a little ahead (PREDICT_S), from the gyro, to make up for the time to the glasses' picture."""
+        q = self.head.view()
+        g = fusion.qrot(q, self.head.last_gyro)  # the turn rate in the room's axes
+        ang = math.sqrt(g[0] ** 2 + g[1] ** 2 + g[2] ** 2) * PREDICT_S
+        if ang < 1e-6:
+            return q
+        k = math.sin(ang / 2) / (ang / PREDICT_S)
+        return fusion.qnorm(fusion.qmul((math.cos(ang / 2), g[0] * k, g[1] * k, g[2] * k), q))
+
     # ---- the loop ----
     def run(self):
         self.log("gaming: Pocket XR's Gaming Mode service started")
         next_check = 0.0
+        last_stats = time.monotonic()
+        last_reports = 0
         step = 1.0 / SEND_HZ
         while True:
             now = time.monotonic()
@@ -280,8 +300,18 @@ class Gaming:
                 try:
                     self.reshade.pump()
                     if self.effect_on and self.head is not None:
-                        w, x, y, z = self.head.view()
-                        self.reshade.set_floats("pxr_quat", (x, y, z, w))
+                        w, x, y, z = self._predicted_view()
+                        self.reshade.paced_floats("pxr_quat", (x, y, z, w))
+                    if now - last_stats >= 10.0 and self.reshade is not None and self.reshade.pace_ms:
+                        ms = sorted(self.reshade.pace_ms)
+                        reports = self.head.count if self.head else 0
+                        imu_rate = (reports - last_reports) / (now - last_stats)
+                        last_reports = reports
+                        self.log(f"gaming: {len(ms) / (now - last_stats):.0f} head updates a second, gamescope took "
+                                 f"{ms[len(ms) // 2]:.1f} ms (median), {ms[-1]:.1f} ms (longest); "
+                                 f"motion {imu_rate:.0f} reports a second")
+                        self.reshade.pace_ms = []
+                        last_stats = now
                 except OSError as e:
                     with self.lock:
                         self._lost_gamescope(e)
