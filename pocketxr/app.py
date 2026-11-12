@@ -26,6 +26,7 @@ from .gl import (GL_BGRA, GL_BLEND, GL_CLAMP_TO_EDGE, GL_COLOR_BUFFER_BIT, GL_LI
                  SDL_WINDOW_FULLSCREEN_DESKTOP, SDL_WINDOW_OPENGL, SDL_WINDOW_SKIP_TASKBAR, displays, gl, sdl,
                  split_displays)
 from . import pcvr as pcvrmod
+from .recorder import Recorder
 from .settingsctl import SettingsControl
 from .spaceview import SpaceView
 from .xcapture import XCapture
@@ -149,6 +150,7 @@ class App:
         self.capture.source = self.settings["source"]
         self.capture.install_handler()
         self.capture.start()
+        self.recorder = Recorder(self.log, on_saved=lambda path: self.events.put(("panel", "record_saved", path)))
         self.deckpad = DeckButtons(lambda n, k: self.events.put(("button", n, k)), log=self.log)
         self.deckpad.start()
         self.panel = self._start_panel()
@@ -173,6 +175,7 @@ class App:
                     self.panel.stdin.close()
                 except OSError:
                     pass
+            self.recorder.wait()
             sdl.SDL_Quit()
             self.log("bye")
         return 0
@@ -418,6 +421,7 @@ class App:
 
     def _close_window(self):
         self.space.forget_textures()
+        self.recorder.forget_gl()
         if self.pcvr is not None:
             self.pcvr.forget_gl()
         if self.window:
@@ -504,6 +508,10 @@ class App:
             self.space.toggle_launcher()
         elif cmd == "cc":
             self.space.toggle_cc(time.monotonic())
+        elif cmd == "record":
+            self.toggle_record()
+        elif cmd == "record_saved":  # from the recorder's thread, through the event queue
+            self._record_saved(value)
         elif cmd in ("snap", "locked", "cursor_follows_head", "sbs_3d"):
             self.set_setting(cmd, bool(value))
         elif cmd == "look":
@@ -608,11 +616,22 @@ class App:
         i = next((k for k, p in enumerate(apps) if p.active), -1)
         self.capture.activate(apps[(i + 1) % len(apps)].key)
 
+    def toggle_record(self):
+        """Start or stop recording what the glasses show (recorder.py)."""
+        on = self.recorder.toggle()
+        self.space.toast("Recording. The red dot is on the glasses only." if on else "Recording stopped. Saving...")
+        self._send_status()
+
+    def _record_saved(self, path):
+        self.space.toast(f"Saved to Videos, Pocket XR: {os.path.basename(path)}")
+        self._send_status()
+
     def request_quit(self, why):
         if self.quitting:
             return
         self.quitting = True
         self.log(f"quit: {why}")
+        self.recorder.wanted = False
         self.message = "Putting your glasses back..."
         self._send_status()
         self.space.save_places()
@@ -679,6 +698,7 @@ class App:
             "sbs_3d": self.settings.get("sbs_3d", True),
             "sbs_ok": bool(g and g.control_link),
             "pcvr": self.pcvr is not None,
+            "recording": self.recorder.wanted,
             "steady_ok": bool(g and g.steady_6dof),
             "flat": self._flat(),
             "viture": bool(g and g.family == "viture"),
@@ -766,6 +786,7 @@ class App:
             self._draw_flat(panels, w, h)
         else:
             self._draw_space(panels, w, h, now)
+        self.recorder.frame(w, h, not flat and w >= 3 * h)  # the finished picture, before the red dot and the swap
         sdl.SDL_GL_SwapWindow(self.window)
         if self.pcvr is not None:
             self.pcvr.submitted()

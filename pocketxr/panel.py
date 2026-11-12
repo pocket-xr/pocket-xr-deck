@@ -186,7 +186,7 @@ class Panel:
         row = tk.Frame(sp.body, bg=C["card"])
         row.pack(fill="x", padx=4, pady=(4, 2))
         self.space_buttons = {}
-        for i, (label, cmd) in enumerate((("Launcher", "launcher"), ("Control Center", "cc"), ("PC VR", "pcvr"))):
+        for i, (label, cmd) in enumerate((("Launcher", "launcher"), ("Control Center", "cc"), ("PC VR", "pcvr"), ("Record", "record"))):
             b = Button(row, label, lambda c=cmd: send(c), height=38)
             b.grid(row=0, column=i, sticky="ew", padx=4)
             row.columnconfigure(i, weight=1)
@@ -289,6 +289,13 @@ class Panel:
             b.text = label
             b.draw()
         b.set(selected=on)
+        rec = bool(st.get("recording"))
+        b = self.space_buttons["record"]
+        label = "Stop recording" if rec else "Record"
+        if b.text != label:
+            b.text = label
+            b.draw()
+        b.set(selected=rec)
         for k, s in self.switches.items():
             s.set(bool(st.get(k, k in ("cursor_follows_head", "sbs_3d"))))
         flat = st.get("flat", False)

@@ -38,6 +38,9 @@ The control panel:
 - **Adjust**: Recentre, Smaller and Bigger, Nearer and Further.
 - **Look at a window to bring it to the front.** In App windows, look at a window for a moment and it comes to
   the front on the Deck's screen, so touch, the trackpads and the keyboard work on it.
+- **Record**, in the Control Center and on the control panel: a 1080p video of exactly what you see, PC VR included,
+  saved in your Videos folder under Pocket XR. A red dot blinks in the glasses while it records; it is not in the
+  video. Press again to stop.
 - **Quit and put the glasses back.** Every setting Pocket XR changed on the glasses is put back as it was.
 
 The Deck's back buttons work at any time, alongside Steam's controls:

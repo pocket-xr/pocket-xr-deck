@@ -611,6 +611,7 @@ class SpaceView:
             "n": n, "focus": bool(foc), "locked": s.get("locked", False), "snap": s.get("snap", False),
             "cursor_follows_head": s.get("cursor_follows_head", True), "speed": s.get("cursor_speed", 5),
             "sbs_3d": s.get("sbs_3d", True),
+            "recording": self.app.recorder.wanted,
             "curve": int(round((foc.curve / S.CURVE_MAX) * 100)) if foc else 0,
             "presets": [p["name"] for p in self.store.presets],
         }
@@ -673,6 +674,9 @@ class SpaceView:
             self._close_card("launcher", now)
         elif a == "cc_close":
             self._close_card("cc", now)
+        elif a == "record":
+            self._close_card("cc", now)  # out of the way, so the video starts on the Space itself
+            self.app.toggle_record()
         elif a == "recenter":
             self.app.recentre()
             self.toast("View recentred")

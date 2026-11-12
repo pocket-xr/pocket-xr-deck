@@ -428,6 +428,19 @@ def cc_card(state):
     cv.icon("recenter", px + 36, py + ph / 2, 30, L.INK)
     cv.text(px + 62, py + ph / 2, "Recenter view", 20, L.INK)
     items.append((px, py, pw, ph, "recenter", None, ph / 2))
+    # Record pill: a red dot and Record, or filled red with Stop recording while it records
+    rec = state.get("recording")
+    qw = 240 if rec else 160
+    qx = px - 16 - qw
+    if rec:
+        cv.fill_round(qx, py, qw, ph, ph / 2, L.DANGER)
+        cv.fill_round(qx + 26, py + ph / 2 - 9, 18, 18, 4, L.INK)
+        cv.text(qx + 56, py + ph / 2, "Stop recording", 20, L.INK, medium=True)
+    else:
+        cv.glass(qx, py, qw, ph, ph / 2, fill=L.GLASS_RAISED)
+        cv.fill_round(qx + 26, py + ph / 2 - 10, 20, 20, 10, L.DANGER)
+        cv.text(qx + 58, py + ph / 2, "Record", 20, L.INK)
+    items.append((qx, py, qw, ph, "record", None, ph / 2))
     cx, cy, r = W - 82, 72, 30
     cv.glass(cx - r, cy - r, 2 * r, 2 * r, r, fill=L.GLASS_RAISED)
     cv.icon("close", cx, cy, 26, L.INK)
