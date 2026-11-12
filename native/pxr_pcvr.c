@@ -12,7 +12,6 @@
 #include <libavutil/hwcontext.h>
 #include <libavutil/imgutils.h>
 #include <pthread.h>
-#include <stdarg.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -45,21 +44,32 @@ static int g_fresh = 0;
 static uint64_t g_decoded = 0, g_errors = 0;
 
 // Garbled frames are not shown (Mike, 12 Nov 2026: grey flashes in PC VR, seen in the promo footage). When an HEVC
-// frame's reference is missing (lost on Wi-Fi, or the stream's start), FFmpeg makes a stand-in filled with mid-grey and
-// does not flag the frames built on it. Its log says "Could not find ref with POC"; after that, frames are held back
-// (the last good one stays up) until a key frame, for at most HOLD_FRAMES, so the picture never stops for long.
-#define HOLD_FRAMES 12
-static volatile int g_ref_missing = 0;
-static int g_hold = 0;
+// frame's reference is missing (lost on Wi-Fi, about every 2 s on Mike's network), FFmpeg makes a stand-in filled with
+// mid-grey (Y, U and V all 128) and does not flag the frames built on it. Most such frames are only patchy and heal in
+// a few frames; now and then one is mostly grey and flashes. Holding back frames after each error froze the picture
+// every 2 s (326 of 3570 held), so instead each frame is checked: one that is mostly (60 %) exact mid-grey, on a
+// 32 x 18 grid, is not shown (the last good one stays up). Before the stream's first key frame nothing is shown.
+// A quarter hid 20 % of frames on Mike's Wi-Fi (each lost reference leaves a run of patchy frames); the flashes seen
+// were frames mostly grey, so only those are hidden.
+#define GREY_SHARE 0.6
+static int g_wait_key = 1;
 static uint64_t g_held = 0;
+static uint64_t g_why[3];  // held back: before the first key frame, flagged damaged, mostly grey
 
-static void ffmpeg_log(void *avcl, int level, const char *fmt, va_list vl) {
-    if (level <= AV_LOG_ERROR && fmt && (strstr(fmt, "Could not find ref") || strstr(fmt, "Error constructing the frame RPS")))
-        g_ref_missing = 1;
-    va_list copy;
-    va_copy(copy, vl);
-    av_log_default_callback(avcl, level, fmt, copy);
-    va_end(copy);
+static int mostly_grey(const AVFrame *f) {
+    if (f->format != AV_PIX_FMT_NV12) return 0;
+    const int gx = 32, gy = 18;
+    int grey = 0;
+    for (int j = 0; j < gy; j++) {
+        const int y = (int)((j + 0.5) * f->height / gy);
+        const uint8_t *row = f->data[0] + (size_t)y * f->linesize[0];
+        const uint8_t *uv = f->data[1] + (size_t)(y / 2) * f->linesize[1];
+        for (int i = 0; i < gx; i++) {
+            const int x = (int)((i + 0.5) * f->width / gx);
+            if (row[x] == 128 && uv[x & ~1] == 128 && uv[(x & ~1) + 1] == 128) grey++;
+        }
+    }
+    return grey > GREY_SHARE * gx * gy;
 }
 
 static uint64_t now_ns(void) {
@@ -118,26 +128,23 @@ static bool decoder_input(AlvrVideoFrameData d) {
     g_packet->data = (uint8_t *)d.buffer_ptr;
     g_packet->size = (int)d.buffer_size;
     g_packet->pts = (int64_t)d.timestamp_ns;
-    g_ref_missing = 0;
     int r = avcodec_send_packet(g_dec, g_packet);
-    if (g_ref_missing) g_hold = HOLD_FRAMES;
     if (r < 0 && r != AVERROR(EAGAIN)) {
         g_errors++;
-        g_hold = HOLD_FRAMES;
         pthread_mutex_unlock(&g_dec_lock);
         return true;  // a bad frame is dropped; the next key frame recovers
     }
     for (;;) {
         r = avcodec_receive_frame(g_dec, g_hwframe);
         if (r < 0) break;
-        if (g_ref_missing) g_hold = HOLD_FRAMES;
         const uint64_t fts = (uint64_t)g_hwframe->pts;
         const int key = (g_hwframe->flags & AV_FRAME_FLAG_KEY) != 0;
         const int damaged = (g_hwframe->flags & AV_FRAME_FLAG_CORRUPT) || g_hwframe->decode_error_flags;
-        if (key && !damaged) g_hold = 0;
-        if (damaged || g_hold > 0) {
-            if (g_hold > 0) g_hold--;
+        if ((key && !damaged) || g_wait_key > 60) g_wait_key = 0;  // a key frame, or a second at most
+        else if (g_wait_key) g_wait_key++;
+        if (damaged || g_wait_key) {
             g_held++;
+            g_why[g_wait_key ? 0 : 1]++;
             alvr_report_frame_decoded(fts);  // decoded all the same, for ALVR's timing; just not shown
             av_frame_unref(g_hwframe);
             continue;
@@ -153,6 +160,14 @@ static bool decoder_input(AlvrVideoFrameData d) {
             out = g_swframe;
         }
         const uint64_t ts = (uint64_t)g_hwframe->pts;
+        if (mostly_grey(out)) {
+            g_held++;
+            g_why[2]++;
+            alvr_report_frame_decoded(ts);
+            av_frame_unref(g_swframe);
+            av_frame_unref(g_hwframe);
+            continue;
+        }
         keep_frame(out, ts);
         g_decoded++;
         alvr_report_frame_decoded(ts);
@@ -224,8 +239,7 @@ static int create_decoder_locked(int codec) {
     g_hwframe = av_frame_alloc();
     g_swframe = av_frame_alloc();
     g_packet = av_packet_alloc();
-    av_log_set_callback(ffmpeg_log);
-    g_hold = HOLD_FRAMES;  // until the stream's first key frame
+    g_wait_key = 1;  // nothing is shown before the stream's first key frame
     alvr_set_decoder_input_callback(NULL, decoder_input);
     LOG("decoder: %s, %s, %llu config bytes", dec->name, g_hw_ok ? "on the GPU (VA-API)" : "on the CPU",
         (unsigned long long)size);
@@ -423,6 +437,8 @@ void pxr_stats(uint64_t *out) {
     out[1] = g_errors;
     out[2] = (uint64_t)g_hw_ok;
     out[3] = g_held;
+    LOG("held back: %llu before the first key frame, %llu flagged damaged, %llu mostly grey",
+        (unsigned long long)g_why[0], (unsigned long long)g_why[1], (unsigned long long)g_why[2]);
 }
 
 /* ---- Controllers: both hands as Quest Touch controllers, as Pocket XR on Android (pocketxr_alvr.cpp) ---- */
