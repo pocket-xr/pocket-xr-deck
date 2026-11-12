@@ -329,6 +329,19 @@ void pxr_send_head(uint64_t target_ns, const float *h) {
     alvr_send_tracking(target_ns, &m, 1, NULL, NULL);
 }
 
+/* Copies a plane into [tex], allocating it first when its size differs (or it has none yet). */
+static void upload(unsigned int tex, GLenum fmt, int w, int h, const uint8_t *data) {
+    GLint cw = 0, ch = 0;
+    glBindTexture(GL_TEXTURE_2D, tex);
+    glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH, &cw);
+    glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_HEIGHT, &ch);
+    if (cw != w || ch != h) {
+        glTexImage2D(GL_TEXTURE_2D, 0, fmt, w, h, 0, fmt, GL_UNSIGNED_BYTE, data);
+    } else {
+        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, w, h, fmt, GL_UNSIGNED_BYTE, data);
+    }
+}
+
 /**
  * GL thread: the newest decoded frame into textures [tex_y] (w x h, one channel) and [tex_uv] (w/2 x h/2, two
  * channels), made or resized here. Returns its timestamp, or 0 with nothing new. out_size[2] gets w, h; out_pose[12]
@@ -342,22 +355,11 @@ uint64_t pxr_acquire(unsigned tex_y, unsigned tex_uv, int *out_size, float *out_
     }
     const uint64_t ts = g_ts;
     const int w = g_w, h = g_h;
-    static int tw = 0, th = 0;
+    /* Each texture's own size, not a remembered one: a new PC VR session (or a new GL context) brings new
+       textures that must be allocated first, or they stay empty and the picture shows as plain red. */
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-    glBindTexture(GL_TEXTURE_2D, tex_y);
-    if (tw != w || th != h) {
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE, w, h, 0, GL_LUMINANCE, GL_UNSIGNED_BYTE, g_y);
-    } else {
-        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, w, h, GL_LUMINANCE, GL_UNSIGNED_BYTE, g_y);
-    }
-    glBindTexture(GL_TEXTURE_2D, tex_uv);
-    if (tw != w || th != h) {
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE_ALPHA, w / 2, h / 2, 0, GL_LUMINANCE_ALPHA, GL_UNSIGNED_BYTE, g_uv);
-    } else {
-        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, w / 2, h / 2, GL_LUMINANCE_ALPHA, GL_UNSIGNED_BYTE, g_uv);
-    }
-    tw = w;
-    th = h;
+    upload(tex_y, GL_LUMINANCE, w, h, g_y);
+    upload(tex_uv, GL_LUMINANCE_ALPHA, w / 2, h / 2, g_uv);
     g_fresh = 0;
     pthread_mutex_unlock(&g_lock);
     glPixelStorei(GL_UNPACK_ALIGNMENT, 4);

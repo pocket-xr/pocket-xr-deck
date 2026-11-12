@@ -371,7 +371,7 @@ class PcVr:
                 if pose[3] != 0 or pose[0] != 0 or pose[1] != 0 or pose[2] != 0:
                     self.frame_pose = ((pose[3], pose[0], pose[1], pose[2]), list(pose[4:12]))
                 self.frames += 1
-                if self.frames == 30 and os.environ.get("POCKETXR_PCVR_DEBUG") == "1":
+                if self.frames in (30, 600):  # what the decoder gave, in the log once early and once later
                     self._debug_textures()
                 if self.last_frame_at is None or now - self.last_frame_at > STEADY_GAP_S:
                     self.steady_since = now
