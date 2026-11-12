@@ -208,6 +208,9 @@ class XCapture(threading.Thread):
         # it is put back on .warp_target (inside the app under the space pointer, or on the chrome spot).
         self.space_pointer = False
         self.warp_target = None
+        self.warp_key = None  # the app window under the space pointer, which must be on top at warp_target
+        self._stack_at = 0.0
+        self._kept_on_top_at = 0.0
         self.motion = [0, 0]
         self._last_warp = None
         self.raise_wanted = None
@@ -685,6 +688,8 @@ class XCapture(threading.Thread):
                 x11.XFlush(self.dpy)
                 px, py = int(t[0]), int(t[1])
             self._last_warp = (px, py)
+            if self.warp_target is not None:
+                self._keep_on_top(self.warp_key, px, py, now)
         else:
             self._last_warp = None
         if not on_glasses and not (dx <= px < dx + dw and dy <= py < dy + dh):
@@ -720,6 +725,38 @@ class XCapture(threading.Thread):
                 f = self._grab(p)
                 if f is not None:
                     p.frame = f
+
+    def _keep_on_top(self, key, px, py, now):
+        """Every app screen sits in the same place on the glasses' output, so a click goes to whichever is on top there.
+        While the space pointer is over a window, that window must be the top one: looking at another window, a click
+        on another, or KWin itself can put a different one on top, and the click went to it instead (Mike, 12 Nov 2026:
+        "sometimes i cant click on buttons"). The stacking order is read again at 20 Hz while pointing, and the window
+        is put back on top when it is not."""
+        if not isinstance(key, int):
+            return
+        if now - self._stack_at >= 0.05:
+            self._stack = self._longs(self.root, "_NET_CLIENT_LIST_STACKING")
+            self._stack_at = now
+        top = None
+        for w in reversed(self._stack):
+            p = self._panels.get(w)
+            if p is not None and p.root_x <= px < p.root_x + p.w and p.root_y <= py < p.root_y + p.h:
+                top = w
+                break
+        if top == key or top is None or now - self._kept_on_top_at < 0.2:
+            return
+        self._kept_on_top_at = now
+        self._client_message(key, "_NET_RESTACK_WINDOW", [2, 0, 0, 0, 0])  # from a pager, to the top
+        x11.XFlush(self.dpy)
+        if key in self._stack:
+            self._stack.remove(key)
+            self._stack.append(key)
+        if (top, key) == getattr(self, "_kept_pair", None):
+            return  # said once; KWin may keep a dialog above its own window, which is fine
+        self._kept_pair = (top, key)
+        p, q = self._panels.get(key), self._panels.get(top)
+        self.log(f"capture: '{q.title if q else top}' was on top of '{p.title if p else key}' under the pointer; "
+                 "put it back on top")
 
     def _grab(self, p):
         if p.key == "deck":

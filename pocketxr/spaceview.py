@@ -309,12 +309,15 @@ class SpaceView:
         if self.drag or self.resize or self.adjust_all is not None or h is None or h[0] != "window" or h[2] != S.BODY \
                 or h[1] == "deck":
             cap.warp_target = None  # the view's clickable spot
+            cap.warp_key = None
             return
         p = next((q for q in panels if q.key == h[1]), None)
         if p is None or p.w <= 0:
             cap.warp_target = None
+            cap.warp_key = None
             return
         u, v = S.clamp(h[4], 0.0, 0.999), S.clamp(h[5], 0.0, 0.999)
+        cap.warp_key = p.key  # kept on top under the pointer by the capture thread (_keep_on_top)
         cap.warp_target = (p.root_x + u * p.w, p.root_y + v * p.h)
         if self.last_raised != p.key:
             cap.raise_window(p.key)
