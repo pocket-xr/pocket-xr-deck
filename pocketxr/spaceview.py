@@ -704,7 +704,9 @@ class SpaceView:
     def draw(self, panels, now, texture_of):
         # windows dim to 0.3 under a card (the Control Center, as in Pocket XR, and the launcher)
         dim_cc = DIM_UNDER_CC if (self.cc is not None or self.launcher is not None) else 1.0
-        shown = [p for p in panels if p.key in self.poses]
+        # Far to near: with no depth buffer (as on Pocket XR), the nearer window must be drawn last to hide what is
+        # behind it. Mike, 11 Nov 2026: a window pulled close still showed the one behind it through it.
+        shown = sorted((p for p in panels if p.key in self.poses), key=lambda p: -self._pose(p.key, now).distance)
         multi = len(shown) > 1
         locked = self.app.settings.get("locked", False)
         for p in shown:
