@@ -138,6 +138,13 @@ Holding the pointer against the right edge of the Deck's screen for a second als
 The mouse pointer is drawn in the glasses on the window it is over. It stays on the Deck's screen: past its right
 edge you could not see or use it.
 
+### Take your layouts along
+
+**Share layouts** and **Import layouts**, in the panel and in the Control Center under Saved layouts, move your
+window presets between the Deck and Pocket XR on Android. Share layouts saves them to one small file in Downloads.
+Import layouts reads the newest one there, from the Deck or from your phone. Each window finds the same app by name;
+apps that aren't on this Deck are left out, and Pocket XR says which.
+
 ### Languages
 
 Pocket XR speaks English, Korean, Japanese, Chinese (simplified and traditional), Spanish, Portuguese (Brazil),
