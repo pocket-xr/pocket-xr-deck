@@ -103,6 +103,16 @@ def notify(text):
         pass
 
 
+def wayland_session():
+    """True in a Wayland desktop session, where Desktop Mode's X11 window moving can't work.
+    POCKETXR_ALLOW_WAYLAND=1 starts it anyway (for testing)."""
+    if os.environ.get("POCKETXR_ALLOW_WAYLAND") == "1":
+        return False
+    kind = os.environ.get("XDG_SESSION_TYPE", "")
+    # SteamOS's X11 desktop says x11; a stray WAYLAND_DISPLAY there (from Gaming Mode) must not stop it.
+    return kind == "wayland" or (kind != "x11" and bool(os.environ.get("WAYLAND_DISPLAY")))
+
+
 class App:
     def __init__(self):
         self.log = Log()
@@ -139,6 +149,17 @@ class App:
             notify(tr("Pocket XR is already running."))
             return 0
         self.log(f"Pocket XR for Steam Deck starting, settings {self.settings}")
+        if wayland_session():
+            # Desktop Mode moves app windows, the pointer and the view with X11, as SteamOS's KDE desktop is X11.
+            # A Wayland desktop (CachyOS, Bazzite and others by default) doesn't let X11 apps do that (a tester on
+            # CachyOS's Wayland desktop lost control of the Deck and had to hard restart). Say so and stop instead.
+            text = tr("Pocket XR's Desktop Mode needs a Plasma (X11) session. Wayland isn't supported yet. "
+                      "Log out and pick Plasma (X11), or use Gaming Mode.")
+            self.log("Wayland desktop session (XDG_SESSION_TYPE=%s, WAYLAND_DISPLAY=%s): not starting" %
+                     (os.environ.get("XDG_SESSION_TYPE"), os.environ.get("WAYLAND_DISPLAY")))
+            notify(text)
+            print(text, file=sys.stderr)
+            return 1
         sdl.SDL_SetHint(b"SDL_VIDEO_MINIMIZE_ON_FOCUS_LOSS", b"0")
         # Only a real close quits: a closing terminal or SSH session must not take the view down.
         sdl.SDL_SetHint(b"SDL_NO_SIGNAL_HANDLERS", b"1")

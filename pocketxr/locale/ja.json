@@ -185,5 +185,6 @@
   "1 window was left out: {apps} isn't on this Deck.": "1 つのウィンドウを外しました：{apps} はこの Deck にありません。",
   "{n} windows were left out: {apps} isn't on this Deck.": "{n} つのウィンドウを外しました：{apps} はこの Deck にありません。",
   "{n} windows were left out: {apps} aren't on this Deck.": "{n} つのウィンドウを外しました：{apps} はこの Deck にありません。",
-  "{first} and {last}": "{first} と {last}"
+  "{first} and {last}": "{first} と {last}",
+  "Pocket XR's Desktop Mode needs a Plasma (X11) session. Wayland isn't supported yet. Log out and pick Plasma (X11), or use Gaming Mode.": "Pocket XRのデスクトップモードにはPlasma (X11)セッションが必要です。Waylandにはまだ対応していません。ログアウトしてPlasma (X11)を選ぶか、ゲームモードを使ってください。"
 }

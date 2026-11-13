@@ -185,5 +185,6 @@
   "1 window was left out: {apps} isn't on this Deck.": "Пропущено 1 окно: {apps} нет на этом Deck.",
   "{n} windows were left out: {apps} isn't on this Deck.": "Пропущено окон: {n}. {apps} нет на этом Deck.",
   "{n} windows were left out: {apps} aren't on this Deck.": "Пропущено окон: {n}. {apps} нет на этом Deck.",
-  "{first} and {last}": "{first} и {last}"
+  "{first} and {last}": "{first} и {last}",
+  "Pocket XR's Desktop Mode needs a Plasma (X11) session. Wayland isn't supported yet. Log out and pick Plasma (X11), or use Gaming Mode.": "Режиму рабочего стола Pocket XR нужен сеанс Plasma (X11). Wayland пока не поддерживается. Выйдите из сеанса и выберите Plasma (X11) или используйте игровой режим."
 }

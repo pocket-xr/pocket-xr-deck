@@ -30,6 +30,11 @@ curl -L https://github.com/pocket-xr/pocket-xr-deck/releases/latest/download/poc
 Pocket XR then appears on the desktop and in the app menu, and starts by itself in Gaming Mode. No password is
 needed. It installs into your home folder, so SteamOS updates leave it alone. Run the same line again to update.
 
+Not on SteamOS? Desktop Mode needs KDE Plasma on X11, as SteamOS has. On a Wayland desktop (the default on CachyOS,
+Bazzite and others) log out and pick **Plasma (X11)**, or use Gaming Mode. If a back button also opens your
+desktop's own menu, your system has mapped that button too: clear it in Steam's desktop controller layout or your
+handheld tool (like HHD or InputPlumber).
+
 If you have [Decky Loader](https://decky.xyz), you can add Pocket XR's panel to Quick Access in Gaming Mode. In
 Gaming Mode, open Decky's settings and turn on **Developer mode**. Then under **Developer**, choose **Install Plugin
 from URL** and enter:

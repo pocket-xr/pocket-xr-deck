@@ -185,5 +185,6 @@
   "1 window was left out: {apps} isn't on this Deck.": "有 1 個視窗未匯入：這台 Deck 上沒有 {apps}。",
   "{n} windows were left out: {apps} isn't on this Deck.": "有 {n} 個視窗未匯入：這台 Deck 上沒有 {apps}。",
   "{n} windows were left out: {apps} aren't on this Deck.": "有 {n} 個視窗未匯入：這台 Deck 上沒有 {apps}。",
-  "{first} and {last}": "{first}和{last}"
+  "{first} and {last}": "{first}和{last}",
+  "Pocket XR's Desktop Mode needs a Plasma (X11) session. Wayland isn't supported yet. Log out and pick Plasma (X11), or use Gaming Mode.": "Pocket XR 的桌面模式需要 Plasma (X11) 工作階段，目前尚不支援 Wayland。請登出後選擇 Plasma (X11)，或使用遊戲模式。"
 }
