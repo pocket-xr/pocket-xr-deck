@@ -217,6 +217,16 @@ class Panel:
             b.grid(row=0, column=i, sticky="ew", padx=3)
             row.columnconfigure(i, weight=1)
             self.space_buttons[cmd] = b
+        # Share layouts and Import layouts: the saved layouts as a file in Downloads, for Pocket XR on a phone or
+        # another Deck (the layouts themselves are in the Control Center)
+        lr = tk.Frame(sp.body, bg=C["card"])
+        lr.pack(fill="x", padx=4, pady=(0, 2))
+        pair = ((tr("Share layouts"), "share_layouts"), (tr("Import layouts"), "import_layouts"))
+        for i, (label, cmd) in enumerate(pair):
+            b = Button(lr, label, lambda c=cmd: send(c), height=30, font=(FONT, 9), radius=10)
+            b.grid(row=0, column=i, sticky="ew", padx=3)
+            lr.columnconfigure(i, weight=1)
+            self.space_buttons[cmd] = b
         self.switches = {}
         for key, title, sub in (("sbs_3d", N_("3D side by side"), N_("Each eye its own view: windows at a real depth")),
                                 ("snap", N_("Snap windows together"), N_("Line up and dock as you move them")),

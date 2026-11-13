@@ -470,7 +470,7 @@ def cc_card(state):
     W = 1600
     n_layouts = len(state["layouts"]) + 1
     left_end = 140 + 30 + math.ceil(n_layouts / 3) * (190 + 16)
-    right_end = 140 + 26 + 4 * 92 + 34 + 26 + 96 + 84 + 34 + 26 + min(3, len(state["presets"])) * 74 + 64
+    right_end = 140 + 26 + 4 * 92 + 34 + 26 + 96 + 84 + 34 + 26 + min(3, len(state["presets"])) * 74 + 64 + 10 + 56
     H = int(max(left_end, right_end) + 56)
     cv = Canvas(W, H)
     items = []
@@ -572,6 +572,15 @@ def cc_card(state):
     cv.icon("save", rx + 40, y + 32, 26, L.ACCENT)
     cv.text(rx + 68, y + 32, tr("Save this layout"), 20, L.ACCENT, medium=True, max_w=rw - 96)
     items.append((rx, y, rw, 64, "save_preset", None, 32))
+    # Share layouts and Import layouts: the presets as a file in Downloads, for Pocket XR on a phone or another Deck
+    y += 64 + 10
+    bw = (rw - 12) / 2
+    pair = ((tr("Share layouts"), "share_layouts"), (tr("Import layouts"), "import_layouts"))
+    for k, (label, action) in enumerate(pair):
+        bx = rx + k * (bw + 12)
+        cv.glass(bx, y, bw, 56, 28, fill=L.GLASS_RAISED)
+        cv.text(bx + bw / 2, y + 28, label, 18, L.INK, align="center", max_w=bw - 32)
+        items.append((bx, y, bw, 56, action, None, 28))
     data, w, h = cv.done()
     return CardSpec(data, w, h, items)
 

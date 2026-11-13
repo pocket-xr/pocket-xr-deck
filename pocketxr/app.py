@@ -514,6 +514,10 @@ class App:
             self.space.toggle_cc(time.monotonic())
         elif cmd == "record":
             self.toggle_record()
+        elif cmd == "share_layouts":
+            self.space.share_layouts()
+        elif cmd == "import_layouts":
+            self.space.import_layouts()
         elif cmd == "record_saved":  # from the recorder's thread, through the event queue
             self._record_saved(value)
         elif cmd in ("snap", "locked", "cursor_follows_head", "sbs_3d"):

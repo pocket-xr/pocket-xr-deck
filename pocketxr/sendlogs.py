@@ -301,11 +301,16 @@ def open_email(path):
         return "attached"
     url = f"mailto:{EMAIL}?subject={quote(subject())}&body={quote(body(os.path.basename(path)))}"
     subprocess.Popen(["xdg-open", url])
+    show_in_files(path)
+    return "attach_yourself"
+
+
+def show_in_files(path):
+    """Shows a file in Dolphin, selected (or its folder in the file manager there is)."""
     if shutil.which("dolphin"):
         subprocess.Popen(["dolphin", "--select", path])
     else:
         subprocess.Popen(["xdg-open", os.path.dirname(path)])
-    return "attach_yourself"
 
 
 def send():

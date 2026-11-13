@@ -1,0 +1,64 @@
+{
+  "format": "pocket-xr-layouts",
+  "version": 1,
+  "made_by": "android",
+  "app_version": "1.4.5",
+  "presets": [
+    {
+      "name": "Workspace 1",
+      "windows": [
+        {
+          "app": { "name": "Firefox", "android": "org.mozilla.firefox", "deck": null },
+          "yaw_deg": 0.0,
+          "pitch_deg": -5.0,
+          "distance_m": 1.5,
+          "width_deg": 40.0,
+          "height_deg": 22.5,
+          "curve": 0.0
+        },
+        {
+          "app": { "name": "Chrome", "android": "com.android.chrome", "deck": null },
+          "yaw_deg": 45.0,
+          "pitch_deg": 0.0,
+          "distance_m": 1.4,
+          "width_deg": 36.0,
+          "height_deg": 20.25,
+          "curve": 1.2
+        },
+        {
+          "app": { "name": "YouTube", "android": "com.google.android.youtube" },
+          "yaw_deg": -45.0,
+          "pitch_deg": 0.0,
+          "distance_m": 1.4,
+          "width_deg": 36.0,
+          "height_deg": 20.25,
+          "curve": 0.0,
+          "some_future_key": true
+        }
+      ]
+    },
+    {
+      "name": "Chat",
+      "windows": [
+        {
+          "app": { "name": "Messages", "android": "com.google.android.apps.messaging", "deck": null },
+          "yaw_deg": 30.0,
+          "pitch_deg": 10.0,
+          "distance_m": 1.0,
+          "width_deg": 25.0,
+          "height_deg": 40.0,
+          "curve": 0.0
+        },
+        {
+          "app": { "name": "Phone", "android": "com.google.android.dialer", "deck": null },
+          "yaw_deg": -30.0,
+          "pitch_deg": 10.0,
+          "distance_m": 1.0,
+          "width_deg": 25.0,
+          "height_deg": 40.0,
+          "curve": 0.0
+        }
+      ]
+    }
+  ]
+}

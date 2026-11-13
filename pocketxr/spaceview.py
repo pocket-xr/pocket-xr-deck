@@ -9,10 +9,13 @@ parked on the view's one clickable spot, so those clicks come here.
 """
 import ctypes
 import math
+import os
 import time
 
 from . import apps as appsmod
 from . import fusion
+from . import layouts
+from . import sendlogs
 from . import space as S
 from . import look as L
 from . import text
@@ -556,9 +559,9 @@ class SpaceView:
         by_cls = {}
         for p in self.app.capture.snapshot():
             if p.key in self.poses:
-                by_cls.setdefault(getattr(p, "cls", ""), []).append(p.key)
+                by_cls.setdefault((getattr(p, "cls", "") or "").lower(), []).append(p.key)
         for w in pr["windows"]:
-            ks = by_cls.get(w["app"])
+            ks = by_cls.get((w["app"] or "").lower())  # any case: an imported layout's class is a desktop entry's
             if ks:
                 k = ks.pop(0)
                 self.tweens[k] = (self.poses[k].copy(), S.Pose.from_json(w["pose"]), now)
@@ -566,6 +569,48 @@ class SpaceView:
         self.app.message = f"{pr['name']}"
         self.toast(pr["name"])
         self.save_places()
+
+    def _local_apps(self):
+        """This Deck's apps for a layouts file: the app menu's, read again (an app may be new), and the classes seen."""
+        try:
+            installed = appsmod.list_apps()
+        except OSError:
+            installed = self.app_list or []
+        seen = list(self.store.apps) + [w["app"] for pr in self.store.presets for w in pr.get("windows", [])]
+        return layouts.local_apps(installed, seen)
+
+    def share_layouts(self):
+        """Share layouts: the presets as pocketxr-layouts-YYYY-MM-DD.json in ~/Downloads, shown in Dolphin."""
+        path = None
+        try:
+            path = layouts.share(self.store, self._local_apps(), sendlogs.version())
+        except OSError as e:
+            self.log(f"layouts: could not share ({e})")
+            msg = tr("Could not save the layouts: {error}", error=e)
+        else:
+            if path is None:
+                msg = tr("No saved layouts yet: save one in the Control Center first.")
+            else:
+                self.log(f"layouts: shared {len(self.store.presets)} presets as {path}")
+                msg = tr("Saved {name} in Downloads. Send it to your phone or another Deck, then use Import layouts "
+                         "there.", name=os.path.basename(path))
+                try:
+                    sendlogs.show_in_files(path)
+                except OSError as e:
+                    self.log(f"layouts: could not show the file ({e})")
+        self.app.message = msg
+        self.toast(tr("Saved {name}", name=os.path.basename(path)) if path else msg, 1300)
+
+    def import_layouts(self):
+        """Import layouts: the newest pocketxr-layouts*.json in ~/Downloads, added on top of the presets."""
+        try:
+            took, msg = layouts.import_newest(self.store, self._local_apps())
+        except OSError as e:
+            took, msg = "", tr("Could not import the layouts: {error}", error=e)
+        line = f"{took} {msg}" if took else msg
+        self.log(f"layouts: {line}")
+        self.app.message = line
+        self.toast(msg, 1300)  # in space, what happened; the panel says which file too
 
     def start_adjust_all(self):
         if self.app.settings.get("locked", False) or not self.poses:
@@ -751,9 +796,13 @@ class SpaceView:
             self.recall_preset(it.arg, now)
         elif a == "save_preset":
             self.save_preset()
+        elif a == "share_layouts":
+            self.share_layouts()
+        elif a == "import_layouts":
+            self.import_layouts()
 
-    def toast(self, msg):
-        self.toasts = [(msg, time.monotonic())]
+    def toast(self, msg, max_w=1100):
+        self.toasts = [(msg, time.monotonic(), max_w)]
 
     # ---------- drawing ----------
     def draw(self, panels, now, texture_of):
@@ -1028,13 +1077,13 @@ class SpaceView:
     def _draw_toast(self, now):
         if not self.toasts:
             return
-        msg, t0 = self.toasts[0]
+        msg, t0, max_w = self.toasts[0]
         age = now - t0
         if age > TOAST_S + L.EXIT_S:
             self.toasts = []
             return
         a = L.ease_enter(age / L.ENTER_S) if age < TOAST_S else 1 - L.ease_exit((age - TOAST_S) / L.EXIT_S)
-        t = self._tex(("toast", msg), lambda: ui.toast(msg))
+        t = self._tex(("toast", msg), lambda: ui.toast(msg, max_w))
         if not t:
             return
         view = self.app.head.view() if self.app.head else (1.0, 0.0, 0.0, 0.0)
