@@ -88,6 +88,19 @@ def test_android_file():
     assert msg == "Added 1 layout. 3 windows were left out: YouTube, Messages and Phone aren't on this Deck.", msg
 
 
+
+def test_real_android_file():
+    """A file written by the Android app's own Share layouts code: Firefox on the phone's left stays on the left."""
+    path = os.path.join(HERE, "data", "layouts-android-real.json")
+    with open(path, encoding="utf-8") as f:
+        file_presets = LY.check(json.load(f), "x.json")
+    merged, added, left_out = LY.merge([], file_presets, LY.local_apps(DECK_APPS, []))
+    assert [p["name"] for p in merged] == ["Browsing", "Workspace 1"], merged  # Movie night was YouTube only
+    assert added == 2 and sorted(set(left_out)) == ["Messages", "YouTube"], (added, left_out)
+    firefox = merged[0]["windows"][0]
+    assert firefox["app"] == "firefox" and S.Pose.from_json(firefox["pose"]).yaw == 22.0, firefox
+
+
 def test_find_order():
     apps = LY.local_apps(DECK_APPS, ["Google-chrome", "org.kde.dolphin"])
     # by the Deck's id first, any case
