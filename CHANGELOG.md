@@ -1,6 +1,6 @@
 # Changes
 
-## 0.7.3 (not released yet)
+## 0.7.3 (22 Nov 2026)
 
 From Pierre Zammit's report and logs on 0.7.2 (Steam Deck LCD, SteamOS 3.9.5, XREAL XBX A01+). Thanks, Pierre.
 
