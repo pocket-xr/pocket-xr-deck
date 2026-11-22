@@ -203,5 +203,7 @@
   "Lay the glasses down on something still for 4 seconds. It stops a slow drift to one side and is saved for these glasses.": "把眼鏡放在不動的地方 4 秒。它能消除往一側的緩慢漂移，並為這副眼鏡儲存。",
   "Calibrated. Saved for these glasses.": "已校準，並為這副眼鏡儲存。",
   "The glasses moved. Lay them on something still and try again.": "眼鏡動了。請放在不動的地方再試一次。",
-  "Plug in glasses with head tracking first.": "請先連接有頭部追蹤的眼鏡。"
+  "Plug in glasses with head tracking first.": "請先連接有頭部追蹤的眼鏡。",
+  "Calibrating: take the glasses off and lay them on something still for 4 seconds.": "正在校準：摘下眼鏡，放在不動的地方 4 秒。",
+  "Another controller: in Steam Input, map a button to the Stop media key to recentre and to Next to switch view.": "其他控制器：在 Steam 輸入中把一個按鍵對應到媒體鍵 Stop 可回到正前方，對應到 Next 可切換檢視。"
 }

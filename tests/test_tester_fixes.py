@@ -51,10 +51,13 @@ class Recentre(unittest.TestCase):
         up = F.qrot(v, (0.0, 1.0, 0.0))
         self.assertAlmostEqual(math.degrees(math.atan2(-up[0], up[1])), 25.0, places=4)  # the head's own roll stays
 
-    def test_a_small_nod_keeps_the_room_level(self):
-        h = recentred(head(10.0, 8.0))
-        f = F.qrot(h.view(), (0.0, 0.0, -1.0))
-        self.assertAlmostEqual(math.degrees(math.asin(f[1])), 8.0, places=4)
+    def test_a_small_nod_is_taken_too(self):
+        # 0.7.2: 0.7.1 took the pitch only past 15 degrees, and the tester's recentres near level moved only sideways
+        for pitch in (8.0, 2.5, -3.0):
+            h = recentred(head(10.0, pitch))
+            f = F.qrot(h.view(), (0.0, 0.0, -1.0))
+            self.assertAlmostEqual(math.degrees(math.asin(f[1])), 0.0, places=4)
+            self.assertAlmostEqual(math.degrees(h.ref_pitch), pitch, places=4)
 
     def test_without_follow_tilt_only_the_heading(self):
         h = recentred(head(10.0, 40.0), follow=False)
@@ -128,9 +131,12 @@ class Calibration(unittest.TestCase):
 
 class Keys(unittest.TestCase):
     def test_defaults_and_settings(self):
-        self.assertEqual(K.key_map(), {119: "recentre", 70: "switch_view"})
+        # Stop and Next, which Steam Input's keyboard has; Pause and Scroll Lock still, from a real keyboard
+        self.assertEqual(K.key_map(), {166: "recentre", 119: "recentre", 163: "switch_view", 70: "switch_view"})
         m = K.key_map({"recentre": "", "next_app": "KEY_F13", "nonsense": "KEY_F1", "launcher": "KEY_NOPE"})
-        self.assertEqual(m, {70: "switch_view", 183: "next_app"})
+        self.assertEqual(m, {163: "switch_view", 70: "switch_view", 183: "next_app"})
+        m = K.key_map({"recentre": ["KEY_F13", "KEY_HOME"], "switch_view": []})
+        self.assertEqual(m, {183: "recentre", 102: "recentre"})
         for action, (button, kind) in K.ACTIONS.items():
             self.assertIn(button, ("L4", "L5", "R4", "R5"))
             self.assertIn(kind, ("tap", "hold"))
@@ -163,12 +169,14 @@ class Keys(unittest.TestCase):
         ka._rescan = lambda: ka.devices.setdefault("/dev/input/event9", r)
         ka.start()
         ev = lambda code, value: struct.pack("llHHi", 0, 0, K.EV_KEY, code, value)
-        os.write(w, ev(119, 1) + ev(119, 2) + ev(119, 0) + ev(70, 1) + ev(30, 1) + struct.pack("llHHi", 0, 0, 0, 0, 0))
+        os.write(w, ev(119, 1) + ev(119, 2) + ev(119, 0) + ev(70, 1) + ev(30, 1) + ev(166, 1) + ev(163, 1) +
+                 struct.pack("llHHi", 0, 0, 0, 0, 0))
         end = time.monotonic() + 3
-        while len(got) < 2 and time.monotonic() < end:
+        while len(got) < 4 and time.monotonic() < end:
             time.sleep(0.02)
         ka.stop = True
-        self.assertEqual(got, ["recentre", "switch_view"])  # key repeat (2), let go (0) and other keys left out
+        # key repeat (2), let go (0) and other keys left out
+        self.assertEqual(got, ["recentre", "switch_view", "recentre", "switch_view"])
 
 
 class Pointer(unittest.TestCase):
@@ -258,19 +266,20 @@ class GamingService(unittest.TestCase):
                 sent.append((k, v))
         g.reshade = R()
         g.pointer_sent = None
-        g.pointer_moved_at = time.monotonic()
         g.pointer = (0.25, 0.5, True)
         self.gaming.Gaming._send_pointer(g)
         self.gaming.Gaming._send_pointer(g)
         g.pointer = (0.25, 0.5, False)  # the app hid its cursor
         self.gaming.Gaming._send_pointer(g)
         g.pointer = (0.3, 0.5, True)
-        g.pointer_moved_at = time.monotonic() - 3.5  # still for longer than gamescope's hide delay
         self.gaming.Gaming._send_pointer(g)
+        time.sleep(0.05)
+        self.gaming.Gaming._send_pointer(g)  # still: it stays (0.7.1 hid it after 3 s, leaving gamescope's arrow)
         g.pointer = None
         self.gaming.Gaming._send_pointer(g)
         self.assertEqual(sent, [("pxr_cursor", (0.25, 0.5, 1.0, 0.0)), ("pxr_cursor", (0.25, 0.5, 0.0, 0.0)),
-                                ("pxr_cursor", (0.3, 0.5, 0.0, 0.0)), ("pxr_cursor", (0.0, 0.0, 0.0, 0.0))])
+                                ("pxr_cursor", (0.3, 0.5, 1.0, 0.0)), ("pxr_cursor", (0.0, 0.0, 0.0, 0.0))])
+        self.assertFalse(hasattr(self.gaming, "POINTER_HIDE_S"))
 
     def test_keys_from_the_x_helper_do_their_action(self):
         g = self.fake()
@@ -315,6 +324,22 @@ class GamingService(unittest.TestCase):
         self.assertIn("calibrated: gyro bias (0.057, 0.0, 0.0) deg/s", g.lines[-1])
         self.assertIsNone(h.cal_result)
 
+    def test_calibrate_without_glasses_is_logged(self):
+        g = self.fake()
+        g.head, g.reader = None, None
+        self.gaming.Gaming._start_calibration(g)
+        self.assertEqual(g.cal_text, "Plug in glasses with head tracking first.")
+        self.assertIn("no glasses with head tracking", g.lines[-1])
+
+    def test_the_panels_version_is_logged_once(self):
+        g = self.fake()
+        g.panel_version = False
+        g.status = lambda: {}
+        g._check_calibration = lambda: None
+        for req in ({"op": "status"}, {"op": "status", "panel": "0.7.2"}, {"op": "status", "panel": "0.7.2"}):
+            self.gaming.Gaming._request(g, req)
+        self.assertEqual(g.lines, ["gaming: Quick Access panel from before 0.7.2", "gaming: Quick Access panel 0.7.2"])
+
 
 class Installer(unittest.TestCase):
     def test_update_launcher_and_panel_replacement_are_there(self):
@@ -331,6 +356,36 @@ class Installer(unittest.TestCase):
             self.assertIn("update.sh", f.read())
         with open(os.path.join(ROOT, "uninstall.sh"), encoding="utf-8") as f:
             self.assertIn("pocket-xr-update.desktop", f.read())
+
+
+
+class Panel(unittest.TestCase):
+    def test_calibrate_toasts_and_panel_version(self):
+        with open(os.path.join(ROOT, "decky", "src", "index.tsx"), encoding="utf-8") as f:
+            tsx = f.read()
+        self.assertIn("toaster.toast(", tsx)
+        self.assertIn("calibrate_start_text", tsx)
+        self.assertIn("watchCalibration()", tsx)
+        self.assertIn("keys_line", tsx)
+        with open(os.path.join(ROOT, "decky", "main.py"), encoding="utf-8") as f:
+            self.assertIn("panel=PANEL_VERSION", f.read())
+
+    def test_logs_say_which_panel(self):
+        from pocketxr import sendlogs
+        home = tempfile.mkdtemp()
+        self.assertIsNone(sendlogs.panel_version(home))
+        d = os.path.join(home, "homebrew", "plugins", "PocketXR")
+        os.makedirs(d)
+        with open(os.path.join(d, "package.json"), "w", encoding="utf-8") as f:
+            json.dump({"name": "pocket-xr-decky", "version": "0.2.0"}, f)
+        self.assertEqual(sendlogs.panel_version(home), "0.2.0")
+
+    def test_new_lines_in_every_language(self):
+        for lang in ("ko", "ja", "zh_CN", "zh_TW", "es", "pt_BR", "fr", "de", "it", "ru"):
+            with open(os.path.join(ROOT, "pocketxr", "locale", lang + ".json"), encoding="utf-8") as f:
+                t = json.load(f)
+            self.assertIn("Calibrating: take the glasses off and lay them on something still for 4 seconds.", t)
+            self.assertTrue(any(k.startswith("Another controller: in Steam Input") for k in t), lang)
 
 
 if __name__ == "__main__":

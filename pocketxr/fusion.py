@@ -115,12 +115,12 @@ class HeadFusion:
     # The first stillness used to recentre too, whenever it came; worn, that could be minutes in, and the windows
     # jumped to wherever the head faced then. Now only in the first seconds after the stream starts.
     FIRST_RECENTRE_S = 5.0
-    # A recentre you ask for with the head more than this up or down takes that pitch as straight ahead too, so the
-    # screen comes to where you look, lying back or at a desk below you (as Pocket XR for Mac's recentreFollowsTilt).
-    # Never the roll: the picture stays level. Looking nearly straight up or down, the heading comes from the head's
-    # right side. A tester (Pierre Zammit, 22 Nov 2026) could not bring the picture in front lying down: recentre
-    # zeroed only the heading ("recentred", then "pitch 16.6 degrees").
-    RECENTRE_TILT_MIN_DEG = 15.0
+    # A recentre you ask for takes the head's pitch as straight ahead too, whatever it is, so the screen comes to where
+    # you look, lying back or at a desk below you (as Pocket XR for Mac's recentreFollowsTilt). Never the roll: the
+    # picture stays level. Looking nearly straight up or down, the heading comes from the head's right side. A tester
+    # (Pierre Zammit, 22 Nov 2026) could not bring the picture in front lying down: recentre zeroed only the heading
+    # ("recentred", then "pitch 16.6 degrees"). 0.7.1 took the pitch only past 15 degrees, and with it he found that
+    # recentre still moved the screen only sideways; most of his recentres were near level.
     NEAR_VERTICAL_DEG = 80.0
     # Hold-still calibration (Quick Access): the glasses lie still for CAL_S and the gyro's mean becomes its bias,
     # saved for those glasses (BIAS_FILE). The automatic learning above keeps refining it. Taken only if nothing moved:
@@ -204,13 +204,12 @@ class HeadFusion:
                 self.want_recentre = False
 
     def _apply_recentre(self):
-        """The heading straight ahead (the lock is held); with a recentre asked for and the head tilted past
-        RECENTRE_TILT_MIN_DEG, its pitch too. The fusion's own recentres keep the pitch the last one took."""
+        """The heading straight ahead (the lock is held); with a recentre that follows the tilt, the head's pitch too.
+        The fusion's own recentres keep the pitch the last one took."""
         f = qrot(self.q, (0.0, 0.0, -1.0))
         head_pitch = math.asin(max(-1.0, min(1.0, f[1])))
         if self.recentre_sets_tilt:
-            past = abs(head_pitch) > math.radians(self.RECENTRE_TILT_MIN_DEG)
-            self.ref_pitch = head_pitch if (self.recentre_follows_tilt and past) else 0.0
+            self.ref_pitch = head_pitch if self.recentre_follows_tilt else 0.0
             self.recentre_sets_tilt = False
         yaw = yaw_of(self.q)
         if abs(head_pitch) >= math.radians(self.NEAR_VERTICAL_DEG):
@@ -309,8 +308,8 @@ class HeadFusion:
 
     def recentre(self, yaw_deg=0.0, follow_tilt=False):
         """The head's heading becomes straight ahead, with the view turned [yaw_deg] (left positive): as on Android,
-        the windows' middle comes in front of the head rather than the room's zero. With [follow_tilt] and the head
-        more than RECENTRE_TILT_MIN_DEG up or down, its pitch becomes straight ahead too."""
+        the windows' middle comes in front of the head rather than the room's zero. With [follow_tilt], the head's
+        pitch becomes straight ahead too, however small."""
         with self.lock:
             self.recentre_yaw = math.radians(yaw_deg)
             self.recentre_follows_tilt = bool(follow_tilt)

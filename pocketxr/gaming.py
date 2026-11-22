@@ -36,12 +36,11 @@ EFFECT_DIR = os.path.expanduser("~/.local/share/gamescope/reshade/Shaders")
 CONFIG = os.path.expanduser("~/.config/pocket-xr-deck/gaming.json")
 LOG = os.path.expanduser("~/.local/state/pocket-xr-deck/gaming.log")
 RAW_IMU = os.path.expanduser("~/.local/state/pocket-xr-deck/imu-raw.log")  # the Air family's first seconds, in full
-POINTER_HIDE_S = 3.0
 HEAD_LOG_S = 60.0  # the head's direction goes in the log once a second this long after glasses, a mode or a recentre
 FOV_V_DEG = 38.0  # the glasses' picture, vertical (as the desktop app)
 ASPECT = 16 / 9
 DEFAULTS = {"mode": "space", "size": 0.8, "curve": 0.0, "readability": False, "readability_saved": None,
-            "keys": {}}  # keys.py: {"recentre": "KEY_PAUSE", ...} over its defaults
+            "keys": {}}  # keys.py: {"recentre": "KEY_STOPCD", ...} over its defaults
 # The Quick Access panel (decky/ plugin) talks to the service here: one JSON request per line, one JSON answer per line
 CONTROL_SOCKET = os.path.join(os.environ.get("XDG_RUNTIME_DIR") or f"/run/user/{os.getuid()}", "pocket-xr-gaming.sock")
 SEND_HZ = 500  # how often the loop looks; updates go out as fast as gamescope takes them (paced)
@@ -129,9 +128,9 @@ class Gaming:
         self.other_checked = 0.0
         self.pointer = None  # (u, v, shown) from xpointer.py: where the mouse pointer is on the picture
         self.pointer_sent = None
-        self.pointer_moved_at = 0.0
         self.pointer_proc = None
         self.pointer_started = 0.0
+        self.panel_version = False  # none heard yet
         self.buttons = DeckButtons(self._button, log=log)
         self.buttons.start()
         # Keys for the back buttons' jobs come through xpointer.py (gamescope's X screens), where Steam Input sends a
@@ -158,6 +157,11 @@ class Gaming:
             "calibrate_line": i18n.tr("Lay the glasses down on something still for 4 seconds. It stops a slow drift "
                                       "to one side and is saved for these glasses."),
             "calibration_text": self.cal_text,
+            # The panel shows this as a toast when a calibration starts, and calibration_text when it ends
+            "calibrate_start_text": i18n.tr("Calibrating: take the glasses off and lay them on something still for "
+                                            "4 seconds."),
+            "keys_line": i18n.tr("Another controller: in Steam Input, map a button to the Stop media key to recentre "
+                                 "and to Next to switch view."),
             "readability_label": i18n.tr("Readability"),
             "readability_line": i18n.tr("The game screen 30 degrees wide: sharpest for a game drawn 1280 pixels "
                                         "wide. For larger text, pick a larger text or interface size in the game."),
@@ -174,6 +178,7 @@ class Gaming:
     def _start_calibration(self):
         if not (self.head and self.reader):
             self.cal_text = i18n.tr("Plug in glasses with head tracking first.")
+            self.log("gaming: calibration asked for, but no glasses with head tracking")
             return
         self.head.start_calibration()
         self.cal_text = ""
@@ -253,6 +258,10 @@ class Gaming:
 
     def _request(self, req):
         op = req.get("op")
+        panel = req.get("panel")  # the Quick Access panel's version, added by its backend (decky/main.py)
+        if panel != self.panel_version:
+            self.panel_version = panel
+            self.log(f"gaming: Quick Access panel {panel or 'from before 0.7.2'}")
         if op == "send_logs":
             # No email app opens in Gaming Mode: the zip goes in Downloads and the panel says where.
             try:
@@ -469,10 +478,7 @@ class Gaming:
             parts = line.split()
             if parts[:1] == ["pointer"] and len(parts) == 4:
                 try:
-                    new = (float(parts[1]), float(parts[2]), parts[3] == "1")
-                    if self.pointer is None or new[:2] != self.pointer[:2]:
-                        self.pointer_moved_at = time.monotonic()
-                    self.pointer = new
+                    self.pointer = (float(parts[1]), float(parts[2]), parts[3] == "1")
                 except ValueError:
                     pass
             elif parts[:1] == ["key"] and len(parts) == 2 and parts[1].isdigit():
@@ -496,11 +502,13 @@ class Gaming:
         self.pointer_sent = None
 
     def _send_pointer(self):
-        """The pointer to the effect when it changes: drawn only while the screen is in space and the app's own cursor
-        is showing."""
+        """The pointer to the effect when it changes: drawn while the screen is in space and the app's own cursor is
+        showing. It stays when the pointer is still: 0.7.1 hid it after 3 seconds still, as gamescope hides its own
+        (SteamOS starts gamescope with --hide-cursor-delay 3000), but a tester (Pierre Zammit, 22 Nov 2026) then saw
+        only gamescope's arrow, which is not over what it points at on a moved screen. gamescope's own cursor still
+        shows; hiding it from outside gamescope is not tried."""
         ptr = self.pointer
-        # hidden after POINTER_HIDE_S still, as gamescope hides its own (SteamOS starts it with --hide-cursor-delay 3000)
-        shown = bool(ptr and ptr[2] and time.monotonic() - self.pointer_moved_at < POINTER_HIDE_S)
+        shown = bool(ptr and ptr[2])
         value = (ptr[0], ptr[1], 1.0 if shown else 0.0, 0.0) if ptr else (0.0, 0.0, 0.0, 0.0)
         if value != self.pointer_sent:
             self.reshade.set_floats("pxr_cursor", value)

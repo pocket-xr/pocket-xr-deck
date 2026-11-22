@@ -9,19 +9,21 @@ there); this module's reader (KeyActions) is Desktop Mode's, from the kernel's i
 has focus. On a Deck (22 Nov 2026) the built-in keyboard and controller devices were readable by the user, but a new
 virtual keyboard (uinput) was not ("Permission denied"), so a pad's keys may not reach Desktop Mode this way.
 
-Actions and their default keys (the "keys" setting changes them; a key name is a Linux KEY_ name, or "" for none):
+Actions and their default keys (the "keys" setting changes them: a Linux KEY_ name, a list of them, or "" for none):
 
-- recentre       Pause          (L4 tap)
-- switch_view    Scroll Lock    (L4 hold: Window in space / Steady, or in Gaming Mode the next mode)
-- next_app       none           (R4 tap)
-- deck_or_apps   none           (R4 hold)
-- launcher       none           (L5 tap)
-- lock           none           (L5 hold)
-- control_center none           (R5 tap)
-- adjust_all     none           (R5 hold)
+- recentre       Stop, Pause          (L4 tap)
+- switch_view    Next, Scroll Lock    (L4 hold: Window in space / Steady, or in Gaming Mode the next mode)
+- next_app       none                 (R4 tap)
+- deck_or_apps   none                 (R4 hold)
+- launcher       none                 (L5 tap)
+- lock           none                 (L5 hold)
+- control_center none                 (R5 tap)
+- adjust_all     none                 (R5 hold)
 
-Pause and Scroll Lock are keys games and Steam rarely use, and both are in Steam Input's keyboard. A key press does
-the action at once; it is not passed on differently (the game still gets the key as usual).
+Stop and Next are media keys in Steam Input's keyboard, which games rarely use. Steam Input's keyboard has no Pause or
+Scroll Lock (a tester's screenshots, Pierre Zammit, 22 Nov 2026: F1 to F12, letters, Insert, Home, Page Up, Delete,
+End, Page Down, the arrows, Num Lock, the number pad, and Play, Stop, Next and Prev); they still work from a real
+keyboard. A key press does the action at once; it is not passed on differently (the game still gets the key as usual).
 """
 import glob
 import os
@@ -40,10 +42,11 @@ ACTIONS = {
     "control_center": ("R5", "tap"),
     "adjust_all": ("R5", "hold"),
 }
-DEFAULT_KEYS = {"recentre": "KEY_PAUSE", "switch_view": "KEY_SCROLLLOCK"}
+DEFAULT_KEYS = {"recentre": ["KEY_STOPCD", "KEY_PAUSE"], "switch_view": ["KEY_NEXTSONG", "KEY_SCROLLLOCK"]}
 
 # Linux input-event-codes.h: the keys worth offering for this (rarely used ones first)
 CODES = {
+    "KEY_STOPCD": 166, "KEY_NEXTSONG": 163, "KEY_PREVIOUSSONG": 165, "KEY_PLAYPAUSE": 164,
     "KEY_PAUSE": 119, "KEY_SCROLLLOCK": 70, "KEY_SYSRQ": 99, "KEY_INSERT": 110, "KEY_MENU": 139,
     "KEY_F1": 59, "KEY_F2": 60, "KEY_F3": 61, "KEY_F4": 62, "KEY_F5": 63, "KEY_F6": 64, "KEY_F7": 65, "KEY_F8": 66,
     "KEY_F9": 67, "KEY_F10": 68, "KEY_F11": 87, "KEY_F12": 88,
@@ -58,16 +61,18 @@ EVENT = struct.Struct("llHHi")  # struct input_event on 64-bit Linux: time (two 
 
 
 def key_map(settings_keys=None):
-    """{key code: action} from the "keys" setting over the defaults; unknown names are left out."""
-    keys = dict(DEFAULT_KEYS)
-    for action, name in (settings_keys or {}).items():
+    """{key code: action} from the "keys" setting over the defaults; unknown names are left out. A setting replaces
+    that action's default keys: one name, a list of names, or "" (or []) for none."""
+    keys = {a: list(n) for a, n in DEFAULT_KEYS.items()}
+    for action, names in (settings_keys or {}).items():
         if action in ACTIONS:
-            keys[action] = name or ""
+            keys[action] = [names] if isinstance(names, str) else list(names or [])
     out = {}
-    for action, name in keys.items():
-        code = CODES.get(name)
-        if code is not None:
-            out[code] = action
+    for action, names in keys.items():
+        for name in names:
+            code = CODES.get(name)
+            if code is not None:
+                out[code] = action
     return out
 
 

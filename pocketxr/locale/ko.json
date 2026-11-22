@@ -203,5 +203,7 @@
   "Lay the glasses down on something still for 4 seconds. It stops a slow drift to one side and is saved for these glasses.": "안경을 움직이지 않는 곳에 4초 동안 내려놓으세요. 한쪽으로 천천히 흘러가는 것을 막고, 이 안경용으로 저장돼요.",
   "Calibrated. Saved for these glasses.": "보정했어요. 이 안경용으로 저장했어요.",
   "The glasses moved. Lay them on something still and try again.": "안경이 움직였어요. 움직이지 않는 곳에 두고 다시 해 보세요.",
-  "Plug in glasses with head tracking first.": "먼저 헤드 트래킹이 있는 안경을 연결하세요."
+  "Plug in glasses with head tracking first.": "먼저 헤드 트래킹이 있는 안경을 연결하세요.",
+  "Calibrating: take the glasses off and lay them on something still for 4 seconds.": "보정 중: 안경을 벗어서 움직이지 않는 곳에 4초 동안 내려놓으세요.",
+  "Another controller: in Steam Input, map a button to the Stop media key to recentre and to Next to switch view.": "다른 컨트롤러: Steam Input에서 버튼을 미디어 키 Stop에 지정하면 가운데로, Next에 지정하면 보기를 바꿔요."
 }

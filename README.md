@@ -137,18 +137,19 @@ The Deck's back buttons work at any time, alongside Steam's controls:
 | L5 | Launcher | Lock screens |
 | R5 | Control Center | Adjust all |
 
-**Recentre** makes where you look straight ahead. With your head more than 15 degrees up or down, lying back or
-looking down at a desk, that tilt becomes straight ahead too, so the screen comes to where you look; the picture
-stays level (the head's roll is not taken). Switching the view does the same.
+**Recentre** makes where you look straight ahead, up or down as well as sideways: lying back or looking down at a
+desk, the screen comes to where you look. The picture stays level (the head's roll is not taken). Switching the view
+does the same. (0.7.1 took the up or down only past 15 degrees, so near level it moved the screen sideways alone.)
 
 **No back buttons?** A Steam Controller or another pad has no L4 or R4, but Steam Input can map any of its buttons to
-a keyboard key, and Pocket XR does the back buttons' jobs from keys too: **Pause** recentres and **Scroll Lock**
-switches the view (in Gaming Mode, the next mode). Map a button to one of them in the controller's Steam Input
-layout. Other keys and the other actions (next app, launcher, Control Center, lock, adjust all) can be set in the
+a keyboard key, and Pocket XR does the back buttons' jobs from keys too: the media key **Stop** recentres and
+**Next** switches the view (in Gaming Mode, the next mode). Map a button to one of them in the controller's Steam
+Input layout, in its keyboard's media keys. **Pause** and **Scroll Lock** do the same from a real keyboard; Steam
+Input's keyboard doesn't have them (Pierre Zammit's screenshots). Other keys and the other actions (next app, launcher, Control Center, lock, adjust all) can be set in the
 `keys` setting, in `~/.config/pocket-xr-deck/settings.json` (Desktop Mode) and `gaming.json` (Gaming Mode), for
-example `"keys": {"recentre": "KEY_F13", "launcher": "KEY_PAUSE"}`. Asked for by Pierre Zammit. In Gaming Mode the
-keys are read from gamescope's screen, where Steam Input sends them: on a Deck, Pause and Scroll Lock sent that way
-recentred and switched as they should (by a test, not yet with a Steam Controller). In Desktop Mode they are read
+example `"keys": {"recentre": "KEY_F13", "launcher": ["KEY_PAUSE", "KEY_HOME"]}`. Asked for by Pierre Zammit. In Gaming Mode the
+keys are read from gamescope's screen, where Steam Input sends them: on a Deck, Stop, Next, Pause and Scroll Lock
+sent there were each seen once (by a test, not yet with a Steam Controller). In Desktop Mode they are read
 from the keyboard devices: the Deck's own keyboard works, a pad's keys through Steam Input are not tried yet.
 ## Gaming Mode
 
@@ -175,11 +176,12 @@ Good to know:
 - **The mouse pointer:** gamescope draws its own cursor after Pocket XR's effect too, where the pointer is on the
   Deck's screen, so on a moved or resized screen it isn't over what it points at. Pocket XR now draws a pointer of
   its own on the screen in space, a white arrow, where it lines up: follow that one. gamescope's cursor still shows,
-  and Pocket XR can't move or hide it. Like gamescope's, it hides after 3 seconds without moving. Reported by
-  Pierre Zammit. On a Deck, gamescope compiled the new effect and the pointer's position was read from gamescope's
+  and Pocket XR can't move it. Pocket XR's arrow stays while the game shows a cursor, even when the pointer is
+  still (0.7.1 hid it after 3 seconds, leaving only gamescope's). Reported by Pierre Zammit. On a Deck, gamescope compiled the new effect and the pointer's position was read from gamescope's
   screen; not yet seen with glasses.
-- **Calibrate (hold still)**, in Quick Access: lay the glasses down on something still for 4 seconds, and the slow
-  drift to one side they may have is measured, taken out and saved for those glasses. Pocket XR also keeps learning
+- **Calibrate (hold still)**, in Quick Access: take the glasses off and lay them on something still for 4 seconds,
+  and the slow drift to one side they may have is measured, taken out and saved for those glasses. A notification
+  says when it starts and how it went. Pocket XR also keeps learning
   it whenever you hold still. Not yet tried with glasses.
 - App windows all around you are a Desktop Mode feature. In Gaming Mode you get one screen.
 - **Readability** in Gaming Mode makes the screen 30 degrees wide, the sharpest for a game drawn 1280 pixels wide
