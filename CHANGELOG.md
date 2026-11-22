@@ -1,6 +1,6 @@
 # Changes
 
-## Not released yet
+## 0.7.1 (22 Nov 2026)
 
 From Pierre Zammit's report and logs (Steam Deck LCD, SteamOS 3.9.5, Pocket XR 0.7.0, XREAL XBX A01+). Thanks, Pierre.
 
