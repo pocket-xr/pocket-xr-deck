@@ -5,7 +5,7 @@ cd "$(dirname "$0")"
 python3 tests/test_offline.py >/dev/null
 python3 tests/test_space.py >/dev/null
 rm -rf dist && mkdir -p dist/pocket-xr-deck
-cp -r pocketxr assets install.sh uninstall.sh VERSION README.md LICENSE dist/pocket-xr-deck/
+cp -r pocketxr assets install.sh uninstall.sh update.sh VERSION README.md LICENSE dist/pocket-xr-deck/
 # PC VR's native libraries (native/build.sh): ALVR's client and Pocket XR's bridge
 if [ -f native/out/libpxr_pcvr.so ]; then
   mkdir -p dist/pocket-xr-deck/native

@@ -198,5 +198,10 @@
   "That didn't work: {error}": "Ça n'a pas marché : {error}",
   "Readability": "Lisibilité",
   "The Deck screen alone, 30 degrees wide: sharper text": "L'écran du Deck seul, 30 degrés de large : un texte plus net",
-  "The game screen 30 degrees wide: sharpest for a game drawn 1280 pixels wide. For larger text, pick a larger text or interface size in the game.": "L'écran du jeu sur 30 degrés de large : le plus net pour un jeu affiché sur 1280 pixels de large. Pour un texte plus grand, choisissez une taille de texte ou d'interface plus grande dans le jeu."
+  "The game screen 30 degrees wide: sharpest for a game drawn 1280 pixels wide. For larger text, pick a larger text or interface size in the game.": "L'écran du jeu sur 30 degrés de large : le plus net pour un jeu affiché sur 1280 pixels de large. Pour un texte plus grand, choisissez une taille de texte ou d'interface plus grande dans le jeu.",
+  "Calibrate (hold still)": "Calibrer (sans bouger)",
+  "Lay the glasses down on something still for 4 seconds. It stops a slow drift to one side and is saved for these glasses.": "Posez les lunettes sur quelque chose d'immobile pendant 4 secondes. Cela évite une lente dérive d'un côté, et c'est enregistré pour ces lunettes.",
+  "Calibrated. Saved for these glasses.": "Calibré. Enregistré pour ces lunettes.",
+  "The glasses moved. Lay them on something still and try again.": "Les lunettes ont bougé. Posez-les sur quelque chose d'immobile et réessayez.",
+  "Plug in glasses with head tracking first.": "Branchez d'abord des lunettes avec suivi de la tête."
 }

@@ -198,5 +198,10 @@
   "That didn't work: {error}": "Das hat nicht geklappt: {error}",
   "Readability": "Lesbarkeit",
   "The Deck screen alone, 30 degrees wide: sharper text": "Nur der Deck-Bildschirm, 30 Grad breit: schärferer Text",
-  "The game screen 30 degrees wide: sharpest for a game drawn 1280 pixels wide. For larger text, pick a larger text or interface size in the game.": "Das Spielbild 30 Grad breit: am schärfsten für ein Spiel, das 1280 Pixel breit gezeichnet wird. Für größeren Text wähle im Spiel eine größere Text- oder Oberflächengröße."
+  "The game screen 30 degrees wide: sharpest for a game drawn 1280 pixels wide. For larger text, pick a larger text or interface size in the game.": "Das Spielbild 30 Grad breit: am schärfsten für ein Spiel, das 1280 Pixel breit gezeichnet wird. Für größeren Text wähle im Spiel eine größere Text- oder Oberflächengröße.",
+  "Calibrate (hold still)": "Kalibrieren (stillhalten)",
+  "Lay the glasses down on something still for 4 seconds. It stops a slow drift to one side and is saved for these glasses.": "Leg die Brille 4 Sekunden lang auf etwas, das sich nicht bewegt. Das verhindert ein langsames Abdriften zur Seite und wird für diese Brille gespeichert.",
+  "Calibrated. Saved for these glasses.": "Kalibriert. Für diese Brille gespeichert.",
+  "The glasses moved. Lay them on something still and try again.": "Die Brille hat sich bewegt. Leg sie auf etwas Stilles und versuch es noch einmal.",
+  "Plug in glasses with head tracking first.": "Schließ zuerst eine Brille mit Head-Tracking an."
 }

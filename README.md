@@ -31,7 +31,10 @@ curl -L https://github.com/pocket-xr/pocket-xr-deck/releases/latest/download/poc
 ```
 
 Pocket XR then appears on the desktop and in the app menu, and starts by itself in Gaming Mode. No password is
-needed. It installs into your home folder, so SteamOS updates leave it alone. Run the same line again to update.
+needed. It installs into your home folder, so SteamOS updates leave it alone. Run the same line again to update,
+or open **Update Pocket XR**, on the desktop and in the app menu, which runs it in a terminal for you (suggested by
+Pierre Zammit). If Decky's plugins folder belongs to root and Pocket XR's Quick Access panel there is older, the
+installer asks whether to update the panel too, with your password, and restarts Decky to load it.
 
 Pocket XR's own Desktop Mode view needs KDE Plasma on X11. The SteamOS 3.9.5 Decks we have seen start Desktop Mode
 on Wayland, so on those use Pocket XR in Gaming Mode. Please don't switch SteamOS's desktop to X11 for it: a tester's
@@ -134,6 +137,19 @@ The Deck's back buttons work at any time, alongside Steam's controls:
 | L5 | Launcher | Lock screens |
 | R5 | Control Center | Adjust all |
 
+**Recentre** makes where you look straight ahead. With your head more than 15 degrees up or down, lying back or
+looking down at a desk, that tilt becomes straight ahead too, so the screen comes to where you look; the picture
+stays level (the head's roll is not taken). Switching the view does the same.
+
+**No back buttons?** A Steam Controller or another pad has no L4 or R4, but Steam Input can map any of its buttons to
+a keyboard key, and Pocket XR does the back buttons' jobs from keys too: **Pause** recentres and **Scroll Lock**
+switches the view (in Gaming Mode, the next mode). Map a button to one of them in the controller's Steam Input
+layout. Other keys and the other actions (next app, launcher, Control Center, lock, adjust all) can be set in the
+`keys` setting, in `~/.config/pocket-xr-deck/settings.json` (Desktop Mode) and `gaming.json` (Gaming Mode), for
+example `"keys": {"recentre": "KEY_F13", "launcher": "KEY_PAUSE"}`. Asked for by Pierre Zammit. In Gaming Mode the
+keys are read from gamescope's screen, where Steam Input sends them: on a Deck, Pause and Scroll Lock sent that way
+recentred and switched as they should (by a test, not yet with a Steam Controller). In Desktop Mode they are read
+from the keyboard devices: the Deck's own keyboard works, a pad's keys through Steam Input are not tried yet.
 ## Gaming Mode
 
 Plug your glasses in and play as usual. Pocket XR starts by itself in Gaming Mode and shows the whole Gaming Mode
@@ -154,7 +170,17 @@ Good to know:
 - The panel needs a recent Decky Loader (3.3 or newer). An older one may not show up in Quick Access at all with
   current Steam versions; update it from decky.xyz.
 - Steam's own overlays, like Quick Access and notifications, stay fixed in front of you rather than on the screen
-  in space. That's how gamescope, Steam's Gaming Mode compositor, draws them.
+  in space. That's how gamescope, Steam's Gaming Mode compositor, draws them: Pocket XR's effect only reaches the
+  game's picture.
+- **The mouse pointer:** gamescope draws its own cursor after Pocket XR's effect too, where the pointer is on the
+  Deck's screen, so on a moved or resized screen it isn't over what it points at. Pocket XR now draws a pointer of
+  its own on the screen in space, a white arrow, where it lines up: follow that one. gamescope's cursor still shows,
+  and Pocket XR can't move or hide it. Like gamescope's, it hides after 3 seconds without moving. Reported by
+  Pierre Zammit. On a Deck, gamescope compiled the new effect and the pointer's position was read from gamescope's
+  screen; not yet seen with glasses.
+- **Calibrate (hold still)**, in Quick Access: lay the glasses down on something still for 4 seconds, and the slow
+  drift to one side they may have is measured, taken out and saved for those glasses. Pocket XR also keeps learning
+  it whenever you hold still. Not yet tried with glasses.
 - App windows all around you are a Desktop Mode feature. In Gaming Mode you get one screen.
 - **Readability** in Gaming Mode makes the screen 30 degrees wide, the sharpest for a game drawn 1280 pixels wide
   (the Deck's own resolution). It can't make a game's text larger: the game picks its own resolution, so for larger

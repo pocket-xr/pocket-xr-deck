@@ -198,5 +198,10 @@
   "That didn't work: {error}": "잘 되지 않았어요: {error}",
   "Readability": "가독성",
   "The Deck screen alone, 30 degrees wide: sharper text": "Deck 화면만, 30도 너비로: 글자가 더 선명해요",
-  "The game screen 30 degrees wide: sharpest for a game drawn 1280 pixels wide. For larger text, pick a larger text or interface size in the game.": "게임 화면을 30도 너비로: 가로 1280픽셀로 그리는 게임이 가장 선명해요. 글자를 더 크게 하려면 게임에서 글자나 인터페이스 크기를 키우세요."
+  "The game screen 30 degrees wide: sharpest for a game drawn 1280 pixels wide. For larger text, pick a larger text or interface size in the game.": "게임 화면을 30도 너비로: 가로 1280픽셀로 그리는 게임이 가장 선명해요. 글자를 더 크게 하려면 게임에서 글자나 인터페이스 크기를 키우세요.",
+  "Calibrate (hold still)": "보정 (가만히 두기)",
+  "Lay the glasses down on something still for 4 seconds. It stops a slow drift to one side and is saved for these glasses.": "안경을 움직이지 않는 곳에 4초 동안 내려놓으세요. 한쪽으로 천천히 흘러가는 것을 막고, 이 안경용으로 저장돼요.",
+  "Calibrated. Saved for these glasses.": "보정했어요. 이 안경용으로 저장했어요.",
+  "The glasses moved. Lay them on something still and try again.": "안경이 움직였어요. 움직이지 않는 곳에 두고 다시 해 보세요.",
+  "Plug in glasses with head tracking first.": "먼저 헤드 트래킹이 있는 안경을 연결하세요."
 }

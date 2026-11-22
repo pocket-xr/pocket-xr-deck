@@ -21,12 +21,13 @@ import math
 import os
 import shutil
 import socket
+import subprocess
 import sys
 import threading
 import time
 
 from . import fusion, glasses as gmod, hidimu, imu, readability
-from . import i18n, sendlogs, wlreshade
+from . import i18n, keys, sendlogs, wlreshade
 from .deckpad import DeckButtons
 from .settingsctl import SettingsControl
 
@@ -35,10 +36,12 @@ EFFECT_DIR = os.path.expanduser("~/.local/share/gamescope/reshade/Shaders")
 CONFIG = os.path.expanduser("~/.config/pocket-xr-deck/gaming.json")
 LOG = os.path.expanduser("~/.local/state/pocket-xr-deck/gaming.log")
 RAW_IMU = os.path.expanduser("~/.local/state/pocket-xr-deck/imu-raw.log")  # the Air family's first seconds, in full
+POINTER_HIDE_S = 3.0
 HEAD_LOG_S = 60.0  # the head's direction goes in the log once a second this long after glasses, a mode or a recentre
 FOV_V_DEG = 38.0  # the glasses' picture, vertical (as the desktop app)
 ASPECT = 16 / 9
-DEFAULTS = {"mode": "space", "size": 0.8, "curve": 0.0, "readability": False, "readability_saved": None}
+DEFAULTS = {"mode": "space", "size": 0.8, "curve": 0.0, "readability": False, "readability_saved": None,
+            "keys": {}}  # keys.py: {"recentre": "KEY_PAUSE", ...} over its defaults
 # The Quick Access panel (decky/ plugin) talks to the service here: one JSON request per line, one JSON answer per line
 CONTROL_SOCKET = os.path.join(os.environ.get("XDG_RUNTIME_DIR") or f"/run/user/{os.getuid()}", "pocket-xr-gaming.sock")
 SEND_HZ = 500  # how often the loop looks; updates go out as fast as gamescope takes them (paced)
@@ -118,18 +121,28 @@ class Gaming:
         self.effect_on = False
         self.lock = threading.Lock()
         self.head_log_until = 0.0
+        self.cal_text = ""
         self.head_logged = 0.0
         self.other_driver = []  # XR Gaming's driver, looked for every few seconds
         self.xr_gaming_enabled = False
         self.session = None  # SteamOS's default Desktop Mode session
         self.other_checked = 0.0
+        self.pointer = None  # (u, v, shown) from xpointer.py: where the mouse pointer is on the picture
+        self.pointer_sent = None
+        self.pointer_moved_at = 0.0
+        self.pointer_proc = None
+        self.pointer_started = 0.0
         self.buttons = DeckButtons(self._button, log=log)
         self.buttons.start()
+        # Keys for the back buttons' jobs come through xpointer.py (gamescope's X screens), where Steam Input sends a
+        # controller's keyboard bindings: {Linux key code: action}
+        self.key_actions = keys.key_map(self.settings.get("keys"))
         threading.Thread(target=self._control_server, name="control", daemon=True).start()
         threading.Thread(target=self._watch_other, name="other-driver", daemon=True).start()
 
     # ---- the Quick Access panel ----
     def status(self):
+        self._check_calibration()
         return {
             "gaming": self.reshade is not None,
             "glasses": self.glasses.name if self.glasses else None,
@@ -140,6 +153,11 @@ class Gaming:
             "size": float(self.settings.get("size", 0.8)),
             "curve": curve_of(self.settings.get("curve", 0.0)),
             "readability": bool(self.settings.get("readability")),
+            "calibrating": bool(self.head and self.head.cal is not None),
+            "calibrate_label": i18n.tr("Calibrate (hold still)"),
+            "calibrate_line": i18n.tr("Lay the glasses down on something still for 4 seconds. It stops a slow drift "
+                                      "to one side and is saved for these glasses."),
+            "calibration_text": self.cal_text,
             "readability_label": i18n.tr("Readability"),
             "readability_line": i18n.tr("The game screen 30 degrees wide: sharpest for a game drawn 1280 pixels "
                                         "wide. For larger text, pick a larger text or interface size in the game."),
@@ -148,6 +166,38 @@ class Gaming:
             # Buttons the panel shows only when they would do something: [{"op", "label"}]
             "actions": self._actions(),
         }
+
+    @staticmethod
+    def _glasses_key(g):
+        return f"{g.vendor:04x}:{g.product:04x}"
+
+    def _start_calibration(self):
+        if not (self.head and self.reader):
+            self.cal_text = i18n.tr("Plug in glasses with head tracking first.")
+            return
+        self.head.start_calibration()
+        self.cal_text = ""
+        self.log("gaming: hold-still calibration started")
+
+    def _check_calibration(self):
+        """Once a calibration ends: saved for these glasses if nothing moved, and a line for the panel."""
+        h = self.head
+        if h is None or h.cal_result is None:
+            return
+        res, mean, sd = h.cal_result
+        h.cal_result = None
+        if res == "ok":
+            key = self._glasses_key(self.glasses)
+            try:
+                fusion.save_bias(key, h.bias)
+                saved = "saved"
+            except OSError as e:
+                saved = f"not saved ({e})"
+            self.log(f"gaming: calibrated: gyro bias {mean} deg/s, spread {sd} deg/s; {saved} for {key}")
+            self.cal_text = i18n.tr("Calibrated. Saved for these glasses.")
+        else:
+            self.log(f"gaming: calibration not taken, the glasses moved: mean {mean} deg/s, spread {sd} deg/s")
+            self.cal_text = i18n.tr("The glasses moved. Lay them on something still and try again.")
 
     def _actions(self):
         out = []
@@ -228,6 +278,8 @@ class Gaming:
                         self._send_view()
                     except OSError as e:
                         self._lost_gamescope(e)
+            elif op == "calibrate":
+                self._start_calibration()
             elif op == "set_readability":
                 self._set_readability(bool(req.get("on")))
             elif op == "set_curve":
@@ -278,6 +330,17 @@ class Gaming:
             elif name == "R4":
                 self.next_mode()
 
+    def _key(self, action):
+        """A key from keys.py (any controller, through Steam Input): recentre, or the next mode."""
+        if self.reshade is None or self.glasses is None:
+            return  # only in Gaming Mode with glasses, as the back buttons
+        self.log(f"gaming: key for {action}")
+        with self.lock:
+            if action == "recentre":
+                self.recentre()
+            elif action == "switch_view":
+                self.next_mode()
+
     def _log_head(self, now):
         """Once a second for a while: where the head points, what the motion sensor reads, so a log shows motion."""
         if self.head is None or now > self.head_log_until or now - self.head_logged < 1.0:
@@ -296,7 +359,7 @@ class Gaming:
     def recentre(self):
         self.head_log_until = time.monotonic() + HEAD_LOG_S
         if self.head:
-            self.head.recentre()
+            self.head.recentre(follow_tilt=True)
         if self.control and self.mode() == "steady":
             self.control.recentre()
         self.log("gaming: recentred")
@@ -335,7 +398,7 @@ class Gaming:
         if self.control:
             self.control.want("steady" if m == "steady" else "3dof")
         if self.head:
-            self.head.recentre()
+            self.head.recentre(follow_tilt=True)
         self._effect(m == "space")
 
     # ---- gamescope ----
@@ -378,6 +441,71 @@ class Gaming:
             except OSError as e:
                 self._lost_gamescope(e)
 
+    # ---- the mouse pointer (xpointer.py) ----
+    def _watch_pointer(self, now):
+        """Keeps xpointer.py running while gamescope is connected, started again (every 10 s at most) if it ends."""
+        p = self.pointer_proc
+        if p is not None and p.poll() is None:
+            return
+        if now - self.pointer_started < 10.0:
+            return
+        self.pointer_started = now
+        try:
+            args = [sys.executable, "-m", "pocketxr.xpointer"]
+            if self.key_actions:
+                args += ["--keys", ",".join(str(c) for c in sorted(self.key_actions))]
+            p = subprocess.Popen(args, stdout=subprocess.PIPE,
+                                 stderr=subprocess.STDOUT, text=True, bufsize=1,
+                                 cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        except OSError as e:
+            self.log(f"gaming: pointer reader did not start ({e})")
+            return
+        self.pointer_proc = p
+        threading.Thread(target=self._read_pointer, args=(p,), name="pointer", daemon=True).start()
+
+    def _read_pointer(self, p):
+        said_none = False
+        for line in p.stdout:
+            parts = line.split()
+            if parts[:1] == ["pointer"] and len(parts) == 4:
+                try:
+                    new = (float(parts[1]), float(parts[2]), parts[3] == "1")
+                    if self.pointer is None or new[:2] != self.pointer[:2]:
+                        self.pointer_moved_at = time.monotonic()
+                    self.pointer = new
+                except ValueError:
+                    pass
+            elif parts[:1] == ["key"] and len(parts) == 2 and parts[1].isdigit():
+                action = self.key_actions.get(int(parts[1]))
+                if action:
+                    self._key(action)
+            elif parts[:1] == ["none"]:
+                if not said_none:
+                    self.log("gaming: pointer: " + line.strip())
+                    said_none = True
+            elif line.strip():
+                self.log("gaming: pointer: " + line.strip())
+        self.log(f"gaming: pointer reader ended ({p.wait()})")
+        self.pointer = None
+
+    def _stop_pointer(self):
+        p, self.pointer_proc = self.pointer_proc, None
+        if p is not None and p.poll() is None:
+            p.terminate()
+        self.pointer = None
+        self.pointer_sent = None
+
+    def _send_pointer(self):
+        """The pointer to the effect when it changes: drawn only while the screen is in space and the app's own cursor
+        is showing."""
+        ptr = self.pointer
+        # hidden after POINTER_HIDE_S still, as gamescope hides its own (SteamOS starts it with --hide-cursor-delay 3000)
+        shown = bool(ptr and ptr[2] and time.monotonic() - self.pointer_moved_at < POINTER_HIDE_S)
+        value = (ptr[0], ptr[1], 1.0 if shown else 0.0, 0.0) if ptr else (0.0, 0.0, 0.0, 0.0)
+        if value != self.pointer_sent:
+            self.reshade.set_floats("pxr_cursor", value)
+            self.pointer_sent = value
+
     def _send_view(self):
         tv = math.tan(math.radians(FOV_V_DEG) / 2)
         th = tv * ASPECT
@@ -410,12 +538,15 @@ class Gaming:
             pass
         self.reshade = None
         self.effect_on = False
+        self.pointer_sent = None
 
     # ---- glasses ----
     def _start_glasses(self, g):
         self.glasses = g
         self.log(f"gaming: glasses {g.name} ({g.family}, {g.vendor:04x}:{g.product:04x})")
-        self.head = fusion.HeadFusion(g.axes)
+        self.head = fusion.HeadFusion(g.axes, bias=fusion.load_bias(self._glasses_key(g)))
+        if self.head.bias_ready:
+            self.log(f"gaming: gyro calibration loaded for these glasses ({self._glasses_key(g)})")
         if g.imu == "network":
             self.reader = imu.ImuReader(self.head.report, log=self.log)
         elif g.imu == "air":
@@ -499,12 +630,16 @@ class Gaming:
                         if self.reshade is None:
                             self._connect_gamescope()
                         self._check_glasses()
+                        if self.reshade is not None:
+                            self._watch_pointer(now)
                         self._log_head(now)
+                        self._check_calibration()
                         if self.glasses and self.reshade and not self.effect_on and self.mode() == "space":
                             self._effect(True)
                     else:
                         if self.reshade is not None:
                             self._lost_gamescope("Gaming Mode ended")
+                        self._stop_pointer()
                         if self.glasses is not None:
                             self._stop_glasses(put_back=True)
             if self.reshade is not None:
@@ -513,6 +648,7 @@ class Gaming:
                     if self.effect_on and self.head is not None:
                         w, x, y, z = self._predicted_view()
                         self.reshade.paced_floats("pxr_quat", (x, y, z, w))
+                        self._send_pointer()
                     if now - last_stats >= 10.0 and self.reshade is not None and self.reshade.pace_ms:
                         ms = sorted(self.reshade.pace_ms)
                         reports = self.head.count if self.head else 0

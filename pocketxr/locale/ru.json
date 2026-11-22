@@ -198,5 +198,10 @@
   "That didn't work: {error}": "Не получилось: {error}",
   "Readability": "Читаемость",
   "The Deck screen alone, 30 degrees wide: sharper text": "Только экран Deck шириной 30 градусов: текст чётче",
-  "The game screen 30 degrees wide: sharpest for a game drawn 1280 pixels wide. For larger text, pick a larger text or interface size in the game.": "Экран игры шириной 30 градусов: чётче всего для игры, которая рисуется шириной 1280 пикселей. Чтобы текст был крупнее, выберите в игре больший размер текста или интерфейса."
+  "The game screen 30 degrees wide: sharpest for a game drawn 1280 pixels wide. For larger text, pick a larger text or interface size in the game.": "Экран игры шириной 30 градусов: чётче всего для игры, которая рисуется шириной 1280 пикселей. Чтобы текст был крупнее, выберите в игре больший размер текста или интерфейса.",
+  "Calibrate (hold still)": "Калибровка (неподвижно)",
+  "Lay the glasses down on something still for 4 seconds. It stops a slow drift to one side and is saved for these glasses.": "Положите очки на что-то неподвижное на 4 секунды. Это убирает медленный увод в сторону и сохраняется для этих очков.",
+  "Calibrated. Saved for these glasses.": "Откалибровано. Сохранено для этих очков.",
+  "The glasses moved. Lay them on something still and try again.": "Очки сдвинулись. Положите их на что-то неподвижное и попробуйте снова.",
+  "Plug in glasses with head tracking first.": "Сначала подключите очки с отслеживанием головы."
 }

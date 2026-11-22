@@ -198,5 +198,10 @@
   "That didn't work: {error}": "没有成功：{error}",
   "Readability": "易读模式",
   "The Deck screen alone, 30 degrees wide: sharper text": "只显示 Deck 屏幕，30 度宽：文字更清晰",
-  "The game screen 30 degrees wide: sharpest for a game drawn 1280 pixels wide. For larger text, pick a larger text or interface size in the game.": "游戏画面 30 度宽：以 1280 像素宽绘制的游戏最清晰。要让文字更大，请在游戏中选择更大的文字或界面尺寸。"
+  "The game screen 30 degrees wide: sharpest for a game drawn 1280 pixels wide. For larger text, pick a larger text or interface size in the game.": "游戏画面 30 度宽：以 1280 像素宽绘制的游戏最清晰。要让文字更大，请在游戏中选择更大的文字或界面尺寸。",
+  "Calibrate (hold still)": "校准（保持静止）",
+  "Lay the glasses down on something still for 4 seconds. It stops a slow drift to one side and is saved for these glasses.": "把眼镜放在不动的地方 4 秒。它能消除向一侧的缓慢漂移，并为这副眼镜保存。",
+  "Calibrated. Saved for these glasses.": "已校准，并为这副眼镜保存。",
+  "The glasses moved. Lay them on something still and try again.": "眼镜动了。请放在不动的地方再试一次。",
+  "Plug in glasses with head tracking first.": "请先连接有头部追踪的眼镜。"
 }
