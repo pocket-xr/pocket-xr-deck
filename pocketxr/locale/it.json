@@ -203,5 +203,7 @@
   "Lay the glasses down on something still for 4 seconds. It stops a slow drift to one side and is saved for these glasses.": "Appoggia gli occhiali su qualcosa di fermo per 4 secondi. Evita una lenta deriva da un lato e viene salvato per questi occhiali.",
   "Calibrated. Saved for these glasses.": "Calibrato. Salvato per questi occhiali.",
   "The glasses moved. Lay them on something still and try again.": "Gli occhiali si sono mossi. Appoggiali su qualcosa di fermo e riprova.",
-  "Plug in glasses with head tracking first.": "Prima collega degli occhiali con tracciamento della testa."
+  "Plug in glasses with head tracking first.": "Prima collega degli occhiali con tracciamento della testa.",
+  "Calibrating: take the glasses off and lay them on something still for 4 seconds.": "Calibrazione: togli gli occhiali e appoggiali su qualcosa di fermo per 4 secondi.",
+  "Another controller: in Steam Input, map a button to the Stop media key to recentre and to Next to switch view.": "Altro controller: in Steam Input assegna un pulsante al tasto multimediale Stop per ricentrare e a Next per cambiare vista."
 }

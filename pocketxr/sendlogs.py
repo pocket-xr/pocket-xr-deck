@@ -8,6 +8,7 @@ user's home folder and name.
 """
 import glob
 import ipaddress
+import json
 import os
 import re
 import shutil
@@ -174,6 +175,15 @@ def decky_version(home):
     return _read(os.path.join(home, "homebrew", "services", ".loader.version")) or None
 
 
+def panel_version(home):
+    """The version of Pocket XR's Quick Access panel in Decky, or None."""
+    try:
+        with open(os.path.join(home, "homebrew", "plugins", "PocketXR", "package.json"), encoding="utf-8") as f:
+            return json.load(f).get("version")
+    except (OSError, ValueError):
+        return None
+
+
 def info_text(home, now):
     lines = [f"Pocket XR for Steam Deck {version()}",
              f"Device: {device()}",
@@ -183,6 +193,9 @@ def info_text(home, now):
     lines.append(f"Glasses: {glasses_line()}")
     dv = decky_version(home)
     lines.append(f"Decky: {dv}" if dv else "Decky: not installed")
+    if dv:
+        pv = panel_version(home)
+        lines.append(f"Quick Access panel: {pv}" if pv else "Quick Access panel: not installed")
     lines.append(f"Language: {i18n.lang()}")
     lines.append("Made: " + time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(now)) + " UTC")
     return "\n".join(lines) + "\n"

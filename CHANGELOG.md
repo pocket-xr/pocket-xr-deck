@@ -1,5 +1,24 @@
 # Changes
 
+## Not released yet
+
+From Pierre Zammit's report and logs on 0.7.1 (Steam Deck LCD, SteamOS 3.9.5, XREAL XBX A01+). Thanks, Pierre.
+
+- **Recentre takes any tilt.** 0.7.1 took the head's up or down only past 15 degrees, and Pierre found recentre still
+  moved the screen only sideways. Now a recentre you ask for always takes it, however small; the roll is still never
+  taken. Checked by tests (a small nod up and down is taken); not yet tried with glasses.
+- **Keys Steam Input has.** Steam Input's keyboard has no Pause or Scroll Lock (his screenshots), so the media key
+  **Stop** now recentres and **Next** switches the view. Pause and Scroll Lock still work from a real keyboard. A
+  setting can now give an action several keys. On a Deck in Gaming Mode, Stop and Next sent into gamescope's two X
+  screens (XTest) were each seen once; not yet tried from a controller's Steam Input layout.
+- **Calibrate says what to do.** A notification when it starts (take the glasses off and lay them down for 4
+  seconds) and one with the result, even with Quick Access closed. His log had no calibration at all, and logs could
+  not show which Quick Access panel was talking: now the log names the panel's version, the logs' info file does too,
+  and a calibration asked for without glasses is logged. Built and checked by tests; the notifications are not yet
+  seen on a Deck, as that Deck still has the 0.2.0 panel.
+- **Pocket XR's pointer stays.** It hid after 3 seconds still, like gamescope's, but Pierre then saw only gamescope's
+  arrow, which is out of line on a moved screen. Now it stays while the game shows a cursor. Checked by tests.
+
 ## 0.7.1 (22 Nov 2026)
 
 From Pierre Zammit's report and logs (Steam Deck LCD, SteamOS 3.9.5, Pocket XR 0.7.0, XREAL XBX A01+). Thanks, Pierre.

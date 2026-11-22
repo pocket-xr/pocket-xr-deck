@@ -203,5 +203,7 @@
   "Lay the glasses down on something still for 4 seconds. It stops a slow drift to one side and is saved for these glasses.": "Posez les lunettes sur quelque chose d'immobile pendant 4 secondes. Cela évite une lente dérive d'un côté, et c'est enregistré pour ces lunettes.",
   "Calibrated. Saved for these glasses.": "Calibré. Enregistré pour ces lunettes.",
   "The glasses moved. Lay them on something still and try again.": "Les lunettes ont bougé. Posez-les sur quelque chose d'immobile et réessayez.",
-  "Plug in glasses with head tracking first.": "Branchez d'abord des lunettes avec suivi de la tête."
+  "Plug in glasses with head tracking first.": "Branchez d'abord des lunettes avec suivi de la tête.",
+  "Calibrating: take the glasses off and lay them on something still for 4 seconds.": "Calibrage : retirez les lunettes et posez-les sur quelque chose d'immobile pendant 4 secondes.",
+  "Another controller: in Steam Input, map a button to the Stop media key to recentre and to Next to switch view.": "Autre manette : dans Steam Input, associez un bouton à la touche multimédia Stop pour recentrer et à Next pour changer de vue."
 }

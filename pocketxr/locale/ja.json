@@ -203,5 +203,7 @@
   "Lay the glasses down on something still for 4 seconds. It stops a slow drift to one side and is saved for these glasses.": "グラスを動かない場所に 4 秒間置いてください。片側へのゆっくりしたずれを止め、このグラス用に保存されます。",
   "Calibrated. Saved for these glasses.": "キャリブレーションしました。このグラス用に保存しました。",
   "The glasses moved. Lay them on something still and try again.": "グラスが動きました。動かない場所に置いて、もう一度お試しください。",
-  "Plug in glasses with head tracking first.": "先にヘッドトラッキングのあるグラスをつないでください。"
+  "Plug in glasses with head tracking first.": "先にヘッドトラッキングのあるグラスをつないでください。",
+  "Calibrating: take the glasses off and lay them on something still for 4 seconds.": "キャリブレーション中：グラスを外して、動かない場所に 4 秒間置いてください。",
+  "Another controller: in Steam Input, map a button to the Stop media key to recentre and to Next to switch view.": "ほかのコントローラー：Steam Input でボタンをメディアキーの Stop に割り当てると正面に戻し、Next でビューを切り替えます。"
 }

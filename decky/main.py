@@ -14,7 +14,20 @@ def _socket_path():
     return f"/run/user/{uid}/pocket-xr-gaming.sock"
 
 
+def _panel_version():
+    """This panel's version, from its package.json, so the service's log says which panel talked to it."""
+    try:
+        with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "package.json"), encoding="utf-8") as f:
+            return json.load(f).get("version")
+    except (OSError, ValueError):
+        return None
+
+
+PANEL_VERSION = _panel_version()
+
+
 def _ask(req):
+    req = dict(req, panel=PANEL_VERSION)
     s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     s.settimeout(30.0 if req.get("op") == "send_logs" else 1.5)  # making the logs' zip takes a few seconds
     try:

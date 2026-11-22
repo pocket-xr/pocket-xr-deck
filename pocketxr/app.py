@@ -46,7 +46,7 @@ DEFAULTS = {"view": "3dof", "source": "deck", "distance": 2.0, "scale": 1.0, "ca
             "snap": False, "locked": False, "cursor_speed": 5, "curve_default": 0.0, "cursor_follows_head": True, "sbs_3d": True,
             "viture_tracking": None, "steady_gap_px": STEADY_GAP_DEFAULT_PX,
             "readability": False, "readability_saved": None,
-            "keys": {}}  # keys.py: {"recentre": "KEY_PAUSE", ...} over its defaults
+            "keys": {}}  # keys.py: {"recentre": "KEY_STOPCD", ...} over its defaults
 
 # 3DoF: a window 1600 px wide is this wide at 1.0, in metres (the Deck's screen 1.28 m, an app's 1920 px screen 1.92 m:
 # about 50 degrees at 2 m, a little narrower than the glasses' own view).
