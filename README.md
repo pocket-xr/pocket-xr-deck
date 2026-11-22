@@ -166,6 +166,14 @@ and **Recentre**. Without
 Decky, use the back buttons: **hold L4** to recentre, **hold R4** to switch between the screen in space and Steady
 (or off, on glasses without Steady). A quick tap still reaches your game.
 
+**Stick clicks**, in every game with no Steam Input setup (on the Deck's own controller): **hold L3** for a second to
+recentre, **hold R3** to switch the view, and **click L3 three times** to calibrate; the calibration starts 5 seconds
+later, so you can take the glasses off and lay them down. One or two clicks, and shorter presses, still reach the game.
+They are on at first; **Stick clicks** in Quick Access turns them off. Asked for by Pierre Zammit. Checked by tests;
+not yet tried on a Deck. Other controllers: Steam Input sends their buttons to games, not to Pocket XR, so use the Stop
+and Next keys above. Steam's **Guide Button Chord Layout** (Steam's controller settings) applies in every game, so a
+chord there (for example Steam + L3) mapped to Stop may save setting it per game; not yet tried.
+
 Good to know:
 
 - The panel needs a recent Decky Loader (3.3 or newer). An older one may not show up in Quick Access at all with
@@ -270,7 +278,7 @@ The same glasses as Pocket XR on Android:
 | XREAL Aura | Yes | Yes. Pocket XR turns the Aura's Spatial Anchor on and off for you. | Yes |
 | XREAL One, One Pro, One Pro+, 1S | Yes | With the XREAL Eye. You turn 6DoF on in the glasses' menu when asked. | Not yet: please try it |
 | XREAL Air, Air 2, Air 2 Pro, Air 2 Ultra | Yes | No | Not yet: please try it |
-| XREAL XBX A01, A01+ | Not yet working: since 0.6.1 an A01+ sends motion, but the screen did not hold still yet (XR Gaming's driver was also running) | No | Yes (A01+), no head tracking yet |
+| XREAL XBX A01, A01+ | Yes (A01+, Gaming Mode, by a tester with 0.7.2); the A01 not yet tried | No | Yes (A01+) |
 | VITURE Beast | Yes | No (waits on VITURE's SDK) | Not yet: please try it |
 | Other VITURE glasses | Experimental, off until you turn it on in the panel | No | Not yet: please try it |
 | Other glasses | No, the windows are shown flat | No | Not yet: please try it |

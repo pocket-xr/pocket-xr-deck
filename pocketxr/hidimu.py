@@ -34,6 +34,9 @@ AIR_ULTRA = 0x0426
 # Seen with 0.6.1 on that A01+: after the heartbeat, interface 1 sent its 0xAA 0x53 start packet and then samples, and it
 # kept streaming with the heartbeat stopped. The tester's buttons were off afterwards. No command to hand the buttons
 # back is known (none is guessed), so the heartbeat now runs only until samples flow, then stops.
+# Seen with 0.7.2 on that A01+ (22 Nov 2026): every time the glasses appeared (after boot, and after each USB drop)
+# interface 1 sent nothing for the whole 6 s wait, and samples came within a second of the heartbeat. So the XBX now
+# gets the heartbeat first; interface 1 alone, then 2, are still tried if the MCU doesn't answer.
 AIR_XBX = frozenset({0x0440, 0x0442})
 XBX_MCU = 0
 MCU_HEAD = 0xFD
@@ -270,8 +273,8 @@ class _HidReader(threading.Thread):
 
 class AirReader(_HidReader):
     """Reads the Air family's IMU. Each time the glasses appear it logs which hidraw node is which interface, and the
-    first bytes of whatever the glasses' nodes send. On the XBX, if interface 1 stays silent it wakes the MCU on
-    interface 0 (the heartbeat above) and tries again, then tries interface 2, and logs which one streamed."""
+    first bytes of whatever the glasses' nodes send. On the XBX it first wakes the MCU on interface 0 (the heartbeat
+    above), then asks interface 1, then interface 2, and logs which one streamed."""
     WAIT_S = 6.0         # how long an interface may stay silent before the next one is tried
     RETRY_S = 10.0       # after every interface was silent
     LOGGED_PER_NODE = 12  # raw reports logged per node per try
@@ -418,16 +421,15 @@ class AirReader(_HidReader):
         self._logged = {}
         by_num = {n[0]: n for n in nodes}
         first = by_num.get(air_interface(self.pid))
+        if self.pid in AIR_XBX and XBX_MCU in by_num and not self.stop and not self.paused:
+            self._start_mcu(by_num[XBX_MCU])
         if first:
             fd = self._try_imu(first, self.WAIT_S)
             if fd is not None:
                 return fd, first
         if self.pid not in AIR_XBX or self.stop or self.paused:
+            self._stop_mcu()
             return None, None
-        if XBX_MCU in by_num and self._start_mcu(by_num[XBX_MCU]) and first:
-            fd = self._try_imu(first, self.WAIT_S)
-            if fd is not None:
-                return fd, first
         for num in sorted(by_num):
             if num in (XBX_MCU, air_interface(self.pid)) or self.stop or self.paused:
                 continue
