@@ -258,15 +258,39 @@ class GamingService(unittest.TestCase):
                 sent.append((k, v))
         g.reshade = R()
         g.pointer_sent = None
+        g.pointer_moved_at = time.monotonic()
         g.pointer = (0.25, 0.5, True)
         self.gaming.Gaming._send_pointer(g)
         self.gaming.Gaming._send_pointer(g)
         g.pointer = (0.25, 0.5, False)  # the app hid its cursor
         self.gaming.Gaming._send_pointer(g)
+        g.pointer = (0.3, 0.5, True)
+        g.pointer_moved_at = time.monotonic() - 3.5  # still for longer than gamescope's hide delay
+        self.gaming.Gaming._send_pointer(g)
         g.pointer = None
         self.gaming.Gaming._send_pointer(g)
         self.assertEqual(sent, [("pxr_cursor", (0.25, 0.5, 1.0, 0.0)), ("pxr_cursor", (0.25, 0.5, 0.0, 0.0)),
-                                ("pxr_cursor", (0.0, 0.0, 0.0, 0.0))])
+                                ("pxr_cursor", (0.3, 0.5, 0.0, 0.0)), ("pxr_cursor", (0.0, 0.0, 0.0, 0.0))])
+
+    def test_keys_from_the_x_helper_do_their_action(self):
+        g = self.fake()
+        done = []
+        g._key = done.append
+        g.key_actions = {119: "recentre", 70: "switch_view"}
+        g.pointer = None
+
+        class P:
+            stdout = iter(["display :0 1280x800\n", "key 119\n", "key 30\n", "pointer 0.5 0.5 1\n", "key 70\n"])
+
+            def wait(self):
+                return 0
+        self.gaming.Gaming._read_pointer(g, P())
+        self.assertEqual(done, ["recentre", "switch_view"])
+        self.assertIn("gaming: pointer: display :0 1280x800", g.lines)
+
+    def test_helper_watches_the_keys_it_is_given(self):
+        self.assertEqual(X.watched_keys(["--keys", "119,70,x,999"]), [70, 119])
+        self.assertEqual(X.watched_keys([]), [])
 
     def test_calibration_result_is_saved_and_said(self):
         g = self.fake()

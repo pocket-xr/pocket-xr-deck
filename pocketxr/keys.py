@@ -1,9 +1,13 @@
 """Keyboard keys for what the Deck's back buttons do, so any controller can do them through Steam Input.
 
 The Deck's back buttons (L4, L5, R4, R5) are read from its own controller (deckpad.py). A Steam Controller or another
-pad has no such buttons, but Steam Input can map any of its buttons to a keyboard key. Pocket XR reads the keys from
-the kernel's input devices (evdev), whichever window has focus, Steam Input's own virtual keyboard included, and
-does the action for that key (a tester asked for this, November 2026: Pierre Zammit, with a Steam Controller).
+pad has no such buttons, but Steam Input can map any of its buttons to a keyboard key (a tester asked for this, November 2026: Pierre
+Zammit, with a Steam Controller).
+
+Where the keys are read: in Gaming Mode from gamescope's X screens (xpointer.py, which sees the keys Steam Input sends
+there); this module's reader (KeyActions) is Desktop Mode's, from the kernel's input devices (evdev), whichever window
+has focus. On a Deck (22 Nov 2026) the built-in keyboard and controller devices were readable by the user, but a new
+virtual keyboard (uinput) was not ("Permission denied"), so a pad's keys may not reach Desktop Mode this way.
 
 Actions and their default keys (the "keys" setting changes them; a key name is a Linux KEY_ name, or "" for none):
 

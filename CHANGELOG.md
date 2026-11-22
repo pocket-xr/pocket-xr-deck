@@ -11,14 +11,15 @@ From Pierre Zammit's report and logs (Steam Deck LCD, SteamOS 3.9.5, Pocket XR 0
   back, rolled, a small nod, looking straight down); not yet tried with glasses.
 - **The installer updates Decky's panel.** When Decky's plugins folder belongs to root and Pocket XR's panel there is
   older, it now asks to replace it with your password (sudo) and restarts Decky. Before, it only said how to add it.
-  Not yet tried on a Deck whose plugins folder belongs to root; where it belongs to you (no password), the panel was
-  replaced in a test install.
+  Where the folder belongs to you (no password), the panel was replaced in a test install. On a Deck whose folder
+  belongs to root (an old 0.2.0 panel there), the sudo path itself was not run, as it would replace that Deck's panel.
 - **Update Pocket XR**, a launcher on the desktop and in the app menu that runs the latest installer in a terminal.
   Suggested by Pierre. Made and removed again by a test install.
 - **Keys for the back buttons' jobs**, for controllers without L4 and R4: Pause recentres and Scroll Lock switches the
-  view, and any action can be given a key in the settings. Map a controller button to the key in Steam Input. Not yet
-  tried with a Steam Controller; whether Pocket XR may read the keyboard devices on SteamOS is not checked yet (the
-  log says).
+  view, and any action can be given a key in the settings. Map a controller button to the key in Steam Input. In
+  Gaming Mode they are read from gamescope's X screens, where Steam Input sends keys: on a Deck, Pause and Scroll Lock
+  sent there (XTest) were each seen once. Desktop Mode reads the keyboard devices: on that Deck the built-in keyboard
+  and controller were readable, a new virtual keyboard was not. Not yet tried with a Steam Controller.
 - **Calibrate (hold still)** in Quick Access: 4 seconds with the glasses lying still measure the gyro's drift, which
   is then taken out and saved for those glasses (and loaded in Desktop Mode too). His glasses drifted about 0.1
   degrees a second to the right while he held still (the log's head direction lines). Checked by tests; not yet tried
@@ -26,8 +27,9 @@ From Pierre Zammit's report and logs (Steam Deck LCD, SteamOS 3.9.5, Pocket XR 0
 - **Gaming Mode's mouse pointer lines up.** gamescope runs Pocket XR's effect on the game's picture only and draws
   its cursor afterwards (gamescope's source), so on a moved, smaller or curved screen the cursor wasn't over what it
   pointed at. Pocket XR now draws its own pointer on the screen in space, from where the pointer is on gamescope's X
-  screen; gamescope's own cursor still shows. Not yet tried in Gaming Mode: the effect's new pointer code has not
-  been compiled by gamescope yet.
+  screen; gamescope's own cursor still shows. It hides after 3 seconds still, as gamescope's does on SteamOS. On a
+  Deck: gamescope 3.16.30 compiled the new effect ("Using technique: PocketXR", the same as the current effect; a
+  broken copy failed, so the check works), and the pointer was read from gamescope's screen. Not yet seen with glasses.
 
 ## 0.7.0 (21 Nov 2026)
 

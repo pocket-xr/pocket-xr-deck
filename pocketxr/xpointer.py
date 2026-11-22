@@ -1,4 +1,5 @@
-"""Where the mouse pointer is in Gaming Mode, for the pointer Pocket XR draws on the screen in space.
+"""Where the mouse pointer is in Gaming Mode, for the pointer Pocket XR draws on the screen in space, and the keys
+that do the back buttons' jobs (keys.py).
 
 gamescope runs its ReShade effect (Pocket XR's PocketXR.fx) on the app's picture only: the mouse cursor is drawn after
 it, on top, where the pointer really is on the Deck's screen (gamescope's src/rendervulkan.cpp, vulkan_composite: the
@@ -13,8 +14,14 @@ goes away (gamescope restarting), and prints one line each time something change
     pointer <u> <v> <shown>      u, v from 0 to 1 across and down the X screen; shown 1 or 0
     display <name> <w>x<h>       the X screen the pointer is on (gamescope's Xwayland), when it changes
     none <why>                   no X screen could be opened (and why), tried again every few seconds
+    key <code>                   a watched key went down (a Linux KEY_ code), with --keys 119,70
 
 shown is 0 when the app's cursor is hidden or empty (a game that hides it), by XFixes' cursor image.
+
+The keys are read here, not from the input devices: Steam Input sends a controller's keyboard bindings into gamescope's
+X screen (XTest), and a new keyboard device is not readable by the user on SteamOS (checked on a Deck, 22 Nov 2026: a
+uinput keyboard's event node gave "Permission denied"; an XTest key on :0 showed in XQueryKeymap). Each X screen's
+key state is read 120 times a second; a key pressed on any of them counts.
 """
 import ctypes
 import ctypes.util
@@ -48,6 +55,7 @@ def _libs():
                                   ctypes.POINTER(ctypes.c_int), ctypes.POINTER(ctypes.c_int),
                                   ctypes.POINTER(ctypes.c_int), ctypes.POINTER(ctypes.c_uint)]
     x11.XFree.argtypes = [ctypes.c_void_p]
+    x11.XQueryKeymap.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
     xf = None
     try:
         xf = ctypes.CDLL(ctypes.util.find_library("Xfixes") or "libXfixes.so.3")
@@ -112,6 +120,17 @@ class Screen:
             self.fixes = bool(xf.XFixesQueryExtension(self.dpy, ctypes.byref(a), ctypes.byref(b)))
         self.last = None
         self.moved_at = 0.0
+        self.keymap = ctypes.create_string_buffer(32)
+        self.down = set()
+
+    def pressed(self, codes):
+        """The watched keys (Linux codes) that went down since the last look."""
+        self.x11.XQueryKeymap(self.dpy, self.keymap)
+        raw = self.keymap.raw
+        now = {c for c in codes if raw[(c + 8) // 8] >> ((c + 8) % 8) & 1}  # X keycodes are Linux codes + 8
+        new = now - self.down
+        self.down = now
+        return new
 
     def pointer(self):
         r, c = ctypes.c_ulong(), ctypes.c_ulong()
@@ -134,8 +153,18 @@ class Screen:
             self.x11.XFree(img)
 
 
-def main():
+def watched_keys(argv):
+    """The Linux key codes after --keys (comma-separated), or none."""
+    if "--keys" in argv:
+        i = argv.index("--keys")
+        if i + 1 < len(argv):
+            return sorted({int(c) for c in argv[i + 1].split(",") if c.strip().isdigit() and 0 < int(c) < 248})
+    return []
+
+
+def main(argv=None):
     out = sys.stdout
+    codes = watched_keys(sys.argv[1:] if argv is None else argv)
     try:
         x11, xf = _libs()
     except OSError as e:
@@ -163,6 +192,11 @@ def main():
                 if s.last is not None:
                     s.moved_at = now
                 s.last = p
+        if codes:
+            for q in screens.values():
+                for c in sorted(q.pressed(codes)):
+                    out.write(f"key {c}\n")
+                    out.flush()
         if screens:
             s = max(screens.values(), key=lambda q: q.moved_at)
             if s is not current:

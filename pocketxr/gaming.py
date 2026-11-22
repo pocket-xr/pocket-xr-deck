@@ -36,6 +36,7 @@ EFFECT_DIR = os.path.expanduser("~/.local/share/gamescope/reshade/Shaders")
 CONFIG = os.path.expanduser("~/.config/pocket-xr-deck/gaming.json")
 LOG = os.path.expanduser("~/.local/state/pocket-xr-deck/gaming.log")
 RAW_IMU = os.path.expanduser("~/.local/state/pocket-xr-deck/imu-raw.log")  # the Air family's first seconds, in full
+POINTER_HIDE_S = 3.0
 HEAD_LOG_S = 60.0  # the head's direction goes in the log once a second this long after glasses, a mode or a recentre
 FOV_V_DEG = 38.0  # the glasses' picture, vertical (as the desktop app)
 ASPECT = 16 / 9
@@ -128,12 +129,14 @@ class Gaming:
         self.other_checked = 0.0
         self.pointer = None  # (u, v, shown) from xpointer.py: where the mouse pointer is on the picture
         self.pointer_sent = None
+        self.pointer_moved_at = 0.0
         self.pointer_proc = None
         self.pointer_started = 0.0
         self.buttons = DeckButtons(self._button, log=log)
         self.buttons.start()
-        self.keys = keys.KeyActions(self._key, self.settings.get("keys"), log=log)
-        self.keys.start()
+        # Keys for the back buttons' jobs come through xpointer.py (gamescope's X screens), where Steam Input sends a
+        # controller's keyboard bindings: {Linux key code: action}
+        self.key_actions = keys.key_map(self.settings.get("keys"))
         threading.Thread(target=self._control_server, name="control", daemon=True).start()
         threading.Thread(target=self._watch_other, name="other-driver", daemon=True).start()
 
@@ -448,7 +451,10 @@ class Gaming:
             return
         self.pointer_started = now
         try:
-            p = subprocess.Popen([sys.executable, "-m", "pocketxr.xpointer"], stdout=subprocess.PIPE,
+            args = [sys.executable, "-m", "pocketxr.xpointer"]
+            if self.key_actions:
+                args += ["--keys", ",".join(str(c) for c in sorted(self.key_actions))]
+            p = subprocess.Popen(args, stdout=subprocess.PIPE,
                                  stderr=subprocess.STDOUT, text=True, bufsize=1,
                                  cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         except OSError as e:
@@ -463,9 +469,16 @@ class Gaming:
             parts = line.split()
             if parts[:1] == ["pointer"] and len(parts) == 4:
                 try:
-                    self.pointer = (float(parts[1]), float(parts[2]), parts[3] == "1")
+                    new = (float(parts[1]), float(parts[2]), parts[3] == "1")
+                    if self.pointer is None or new[:2] != self.pointer[:2]:
+                        self.pointer_moved_at = time.monotonic()
+                    self.pointer = new
                 except ValueError:
                     pass
+            elif parts[:1] == ["key"] and len(parts) == 2 and parts[1].isdigit():
+                action = self.key_actions.get(int(parts[1]))
+                if action:
+                    self._key(action)
             elif parts[:1] == ["none"]:
                 if not said_none:
                     self.log("gaming: pointer: " + line.strip())
@@ -486,7 +499,9 @@ class Gaming:
         """The pointer to the effect when it changes: drawn only while the screen is in space and the app's own cursor
         is showing."""
         ptr = self.pointer
-        value = (ptr[0], ptr[1], 1.0 if ptr[2] else 0.0, 0.0) if ptr else (0.0, 0.0, 0.0, 0.0)
+        # hidden after POINTER_HIDE_S still, as gamescope hides its own (SteamOS starts it with --hide-cursor-delay 3000)
+        shown = bool(ptr and ptr[2] and time.monotonic() - self.pointer_moved_at < POINTER_HIDE_S)
+        value = (ptr[0], ptr[1], 1.0 if shown else 0.0, 0.0) if ptr else (0.0, 0.0, 0.0, 0.0)
         if value != self.pointer_sent:
             self.reshade.set_floats("pxr_cursor", value)
             self.pointer_sent = value

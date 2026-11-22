@@ -146,8 +146,10 @@ a keyboard key, and Pocket XR does the back buttons' jobs from keys too: **Pause
 switches the view (in Gaming Mode, the next mode). Map a button to one of them in the controller's Steam Input
 layout. Other keys and the other actions (next app, launcher, Control Center, lock, adjust all) can be set in the
 `keys` setting, in `~/.config/pocket-xr-deck/settings.json` (Desktop Mode) and `gaming.json` (Gaming Mode), for
-example `"keys": {"recentre": "KEY_F13", "launcher": "KEY_PAUSE"}`. Asked for by Pierre Zammit. Not yet tried with a
-Steam Controller: it needs Pocket XR to be able to read the keyboard devices, which the log says ("keys: reading").
+example `"keys": {"recentre": "KEY_F13", "launcher": "KEY_PAUSE"}`. Asked for by Pierre Zammit. In Gaming Mode the
+keys are read from gamescope's screen, where Steam Input sends them: on a Deck, Pause and Scroll Lock sent that way
+recentred and switched as they should (by a test, not yet with a Steam Controller). In Desktop Mode they are read
+from the keyboard devices: the Deck's own keyboard works, a pad's keys through Steam Input are not tried yet.
 ## Gaming Mode
 
 Plug your glasses in and play as usual. Pocket XR starts by itself in Gaming Mode and shows the whole Gaming Mode
@@ -173,7 +175,9 @@ Good to know:
 - **The mouse pointer:** gamescope draws its own cursor after Pocket XR's effect too, where the pointer is on the
   Deck's screen, so on a moved or resized screen it isn't over what it points at. Pocket XR now draws a pointer of
   its own on the screen in space, a white arrow, where it lines up: follow that one. gamescope's cursor still shows,
-  and Pocket XR can't move or hide it. Reported by Pierre Zammit. Not yet tried in Gaming Mode.
+  and Pocket XR can't move or hide it. Like gamescope's, it hides after 3 seconds without moving. Reported by
+  Pierre Zammit. On a Deck, gamescope compiled the new effect and the pointer's position was read from gamescope's
+  screen; not yet seen with glasses.
 - **Calibrate (hold still)**, in Quick Access: lay the glasses down on something still for 4 seconds, and the slow
   drift to one side they may have is measured, taken out and saved for those glasses. Pocket XR also keeps learning
   it whenever you hold still. Not yet tried with glasses.
