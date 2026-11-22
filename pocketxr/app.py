@@ -17,7 +17,7 @@ import sys
 import threading
 import time
 
-from . import fusion, glasses as gmod, hidimu, imu, readability, remote, session
+from . import fusion, glasses as gmod, hidimu, imu, keys, readability, remote, session
 from .deckpad import DeckButtons
 from .gl import (GL_BGRA, GL_BLEND, GL_CLAMP_TO_EDGE, GL_COLOR_BUFFER_BIT, GL_LINEAR, GL_LINE_LOOP, GL_MODELVIEW,
                  GL_ONE_MINUS_SRC_ALPHA, GL_PROJECTION, GL_QUADS, GL_RGBA, GL_SRC_ALPHA, GL_TEXTURE_2D,
@@ -45,7 +45,8 @@ GL_TEXTURE_MAX_ANISOTROPY = 0x84FE  # EXT_texture_filter_anisotropic, core in GL
 DEFAULTS = {"view": "3dof", "source": "deck", "distance": 2.0, "scale": 1.0, "canvas_scale": 0.8, "look": True,
             "snap": False, "locked": False, "cursor_speed": 5, "curve_default": 0.0, "cursor_follows_head": True, "sbs_3d": True,
             "viture_tracking": None, "steady_gap_px": STEADY_GAP_DEFAULT_PX,
-            "readability": False, "readability_saved": None}
+            "readability": False, "readability_saved": None,
+            "keys": {}}  # keys.py: {"recentre": "KEY_PAUSE", ...} over its defaults
 
 # 3DoF: a window 1600 px wide is this wide at 1.0, in metres (the Deck's screen 1.28 m, an app's 1920 px screen 1.92 m:
 # about 50 degrees at 2 m, a little narrower than the glasses' own view).
@@ -214,6 +215,10 @@ class App:
                                    opened=lambda slot: self.events.put(("panel", "pc_screen_opened", slot)))
         self.deckpad = DeckButtons(lambda n, k: self.events.put(("button", n, k)), log=self.log)
         self.deckpad.start()
+        # The same actions from keyboard keys (keys.py), so a Steam Controller or any pad can do them through Steam Input
+        self.keys = keys.KeyActions(lambda a: self.events.put(("button",) + keys.ACTIONS[a]), self.settings.get("keys"),
+                                    log=self.log)
+        self.keys.start()
         # The same buttons from keyboard shortcuts (pocket-xr --button L4 tap), for computers without back buttons.
         self.remote = remote.Listener(lambda n, k: self.events.put(("button", n, k)), log=self.log)
         if self.remote.open():
@@ -398,7 +403,10 @@ class App:
         if self.reader:
             self.reader.stop = True
             self.reader = None
-        self.head = fusion.HeadFusion(g.axes)
+        key = f"{g.vendor:04x}:{g.product:04x}"
+        self.head = fusion.HeadFusion(g.axes, bias=fusion.load_bias(key))
+        if self.head.bias_ready:
+            self.log(f"gyro calibration loaded for these glasses ({key})")
         kind = g.imu
         if kind == "network":
             self.reader = imu.ImuReader(self.head.report, log=self.log)
@@ -661,7 +669,7 @@ class App:
         if self.control:
             self.control.want(view)
         if self.head:
-            self.head.recentre()
+            self.head.recentre(follow_tilt=True)
 
     def start_pcvr(self):
         """PC VR: SteamVR from the PC, as Pocket XR's PC VR tile on Android. It opens as a portal into the loading
@@ -771,7 +779,7 @@ class App:
         flat = self._flat()
         yaw = 0.0 if flat else self.space.content_yaw()
         if self.head:
-            self.head.recentre(yaw)
+            self.head.recentre(yaw, follow_tilt=True)
         if not flat:
             self.space.centre_pointer()
         if flat and self.control:

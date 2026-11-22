@@ -55,6 +55,7 @@ rm -rf "$DEST/pocketxr" "$DEST/assets" "$DEST/native"
 cp -r "$SRC/pocketxr" "$SRC/assets" "$DEST/"
 [ -d "$SRC/native" ] && cp -r "$SRC/native" "$DEST/"
 cp "$SRC/uninstall.sh" "$SRC/VERSION" "$DEST/"
+[ -f "$SRC/update.sh" ] && cp "$SRC/update.sh" "$DEST/" && chmod +x "$DEST/update.sh"
 find "$DEST" -name '__pycache__' -prune -exec rm -rf {} +
 
 cat > "$BIN/pocket-xr" <<EOF
@@ -90,6 +91,28 @@ entry > "$APPS/pocket-xr.desktop"
 if [ -d "$HOME/Desktop" ]; then
   entry > "$HOME/Desktop/pocket-xr.desktop"
   chmod +x "$HOME/Desktop/pocket-xr.desktop"
+fi
+# "Update Pocket XR": the latest release's installer in a terminal (update.sh), beside Pocket XR. Suggested by a tester,
+# Pierre Zammit (November 2026).
+update_entry() {
+  cat <<EOF
+[Desktop Entry]
+Type=Application
+Name=Update Pocket XR
+Comment=Download and install the latest Pocket XR
+Exec=$DEST/update.sh
+Icon=pocket-xr
+Terminal=true
+Categories=Utility;
+StartupNotify=false
+EOF
+}
+if [ -x "$DEST/update.sh" ]; then
+  update_entry > "$APPS/pocket-xr-update.desktop"
+  if [ -d "$HOME/Desktop" ]; then
+    update_entry > "$HOME/Desktop/pocket-xr-update.desktop"
+    chmod +x "$HOME/Desktop/pocket-xr-update.desktop"
+  fi
 fi
 update-desktop-database "$APPS" >/dev/null 2>&1 || true
 
@@ -211,19 +234,39 @@ fi
 
 # Gaming Mode's Quick Access panel, for Decky Loader (https://decky.xyz), when Decky is installed. Where Decky's
 # plugins folder belongs to this user (read-only), it is opened, filled and closed again without a password. Where it
-# belongs to root, only Decky can add the panel: from the release's pocket-xr-decky.zip, by its Install from URL.
+# belongs to root and an older Pocket XR panel is there, it is replaced with your password (sudo), asked here in the
+# terminal, and Decky is restarted so it loads the new one: a tester (Pierre Zammit, November 2026) found the update
+# left his panel as it was. Saying no, or a Deck with no password set, leaves it and says how to add it in Decky.
 PLUGINS="$HOME/homebrew/plugins"
 PANEL_URL="https://github.com/pocket-xr/pocket-xr-deck/releases/latest/download/pocket-xr-decky.zip"
 PANEL=""
+want=$(grep -o '"version": *"[^"]*"' "$SRC/decky/package.json" 2>/dev/null || true)
+have=$(grep -o '"version": *"[^"]*"' "$PLUGINS/PocketXR/package.json" 2>/dev/null || true)
+panel_files() {  # panel_files <command prefix>: the panel's files into the plugins folder
+  $1 mkdir -p "$PLUGINS/PocketXR/dist"
+  $1 cp "$SRC/decky/plugin.json" "$SRC/decky/package.json" "$SRC/decky/main.py" "$PLUGINS/PocketXR/"
+  $1 cp "$SRC/decky/dist/index.js" "$PLUGINS/PocketXR/dist/"
+}
 if [ -d "$PLUGINS" ] && [ -O "$PLUGINS" ] && [ -f "$SRC/decky/dist/index.js" ]; then
   chmod u+w "$PLUGINS"
   [ -d "$PLUGINS/PocketXR" ] && chmod -R u+w "$PLUGINS/PocketXR" && rm -rf "$PLUGINS/PocketXR"
-  mkdir -p "$PLUGINS/PocketXR/dist"
-  cp "$SRC/decky/plugin.json" "$SRC/decky/package.json" "$SRC/decky/main.py" "$PLUGINS/PocketXR/"
-  cp "$SRC/decky/dist/index.js" "$PLUGINS/PocketXR/dist/"
+  panel_files ""
   chmod -R a-w "$PLUGINS/PocketXR"
   chmod u-w "$PLUGINS"
   PANEL=yes
+elif [ -d "$PLUGINS/PocketXR" ] && [ -f "$SRC/decky/dist/index.js" ] && [ "$want" != "$have" ]; then
+  echo "Pocket XR's Quick Access panel in Decky is older than this Pocket XR. Decky's plugins folder belongs to root,"
+  echo "so updating it needs your password (the one you set with passwd)."
+  if ask "Update the panel now (sudo)?"; then
+    if sudo rm -rf "$PLUGINS/PocketXR" && panel_files sudo; then
+      PANEL=replaced
+      if sudo systemctl restart plugin_loader >/dev/null 2>&1; then
+        PANEL=reloaded
+      fi
+    else
+      echo "Not updated." >&2
+    fi
+  fi
 fi
 
 echo "Done. Pocket XR $(cat "$SRC/VERSION") is on the desktop and in the app menu."
@@ -247,9 +290,10 @@ elif [ -n "$HOST" ]; then
   echo "Your phone's Pocket XR can show this Deck's screens (PC screens) while it is in Desktop Mode."
 fi
 [ -n "$STEAMOS" ] || exit 0  # the rest is about Gaming Mode's Quick Access panel: SteamOS only
-want=$(grep -o '"version": *"[^"]*"' "$SRC/decky/package.json" 2>/dev/null || true)
 have=$(grep -o '"version": *"[^"]*"' "$PLUGINS/PocketXR/package.json" 2>/dev/null || true)
-if [ -n "$PANEL" ]; then
+if [ "$PANEL" = reloaded ]; then
+  echo "Its Gaming Mode panel in Decky is updated, and Decky restarted to load it."
+elif [ -n "$PANEL" ]; then
   echo "Its Gaming Mode panel is in Decky: restart the Deck once to see Pocket XR in Quick Access."
 elif [ -n "$want" ] && [ "$want" = "$have" ]; then
   echo "Its Gaming Mode panel is in Quick Access, under Decky."

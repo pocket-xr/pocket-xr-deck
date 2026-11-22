@@ -198,5 +198,10 @@
   "That didn't work: {error}": "Não funcionou: {error}",
   "Readability": "Legibilidade",
   "The Deck screen alone, 30 degrees wide: sharper text": "Só a tela do Deck, com 30 graus de largura: texto mais nítido",
-  "The game screen 30 degrees wide: sharpest for a game drawn 1280 pixels wide. For larger text, pick a larger text or interface size in the game.": "A tela do jogo com 30 graus de largura: o mais nítido para um jogo desenhado com 1280 pixels de largura. Para um texto maior, escolha um tamanho de texto ou de interface maior no jogo."
+  "The game screen 30 degrees wide: sharpest for a game drawn 1280 pixels wide. For larger text, pick a larger text or interface size in the game.": "A tela do jogo com 30 graus de largura: o mais nítido para um jogo desenhado com 1280 pixels de largura. Para um texto maior, escolha um tamanho de texto ou de interface maior no jogo.",
+  "Calibrate (hold still)": "Calibrar (paradas)",
+  "Lay the glasses down on something still for 4 seconds. It stops a slow drift to one side and is saved for these glasses.": "Deixe os óculos sobre algo parado por 4 segundos. Isso evita um desvio lento para um lado e fica salvo para estes óculos.",
+  "Calibrated. Saved for these glasses.": "Calibrado. Salvo para estes óculos.",
+  "The glasses moved. Lay them on something still and try again.": "Os óculos se mexeram. Deixe-os sobre algo parado e tente de novo.",
+  "Plug in glasses with head tracking first.": "Primeiro conecte óculos com rastreamento de cabeça."
 }

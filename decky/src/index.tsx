@@ -18,6 +18,10 @@ type Status = {
   size?: number;
   curve?: number;
   readability?: boolean;
+  calibrating?: boolean;
+  calibrate_label?: string; // in the panel's language, from the service
+  calibrate_line?: string;
+  calibration_text?: string;
   readability_label?: string; // in the panel's language, from the service
   readability_line?: string;
   lang?: string;
@@ -166,6 +170,16 @@ function Content() {
         <PanelSectionRow>
           <ButtonItem layout="below" disabled={!ready} onClick={() => send({ op: "recentre" })}>
             {w.recentre}
+          </ButtonItem>
+        </PanelSectionRow>
+        <PanelSectionRow>
+          <ButtonItem
+            layout="below"
+            disabled={!ready || !st?.tracking || !!st?.calibrating}
+            description={st?.calibrating ? "..." : st?.calibration_text || st?.calibrate_line}
+            onClick={() => send({ op: "calibrate" })}
+          >
+            {st?.calibrate_label || "Calibrate (hold still)"}
           </ButtonItem>
         </PanelSectionRow>
         <PanelSectionRow>

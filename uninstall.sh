@@ -36,6 +36,8 @@ rm -f "$HOME/.local/bin/pocket-xr" \
       "$HOME/.local/share/applications/pocket-xr.desktop" \
       "$HOME/.local/share/applications/pocket-xr-host.desktop" \
       "$HOME/Desktop/pocket-xr.desktop" \
+      "$HOME/.local/share/applications/pocket-xr-update.desktop" \
+      "$HOME/Desktop/pocket-xr-update.desktop" \
       "$HOME/.local/share/icons/hicolor/512x512/apps/pocket-xr.png"
 rm -rf "$HOME/.local/share/fonts/pocket-xr"
 update-desktop-database "$HOME/.local/share/applications" >/dev/null 2>&1 || true

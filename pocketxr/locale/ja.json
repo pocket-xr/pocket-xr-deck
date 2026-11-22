@@ -198,5 +198,10 @@
   "That didn't work: {error}": "うまくいきませんでした: {error}",
   "Readability": "読みやすさ",
   "The Deck screen alone, 30 degrees wide: sharper text": "Deck の画面だけを幅 30 度で：文字がくっきり",
-  "The game screen 30 degrees wide: sharpest for a game drawn 1280 pixels wide. For larger text, pick a larger text or interface size in the game.": "ゲーム画面を幅 30 度で：横 1280 ピクセルで描くゲームが最もくっきり見えます。文字を大きくするには、ゲームで文字やインターフェースのサイズを大きくしてください。"
+  "The game screen 30 degrees wide: sharpest for a game drawn 1280 pixels wide. For larger text, pick a larger text or interface size in the game.": "ゲーム画面を幅 30 度で：横 1280 ピクセルで描くゲームが最もくっきり見えます。文字を大きくするには、ゲームで文字やインターフェースのサイズを大きくしてください。",
+  "Calibrate (hold still)": "キャリブレーション（静止）",
+  "Lay the glasses down on something still for 4 seconds. It stops a slow drift to one side and is saved for these glasses.": "グラスを動かない場所に 4 秒間置いてください。片側へのゆっくりしたずれを止め、このグラス用に保存されます。",
+  "Calibrated. Saved for these glasses.": "キャリブレーションしました。このグラス用に保存しました。",
+  "The glasses moved. Lay them on something still and try again.": "グラスが動きました。動かない場所に置いて、もう一度お試しください。",
+  "Plug in glasses with head tracking first.": "先にヘッドトラッキングのあるグラスをつないでください。"
 }
