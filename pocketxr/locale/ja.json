@@ -205,5 +205,7 @@
   "The glasses moved. Lay them on something still and try again.": "グラスが動きました。動かない場所に置いて、もう一度お試しください。",
   "Plug in glasses with head tracking first.": "先にヘッドトラッキングのあるグラスをつないでください。",
   "Calibrating: take the glasses off and lay them on something still for 4 seconds.": "キャリブレーション中：グラスを外して、動かない場所に 4 秒間置いてください。",
-  "Another controller: in Steam Input, map a button to the Stop media key to recentre and to Next to switch view.": "ほかのコントローラー：Steam Input でボタンをメディアキーの Stop に割り当てると正面に戻し、Next でビューを切り替えます。"
+  "Another controller: in Steam Input, map a button to the Stop media key to recentre and to Next to switch view.": "ほかのコントローラー：Steam Input でボタンをメディアキーの Stop に割り当てると正面に戻し、Next でビューを切り替えます。",
+  "Stick clicks": "スティック押し込み",
+  "In every game: hold L3 to recentre, hold R3 to switch view, click L3 three times to calibrate (lay the glasses down within 5 seconds).": "どのゲームでも：L3 長押しで正面に戻す、R3 長押しでビュー切り替え、L3 を3回押すとキャリブレーション（5秒以内にグラスを置いてください）。"
 }

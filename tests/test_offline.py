@@ -314,7 +314,7 @@ def _run_reader(fake):
     return r, lines, got
 
 
-def test_xbx_wakes_the_mcu_when_interface_1_is_silent():
+def test_xbx_wakes_the_mcu_first():
     if not hasattr(__import__("socket"), "AF_UNIX"):
         return
     fake = FakeXbx(lambda num, awake: num == 1 and awake)
@@ -323,9 +323,9 @@ def test_xbx_wakes_the_mcu_when_interface_1_is_silent():
     assert r.decision == "interface 1 (/dev/fake1), with the MCU heartbeat", lines
     text = "\n".join(lines)
     assert "imu: fake1 is interface 1 (/sys/fake/1-1:1.1)" in text
-    assert "no samples on interface 1" in text and "MCU heartbeat running on interface 0" in text
+    assert "no samples on interface" not in text and "MCU heartbeat running on interface 0" in text
     assert "imu: /dev/fake0 read fd " in text  # the MCU's answers, in hex
-    assert fake.opened[:3] == [1, 0, 1], fake.opened
+    assert fake.opened[:2] == [0, 1], fake.opened  # the heartbeat first, so no 6 s wait (0.7.2's tester logs)
     assert r._mcu is None and "imu: MCU heartbeat stopped" in text  # stopped with the reader
 
 
@@ -336,7 +336,27 @@ def test_xbx_tries_interface_2_last():
     r, lines, got = _run_reader(fake)
     assert len(got) >= 20, lines
     assert r.decision == "interface 2 (/dev/fake2), with the MCU heartbeat", lines
-    assert fake.opened[:4] == [1, 0, 1, 2], fake.opened
+    assert fake.opened[:3] == [0, 1, 2], fake.opened
+
+
+def test_xbx_still_asks_interface_1_when_the_mcu_is_silent():
+    if not hasattr(__import__("socket"), "AF_UNIX"):
+        return
+
+    class SilentMcu(FakeXbx):
+        def _serve(self, num, sock):
+            if num == 0:
+                while sock.recv(64):
+                    pass  # takes the commands, never answers
+                return
+            return FakeXbx._serve(self, num, sock)
+
+    fake = SilentMcu(lambda num, awake: num == 1)
+    r, lines, got = _run_reader(fake)
+    assert len(got) >= 20, lines
+    assert r.decision == "interface 1 (/dev/fake1)", lines
+    assert "imu: MCU command 0x26 on interface 0: no answer" in lines
+    assert fake.opened[:2] == [0, 1], fake.opened
 
 
 def test_air_2_never_opens_another_interface():

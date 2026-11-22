@@ -205,5 +205,7 @@
   "The glasses moved. Lay them on something still and try again.": "眼镜动了。请放在不动的地方再试一次。",
   "Plug in glasses with head tracking first.": "请先连接有头部追踪的眼镜。",
   "Calibrating: take the glasses off and lay them on something still for 4 seconds.": "正在校准：摘下眼镜，放在不动的地方 4 秒。",
-  "Another controller: in Steam Input, map a button to the Stop media key to recentre and to Next to switch view.": "其他手柄：在 Steam 输入中把一个按键映射到媒体键 Stop 可回到正前方，映射到 Next 可切换视图。"
+  "Another controller: in Steam Input, map a button to the Stop media key to recentre and to Next to switch view.": "其他手柄：在 Steam 输入中把一个按键映射到媒体键 Stop 可回到正前方，映射到 Next 可切换视图。",
+  "Stick clicks": "摇杆按下",
+  "In every game: hold L3 to recentre, hold R3 to switch view, click L3 three times to calibrate (lay the glasses down within 5 seconds).": "在任何游戏中：按住 L3 回到正前方，按住 R3 切换视图，连按 L3 三次进行校准（在 5 秒内放下眼镜）。"
 }

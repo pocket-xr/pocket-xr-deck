@@ -14,9 +14,17 @@ goes away (gamescope restarting), and prints one line each time something change
     pointer <u> <v> <shown>      u, v from 0 to 1 across and down the X screen; shown 1 or 0
     display <name> <w>x<h>       the X screen the pointer is on (gamescope's Xwayland), when it changes
     none <why>                   no X screen could be opened (and why), tried again every few seconds
+    unopened <name> <why>        one X screen would not open; said once, then tried again quietly
     key <code>                   a watched key went down (a Linux KEY_ code), with --keys 119,70
 
 shown is 0 when the app's cursor is hidden or empty (a game that hides it), by XFixes' cursor image.
+
+Which X screen: gamescope runs two Xwaylands in Gaming Mode, :0 (Steam, the output's size) and :1 (the game, the
+game's size), and the effect works in the game picture's own pixels. 0.7.1 and 0.7.2 took the screen whose pointer
+moved last, and a tester's log (Pierre Zammit, 22 Nov 2026) flips between :0 1920x1080 and :1 1280x800 with the game
+running, so the pointer could be placed by the wrong screen's size. gamescope names the screen that has the mouse in
+GAMESCOPE_MOUSE_FOCUS_DISPLAY on :0's root window (steamcompmgr.cpp), so that one is taken when it is set; the last
+moved one otherwise. gamescope stores the name as 32 bit items, so the name's first 4 bytes are in the first item.
 
 The keys are read here, not from the input devices: Steam Input sends a controller's keyboard bindings into gamescope's
 X screen (XTest), and a new keyboard device is not readable by the user on SteamOS (checked on a Deck, 22 Nov 2026: a
@@ -56,6 +64,12 @@ def _libs():
                                   ctypes.POINTER(ctypes.c_int), ctypes.POINTER(ctypes.c_uint)]
     x11.XFree.argtypes = [ctypes.c_void_p]
     x11.XQueryKeymap.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
+    x11.XInternAtom.restype = ctypes.c_ulong
+    x11.XInternAtom.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_int]
+    x11.XGetWindowProperty.argtypes = [ctypes.c_void_p, ctypes.c_ulong, ctypes.c_ulong, ctypes.c_long, ctypes.c_long,
+                                       ctypes.c_int, ctypes.c_ulong, ctypes.POINTER(ctypes.c_ulong),
+                                       ctypes.POINTER(ctypes.c_int), ctypes.POINTER(ctypes.c_ulong),
+                                       ctypes.POINTER(ctypes.c_ulong), ctypes.POINTER(ctypes.c_void_p)]
     xf = None
     try:
         xf = ctypes.CDLL(ctypes.util.find_library("Xfixes") or "libXfixes.so.3")
@@ -91,6 +105,39 @@ def display_names(root="/tmp/.X11-unix"):
     return [":" + os.path.basename(p)[1:] for p in sorted(glob.glob(os.path.join(root, "X[0-9]*")))]
 
 
+def focus_name(items):
+    """The X display name in gamescope's GAMESCOPE_MOUSE_FOCUS_DISPLAY (a list of 32 bit items), or None."""
+    if not items:
+        return None
+    raw = (int(items[0]) & 0xFFFFFFFF).to_bytes(4, "little").split(b"\0")[0]
+    name = raw.decode("ascii", errors="replace")
+    return name if name.startswith(":") and name[1:].isdigit() else None
+
+
+def pick(screens, focus):
+    """The screen the pointer is read from: the one gamescope says has the mouse, else the one moved last."""
+    if focus in screens:
+        return screens[focus]
+    return max(screens.values(), key=lambda q: q.moved_at)
+
+
+def quietly(call):
+    """Runs call() with libX11's messages to stderr caught: (its result, what it printed)."""
+    import tempfile
+    sys.stderr.flush()
+    saved = os.dup(2)
+    with tempfile.TemporaryFile() as f:
+        os.dup2(f.fileno(), 2)
+        try:
+            result = call()
+        finally:
+            os.dup2(saved, 2)
+            os.close(saved)
+        f.seek(0)
+        said = f.read().decode(errors="replace")
+    return result, " ".join(dict.fromkeys(x.strip() for x in said.splitlines() if x.strip()))
+
+
 def cursor_shown(image):
     """Whether an XFixes cursor image has any pixel that isn't fully transparent."""
     n = image.width * image.height
@@ -103,14 +150,15 @@ class Screen:
     def __init__(self, x11, xf, name):
         self.x11, self.xf, self.name = x11, xf, name
         self.dpy = None
+        said = ""
         for auth in [os.environ.get("XAUTHORITY")] + xauthority_candidates():
             if auth:
                 os.environ["XAUTHORITY"] = auth
-            self.dpy = x11.XOpenDisplay(name.encode())
+            self.dpy, said = quietly(lambda: x11.XOpenDisplay(name.encode()))
             if self.dpy:
                 break
         if not self.dpy:
-            raise OSError(f"{name} would not open")
+            raise OSError(said or "would not open")
         scr = x11.XDefaultScreen(self.dpy)
         self.root = x11.XDefaultRootWindow(self.dpy)
         self.size = (x11.XDisplayWidth(self.dpy, scr), x11.XDisplayHeight(self.dpy, scr))
@@ -122,6 +170,26 @@ class Screen:
         self.moved_at = 0.0
         self.keymap = ctypes.create_string_buffer(32)
         self.down = set()
+        self.focus_atom = x11.XInternAtom(self.dpy, b"GAMESCOPE_MOUSE_FOCUS_DISPLAY", 1)  # 0 if gamescope set none
+
+    def mouse_focus(self):
+        """The display gamescope says has the mouse (set on its first Xwayland's root window), or None."""
+        if not self.focus_atom:
+            self.focus_atom = self.x11.XInternAtom(self.dpy, b"GAMESCOPE_MOUSE_FOCUS_DISPLAY", 1)
+            if not self.focus_atom:
+                return None
+        kind, fmt = ctypes.c_ulong(), ctypes.c_int()
+        n, left, data = ctypes.c_ulong(), ctypes.c_ulong(), ctypes.c_void_p()
+        if self.x11.XGetWindowProperty(self.dpy, self.root, self.focus_atom, 0, 4, 0, 0, ctypes.byref(kind),
+                                       ctypes.byref(fmt), ctypes.byref(n), ctypes.byref(left), ctypes.byref(data)):
+            return None
+        try:
+            if not data.value or fmt.value != 32 or not n.value:
+                return None
+            return focus_name(ctypes.cast(data, ctypes.POINTER(ctypes.c_ulong))[:n.value])
+        finally:
+            if data.value:
+                self.x11.XFree(data)
 
     def pressed(self, codes):
         """The watched keys (Linux codes) that went down since the last look."""
@@ -173,6 +241,8 @@ def main(argv=None):
     screens = {}
     current, said, shown, next_cursor = None, None, True, 0.0
     next_open = 0.0
+    unopened = set()
+    focus = None
     while True:
         now = time.monotonic()
         if now >= next_open:
@@ -182,8 +252,11 @@ def main(argv=None):
                 if name not in screens:
                     try:
                         screens[name] = Screen(x11, xf, name)
-                    except OSError:
-                        pass
+                        unopened.discard(name)
+                    except OSError as e:
+                        if name not in unopened:  # libX11 says why on stderr each try: said here once
+                            unopened.add(name)
+                            print(f"unopened {name} ({e}); tried again quietly", flush=True)
             if not screens:
                 print("none no X screen opened (" + (", ".join(names) or "no sockets") + ")", flush=True)
         for s in screens.values():
@@ -198,7 +271,10 @@ def main(argv=None):
                     out.write(f"key {c}\n")
                     out.flush()
         if screens:
-            s = max(screens.values(), key=lambda q: q.moved_at)
+            if now >= next_cursor:
+                first = screens[min(screens, key=lambda n: int(n[1:]) if n[1:].isdigit() else 99)]
+                focus = first.mouse_focus()
+            s = pick(screens, focus)
             if s is not current:
                 current = s
                 print(f"display {s.name} {s.size[0]}x{s.size[1]}", flush=True)

@@ -1,5 +1,29 @@
 # Changes
 
+## 0.7.3 (not released yet)
+
+From Pierre Zammit's report and logs on 0.7.2 (Steam Deck LCD, SteamOS 3.9.5, XREAL XBX A01+). Thanks, Pierre.
+
+- **XBX: motion at once.** Each time his glasses appeared (after boot and after each USB drop), interface 1 sent
+  nothing for the whole 6 second wait, then samples came within a second of the MCU heartbeat. The XBX now gets the
+  heartbeat first, not after 6 silent seconds; if the MCU doesn't answer, interface 1 alone and then interface 2 are
+  still tried. Checked by tests; not yet tried with glasses.
+- **Gaming Mode's pointer: the right X screen.** gamescope runs two X screens, :0 (Steam, 1920x1080 on his glasses)
+  and :1 (the game, 1280x800), and his log flips between them while playing: 0.7.2 took the one whose pointer moved
+  last, so the pointer could be placed by the wrong screen's size. Now the screen gamescope says has the mouse
+  (GAMESCOPE_MOUSE_FOCUS_DISPLAY) is taken, the last moved one otherwise. Written from gamescope's source and checked
+  by tests; not yet tried on a Deck. gamescope's own arrow is drawn after Pocket XR's effect, so it still moves with
+  the head.
+- **One line, not one every 3 seconds.** A third X screen that wouldn't open put libX11's "Authorization required"
+  in the log twice every 3 seconds. Now it is said once.
+- **Stick clicks**, in every game without Steam Input setup, on the Deck's own controller: hold L3 for a second to
+  recentre, hold R3 to switch the view, click L3 three times to calibrate (it starts 5 seconds later). On at first,
+  with a switch in Quick Access. The stick click bits are taken from Linux's hid-steam driver, not yet checked by
+  pressing them on a Deck. Other controllers: their buttons go to games through Steam Input, so the Stop and Next keys
+  stay the way. Checked by tests.
+- His two drops (19:35:10 and 20:17:32) show "Air link lost (Input/output error)" with the glasses' interfaces back
+  within 3 seconds, and at 20:17:32 the glasses' display went too: the whole USB-C link reset. No change for this.
+
 ## 0.7.2 (22 Nov 2026)
 
 From Pierre Zammit's report and logs on 0.7.1 (Steam Deck LCD, SteamOS 3.9.5, XREAL XBX A01+). Thanks, Pierre.

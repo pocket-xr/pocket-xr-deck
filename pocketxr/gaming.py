@@ -40,7 +40,9 @@ HEAD_LOG_S = 60.0  # the head's direction goes in the log once a second this lon
 FOV_V_DEG = 38.0  # the glasses' picture, vertical (as the desktop app)
 ASPECT = 16 / 9
 DEFAULTS = {"mode": "space", "size": 0.8, "curve": 0.0, "readability": False, "readability_saved": None,
-            "keys": {}}  # keys.py: {"recentre": "KEY_STOPCD", ...} over its defaults
+            "keys": {},  # keys.py: {"recentre": "KEY_STOPCD", ...} over its defaults
+            "sticks": True}  # the Deck's stick clicks: hold L3 recentres, hold R3 switches view, L3 three times calibrates
+STICK_CAL_DELAY_S = 5.0  # a calibration from the stick clicks starts this long after, to take the glasses off first
 # The Quick Access panel (decky/ plugin) talks to the service here: one JSON request per line, one JSON answer per line
 CONTROL_SOCKET = os.path.join(os.environ.get("XDG_RUNTIME_DIR") or f"/run/user/{os.getuid()}", "pocket-xr-gaming.sock")
 SEND_HZ = 500  # how often the loop looks; updates go out as fast as gamescope takes them (paced)
@@ -121,6 +123,7 @@ class Gaming:
         self.lock = threading.Lock()
         self.head_log_until = 0.0
         self.cal_text = ""
+        self.cal_due = None  # when a calibration asked for with the stick clicks starts
         self.head_logged = 0.0
         self.other_driver = []  # XR Gaming's driver, looked for every few seconds
         self.xr_gaming_enabled = False
@@ -162,6 +165,10 @@ class Gaming:
                                             "4 seconds."),
             "keys_line": i18n.tr("Another controller: in Steam Input, map a button to the Stop media key to recentre "
                                  "and to Next to switch view."),
+            "sticks": bool(self.settings.get("sticks", True)),
+            "sticks_label": i18n.tr("Stick clicks"),
+            "sticks_line": i18n.tr("In every game: hold L3 to recentre, hold R3 to switch view, click L3 three times "
+                                   "to calibrate (lay the glasses down within 5 seconds)."),
             "readability_label": i18n.tr("Readability"),
             "readability_line": i18n.tr("The game screen 30 degrees wide: sharpest for a game drawn 1280 pixels "
                                         "wide. For larger text, pick a larger text or interface size in the game."),
@@ -291,6 +298,10 @@ class Gaming:
                 self._start_calibration()
             elif op == "set_readability":
                 self._set_readability(bool(req.get("on")))
+            elif op == "set_sticks":
+                self.settings["sticks"] = bool(req.get("on"))
+                save_settings(self.settings)
+                self.log(f"gaming: stick clicks {'on' if self.settings['sticks'] else 'off'} (Quick Access)")
             elif op == "set_curve":
                 self.settings["curve"] = curve_of(req.get("curve", 0.0))
                 save_settings(self.settings)
@@ -331,13 +342,35 @@ class Gaming:
 
     # ---- the back buttons ----
     def _button(self, name, kind):
-        if kind != "hold" or self.reshade is None or self.glasses is None:
+        if self.reshade is None or self.glasses is None:
             return  # only in Gaming Mode with glasses: in Desktop Mode the desktop app has the buttons
+        if name in ("L3", "R3"):
+            self._stick(name, kind)
+            return
+        if kind != "hold":
+            return
         with self.lock:
             if name == "L4":
                 self.recentre()
             elif name == "R4":
                 self.next_mode()
+
+    def _stick(self, name, kind):
+        """The stick clicks (deckpad.Sticks), when "sticks" is on: games use the clicks, so only a long hold or three
+        clicks do anything here."""
+        if not self.settings.get("sticks", True) or kind not in ("hold", "triple"):
+            return
+        with self.lock:
+            if (name, kind) == ("L3", "hold"):
+                self.log("gaming: L3 held")
+                self.recentre()
+            elif (name, kind) == ("R3", "hold"):
+                self.log("gaming: R3 held")
+                self.next_mode()
+            elif (name, kind) == ("L3", "triple"):
+                self.cal_due = time.monotonic() + STICK_CAL_DELAY_S
+                self.cal_text = ""
+                self.log(f"gaming: L3 clicked three times: calibration in {STICK_CAL_DELAY_S:g} s")
 
     def _key(self, action):
         """A key from keys.py (any controller, through Steam Input): recentre, or the next mode."""
@@ -641,6 +674,9 @@ class Gaming:
                         if self.reshade is not None:
                             self._watch_pointer(now)
                         self._log_head(now)
+                        if self.cal_due is not None and now >= self.cal_due:
+                            self.cal_due = None
+                            self._start_calibration()
                         self._check_calibration()
                         if self.glasses and self.reshade and not self.effect_on and self.mode() == "space":
                             self._effect(True)

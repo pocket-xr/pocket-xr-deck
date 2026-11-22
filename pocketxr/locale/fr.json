@@ -205,5 +205,7 @@
   "The glasses moved. Lay them on something still and try again.": "Les lunettes ont bougé. Posez-les sur quelque chose d'immobile et réessayez.",
   "Plug in glasses with head tracking first.": "Branchez d'abord des lunettes avec suivi de la tête.",
   "Calibrating: take the glasses off and lay them on something still for 4 seconds.": "Calibrage : retirez les lunettes et posez-les sur quelque chose d'immobile pendant 4 secondes.",
-  "Another controller: in Steam Input, map a button to the Stop media key to recentre and to Next to switch view.": "Autre manette : dans Steam Input, associez un bouton à la touche multimédia Stop pour recentrer et à Next pour changer de vue."
+  "Another controller: in Steam Input, map a button to the Stop media key to recentre and to Next to switch view.": "Autre manette : dans Steam Input, associez un bouton à la touche multimédia Stop pour recentrer et à Next pour changer de vue.",
+  "Stick clicks": "Clics des sticks",
+  "In every game: hold L3 to recentre, hold R3 to switch view, click L3 three times to calibrate (lay the glasses down within 5 seconds).": "Dans tous les jeux : maintenez L3 pour recentrer, R3 pour changer de vue, cliquez trois fois sur L3 pour calibrer (posez les lunettes dans les 5 secondes)."
 }
