@@ -175,15 +175,19 @@ and Next keys above. Steam's **Guide Button Chord Layout** (Steam's controller s
 chord there (for example Steam + L3) mapped to Stop may save setting it per game; not yet tried.
 
 **Taps on the glasses**, for any controller or with the Deck put down: tap the glasses' frame **twice** to recentre,
-**three times** to switch the view. Pocket XR reads the taps from the glasses' own motion sensor, and leaves out
-jolts during fast head turns and the slower ones from walking. Off at first: turn on **Taps on the glasses** in Quick
-Access. Asked for by Pierre Zammit. Checked by tests and against his recorded head movement (no taps found); not yet
-tried with real taps on glasses.
+**three times** to switch the view, at about 2 taps a second (1.5 to 5 a second work), holding your head still.
+Pocket XR reads the taps from the glasses' own motion sensor: a tap is a small jolt that starts suddenly, and jolts
+during fast head turns, slower ones and longer ones are left out. Off at first: turn on **Taps on the glasses** in
+Quick Access. Asked for by Pierre Zammit. With 0.7.6 his taps on the top of the frame mostly didn't count; the next
+version takes softer taps (his recorded ones count) and puts every jolt in the log with why it did or didn't count.
+A few steps of walking with sharp heel strikes could count as taps; not yet tried while walking.
 
 **Use the glasses' buttons**, in Quick Access (XREAL Air family, including the XBX): Pocket XR lets go of the glasses
 until you turn it off again, so their own buttons can work, for brightness say. Head tracking pauses meanwhile.
-Asked for by Pierre Zammit, whose XBX's buttons don't work while Pocket XR reads the glasses. Not yet tried with
-glasses, so whether the buttons come back this way is not known yet.
+Asked for by Pierre Zammit, whose XBX's buttons don't work while Pocket XR reads the glasses. With 0.7.6 they came
+back, but only 1 to 4 minutes later, when the glasses reset themselves (they blink off and on). So: set the mode to
+Off, turn this on, wait for the glasses to blink, adjust them, turn this off, then pick a mode. The next version also
+tries to reset the glasses over USB at once, which SteamOS may not allow; its log says which.
 
 Good to know:
 

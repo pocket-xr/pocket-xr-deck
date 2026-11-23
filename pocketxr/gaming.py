@@ -129,7 +129,8 @@ class Gaming:
         self.head_log_until = 0.0
         self.cal_text = ""
         self.cal_due = None  # when a calibration asked for with the stick clicks starts
-        self.taps = taps.Taps(self._tapped)
+        self.buttons_released = False  # "Use the glasses' buttons" (Quick Access)
+        self.taps = taps.Taps(self._tapped, on_log=lambda line: self.log("gaming: " + line))
         self.head_logged = 0.0
         self.other_driver = []  # XR Gaming's driver, looked for every few seconds
         self.xr_gaming_enabled = False
@@ -173,14 +174,20 @@ class Gaming:
             "keys_line": i18n.tr("Another controller: in Steam Input, map a button to the Stop media key to recentre "
                                  "and to Next to switch view."),
             # Only for the Air family's reader (hidimu.AirReader): None hides the switch
-            "glasses_buttons": (bool(self.reader.released) if isinstance(self.reader, hidimu.AirReader) else None),
+            "glasses_buttons": (self.buttons_released if isinstance(self.reader, hidimu.AirReader) else None),
             "glasses_buttons_label": i18n.tr("Use the glasses' buttons"),
+            # His buttons came back 1 to 4 minutes after letting go, when the glasses reset themselves
+            # (hidimu.USBDEVFS_RESET); the steps are the ones he found work (Pierre Zammit, 23 Nov 2026)
             "glasses_buttons_line": i18n.tr("Lets go of the glasses so their own buttons work (brightness, for "
-                                            "example). Head tracking pauses until you turn this off."),
+                                            "example). Head tracking pauses until you turn this off. Set the mode to "
+                                            "Off, turn this on and wait for the glasses to blink off and on (up to a "
+                                            "few minutes), adjust them, turn this off, then pick a mode."),
             "taps": bool(self.settings.get("taps", False)),
             "taps_label": i18n.tr("Taps on the glasses"),
-            "taps_line": i18n.tr("Tap the glasses' frame twice to recentre, three times to switch view. New: say if "
-                                 "it misses taps or reacts on its own."),
+            # taps.py takes taps 0.2 to 0.7 s apart: about 1.5 to 5 a second
+            "taps_line": i18n.tr("Tap the glasses' frame twice to recentre, three times to switch view, at about 2 "
+                                 "taps a second (1.5 to 5 a second work). Hold your head still while you tap. New: "
+                                 "say if it misses taps or reacts on its own."),
             "sticks": bool(self.settings.get("sticks", True)),
             "sticks_label": i18n.tr("Stick clicks"),
             "sticks_line": i18n.tr("In every game: hold L3 to recentre, hold R3 to switch view, click L3 three times "
@@ -378,11 +385,13 @@ class Gaming:
                 self.next_mode()
 
     def _glasses_buttons(self, on):
-        """Lets go of the glasses (no stream, no heartbeat, their files closed) so their own buttons work, or takes
-        them back. Not kept: new glasses, or the service starting again, read them as usual."""
+        """Lets go of the glasses (no stream, no heartbeat, their files closed, and on the XBX a USB reset if allowed)
+        so their own buttons work, or takes them back. Kept while the service runs, also when the glasses come back
+        after the reset; not kept when the service starts again."""
         r = self.reader
-        if not isinstance(r, hidimu.AirReader) or r.released == on:
+        if not isinstance(r, hidimu.AirReader) or self.buttons_released == on:
             return
+        self.buttons_released = on
         r.released = on
         self.log("gaming: glasses let go for their own buttons; head tracking paused (Quick Access)" if on
                  else "gaming: glasses taken back from their own buttons (Quick Access)")
@@ -645,6 +654,7 @@ class Gaming:
             self.reader = imu.ImuReader(self._report, log=self.log)
         elif g.imu == "air":
             self.reader = hidimu.AirReader(self._report, g.product, log=self.log, record_path=RAW_IMU)
+            self.reader.released = self.buttons_released  # still let go, when the glasses come back after a reset
         elif g.imu == "viture" and g.viture_tracking_default():
             self.reader = hidimu.VitureReader(self._report, g.product, log=self.log)
         if self.reader:

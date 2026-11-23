@@ -173,6 +173,7 @@ class GlassesButtons(unittest.TestCase):
         g = G()
         g.lines = []
         g.log = g.lines.append
+        g.buttons_released = False
         g.reader = hidimu.AirReader(lambda *a: None, 0x0442, nodes=lambda: [])
         gaming.Gaming._glasses_buttons(g, True)
         self.assertTrue(g.reader.released and g.reader.held)

@@ -47,6 +47,45 @@ AIR_ULTRA = 0x0426
 # timed out (ETIMEDOUT): the MCU had hung. The heartbeat loop sent the next heartbeat as soon as the MCU answered,
 # hundreds a second, not one every 100 ms. 0.7.5 sends exactly one every 100 ms (HEARTBEAT_S), and logs the rate.
 AIR_XBX = frozenset({0x0440, 0x0442})
+# Letting go of the XBX for its own buttons (Gaming Mode's "Use the glasses' buttons"): with 0.7.6 his buttons came
+# back only 1 min 20 s to 3 min 25 s after the heartbeat stopped and the files closed, when the glasses reset
+# themselves. The handshake above puts the MCU in a mode it keeps until then. No public driver documents a command
+# that ends it (xrealAirLinuxDriver's list has none, and its close only closes the file), so none is sent. A USB reset
+# of the glasses (USBDEVFS_RESET, as unplugging and plugging them in) is tried instead; it needs write access to the
+# glasses' /dev/bus/usb node, which udev's default (root, 0664) does not give the user, so it may well be refused:
+# the log says which.
+USBDEVFS_RESET = 0x5514  # _IO('U', 20), linux/usbdevice_fs.h
+
+
+def usb_node(iface_sysfs):
+    """The /dev/bus/usb node of the USB device an interface (its sysfs path, ...-1-1:1.0) belongs to, or None."""
+    dev = os.path.dirname(iface_sysfs.rstrip("/"))
+    try:
+        with open(os.path.join(dev, "busnum")) as f:
+            bus = int(f.read())
+        with open(os.path.join(dev, "devnum")) as f:
+            num = int(f.read())
+    except (OSError, ValueError):
+        return None
+    return f"/dev/bus/usb/{bus:03d}/{num:03d}"
+
+
+def usb_reset(node, opener=os.open, ioctl=None):
+    """Resets a USB device (as unplugging it). Returns None when done, else why not."""
+    if ioctl is None:
+        import fcntl  # Linux only
+        ioctl = fcntl.ioctl
+    try:
+        fd = opener(node, os.O_WRONLY)
+    except OSError as e:
+        return f"{node} not writable ({e.strerror or e})"
+    try:
+        ioctl(fd, USBDEVFS_RESET, 0)
+        return None
+    except OSError as e:
+        return f"reset of {node} failed ({e.strerror or e})"
+    finally:
+        os.close(fd)
 XBX_MCU = 0
 MCU_HEAD = 0xFD
 MCU_HEARTBEAT = 0x1A
@@ -301,6 +340,10 @@ class AirReader(_HidReader):
         # closed, until it is set back. A tester (Pierre Zammit, 23 Nov 2026) asked for this: his XBX's buttons
         # (brightness) don't work while Pocket XR reads the glasses.
         self.released = False
+        self.handshake = False  # the MCU handshake was sent to the glasses now attached
+        self.reset_done = False  # tried (or done) the USB reset for this letting go
+        self.last_nodes = []
+        self._usb_reset = usb_reset
         self.last_beat = None  # time.monotonic() of the last heartbeat written
         self.beats = 0  # heartbeats written
         self._nodes = nodes or (lambda: hidraw_map(0x3318, self.pid))
@@ -377,6 +420,7 @@ class AirReader(_HidReader):
             self.log(f"imu: MCU on {dev} failed ({e})")
             os.close(fd)
             return False
+        self.handshake = True
         state = {"run": True}
 
         def beat():
@@ -412,6 +456,24 @@ class AirReader(_HidReader):
         t.start()
         self.log(f"imu: MCU heartbeat running on interface {num} ({dev})")
         return True
+
+    def _reset_for_buttons(self):
+        """Once per letting go, after the handshake: a USB reset of the glasses, so they leave the handshake's mode
+        at once (see USBDEVFS_RESET)."""
+        if not self.handshake:
+            return
+        iface = next((n[3] for n in self.last_nodes if len(n) > 3), None)
+        node = usb_node(iface) if iface else None
+        if not node:
+            self.log("imu: no USB reset of the glasses: their USB device was not found")
+            return
+        why = self._usb_reset(node)
+        if why:
+            self.log(f"imu: no USB reset of the glasses: {why}; their buttons come back when they reset themselves "
+                     "(up to a few minutes)")
+        else:
+            self.handshake = False
+            self.log(f"imu: glasses reset over USB ({node}), so their own buttons work again")
 
     def _stop_mcu(self, why=""):
         if not self._mcu:
@@ -459,6 +521,9 @@ class AirReader(_HidReader):
 
     def _find(self, nodes):
         """(fd, node) of the interface that streams, tried in the order the class docstring gives, else (None, None)."""
+        if [n[1] for n in nodes] != [n[1] for n in self.last_nodes]:
+            self.handshake = False  # other nodes: the glasses were plugged in again (or reset)
+        self.last_nodes = list(nodes)
         for n in nodes:
             self.log(f"imu: {os.path.basename(n[1])} is interface {n[0]}" + (f" ({n[3]})" if len(n) > 3 else ""))
         self._logged = {}
@@ -532,6 +597,11 @@ class AirReader(_HidReader):
         while not self.stop:
             if self.released:
                 self._stop_mcu("let go for the glasses' own buttons")
+                if not self.reset_done:
+                    self.reset_done = True
+                    self._reset_for_buttons()
+            else:
+                self.reset_done = False
             if self.held:
                 time.sleep(0.5)
                 continue

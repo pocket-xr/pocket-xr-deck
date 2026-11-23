@@ -1,5 +1,31 @@
 # Changes
 
+## 0.7.7 (not released yet)
+
+From Pierre Zammit's report and logs on 0.7.6 (Steam Deck LCD, XREAL XBX A01+). Thanks, Pierre.
+
+- **Taps on the glasses: softer taps count, and every jolt is logged.** He double tapped the top of the frame many
+  times and it worked twice; the misses left nothing in the log. His one recording with taps in it (imu-raw.log,
+  three taps about 320 ms apart) shows why: the taps were 0.33 to 0.51 g away from the 30 ms average, and 0.7.6
+  wanted 0.8 g. What does set them apart is how suddenly they start: 0.23 to 0.42 g within 3 ms, where none of his
+  plain head movement went over 0.10 g. Now a tap is a jolt of 0.25 g with a 0.15 g jump within 3 ms, lasting up to
+  80 ms (the frame's swing after a tap is part of it, so it doesn't eat the next tap), after 60 ms still, with the
+  head turning under 60 degrees a second. Taps may be 0.2 to 0.7 s apart (2 a second works; 0.7.6 took up to 0.45 s).
+  Replayed through his six recordings: his three taps count as three; plain head movement and putting the glasses on
+  (two sharp jolts 134 ms apart) give nothing. Every jolt over 0.15 g goes in the log with its peak, jump, length,
+  the stillness before it, the head's turn, the gap to the last tap, and why it did or didn't count (at most 30 lines
+  a minute). Quick Access says the cadence. Not yet tried with real taps on glasses; a few steps of walking with
+  sharp heel strikes (made-up ones, 0.7 g over 20 ms) count as taps, so it stays off at first.
+- **Use the glasses' buttons: the wait, and a USB reset.** It worked for him, but the buttons came back only 1 min
+  20 s, 1 min 45 s and 3 min 25 s after turning it on: the glasses keep the mode Pocket XR's handshake puts them in
+  until they reset themselves. No public driver documents a command that ends that mode (xrealAirLinuxDriver's list
+  has none, and its close only closes the file), so none is sent. Pocket XR now tries a USB reset of the glasses when
+  letting go (as unplugging them), and logs whether it was allowed: udev's default gives the user no write access to
+  the glasses' USB device, so it may well be refused on SteamOS. The switch stays on when the glasses come back after
+  the reset. Its text now gives his steps: set the mode to Off, turn this on, wait for the glasses to blink off and on
+  (up to a few minutes), adjust them, turn this off, then pick a mode. Checked by tests; the reset is not yet tried on
+  a Deck (whether SteamOS lets the user do it was not checked: Mike's Deck was off).
+
 ## 0.7.6 (23 Nov 2026)
 
 From Pierre Zammit's report and logs on 0.7.5 (Steam Deck LCD, XREAL XBX A01+). Thanks, Pierre.
