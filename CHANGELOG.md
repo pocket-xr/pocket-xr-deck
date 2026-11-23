@@ -1,6 +1,6 @@
 # Changes
 
-## 0.7.7 (not released yet)
+## 0.7.7 (23 Nov 2026)
 
 From Pierre Zammit's report and logs on 0.7.6 (Steam Deck LCD, XREAL XBX A01+). Thanks, Pierre.
 
@@ -24,7 +24,14 @@ From Pierre Zammit's report and logs on 0.7.6 (Steam Deck LCD, XREAL XBX A01+). 
   the glasses' USB device, so it may well be refused on SteamOS. The switch stays on when the glasses come back after
   the reset. Its text now gives his steps: set the mode to Off, turn this on, wait for the glasses to blink off and on
   (up to a few minutes), adjust them, turn this off, then pick a mode. Checked by tests; the reset is not yet tried on
-  a Deck (whether SteamOS lets the user do it was not checked: Mike's Deck was off).
+  a Deck.
+- **The USB permission for that reset.** The installer offers a udev rule, `/etc/udev/rules.d/71-pocket-xr-usb.rules`,
+  that lets whoever sits at the Deck (uaccess) reset XREAL (3318) and VITURE (35ca) glasses over USB, and no other
+  USB device. It asks with your password (sudo), as for the Quick Access panel, says why, reloads udev and asks you
+  to unplug and plug in the glasses. Saying no keeps the rest working: the buttons then come back when the glasses
+  reset themselves, and the log says the reset needs the rule. It is in /etc, which SteamOS keeps across its updates
+  (not yet seen across one); uninstall.sh offers to remove it, and the older hidraw rule (70-pocket-xr.rules). Tried
+  by a test install with a stand-in sudo; not yet on a Deck.
 
 ## 0.7.6 (23 Nov 2026)
 

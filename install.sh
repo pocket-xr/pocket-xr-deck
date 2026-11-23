@@ -143,6 +143,30 @@ if [ -z "$STEAMOS" ] && [ ! -f "$UDEV_RULE" ] && [ -d /etc/udev/rules.d ]; then
   fi
 fi
 
+# "Use the glasses' buttons" in Gaming Mode resets XREAL glasses over USB, as unplugging them, so they give their
+# buttons back at once rather than minutes later (a tester, Pierre Zammit, 23 Nov 2026). That needs write access to the
+# glasses' USB device, which udev gives only to root: this rule gives it to whoever sits at the computer (uaccess),
+# for XREAL (3318) and VITURE (35ca) glasses only. It lives in /etc, which SteamOS keeps across its updates.
+USB_RULE="${POCKET_XR_USB_RULE:-/etc/udev/rules.d/71-pocket-xr-usb.rules}"  # the variable: for tests
+USB_RULE_TEXT='# Pocket XR: the seated user may reset XREAL and VITURE glasses over USB ("Use the glasses'"'"' buttons")
+SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ATTR{idVendor}=="3318", TAG+="uaccess"
+SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ATTR{idVendor}=="35ca", TAG+="uaccess"'
+USB_RULE_STATE=""
+if [ -d /etc/udev/rules.d ] && [ "$(cat "$USB_RULE" 2>/dev/null)" != "$USB_RULE_TEXT" ]; then
+  echo "\"Use the glasses' buttons\" (Gaming Mode) resets XREAL glasses over USB so their buttons work again at once."
+  echo "That needs permission for your user to reset XREAL and VITURE glasses only (a udev rule in $USB_RULE)."
+  if ask "Add it now (sudo, your password)?"; then
+    if printf '%s\n' "$USB_RULE_TEXT" | sudo tee "$USB_RULE" >/dev/null \
+       && sudo udevadm control --reload-rules && sudo udevadm trigger --subsystem-match=usb --action=change; then
+      USB_RULE_STATE=added
+    else
+      USB_RULE_STATE=failed
+    fi
+  else
+    USB_RULE_STATE=skipped
+  fi
+fi
+
 # Keyboard shortcuts for what the Deck's back buttons do, on GNOME (a computer has no back buttons). Added once,
 # beside any custom shortcuts already there; uninstall.sh takes them out again.
 SHORTCUTS=""
@@ -317,6 +341,15 @@ if [ "$HOST" = replaced ]; then
   echo "are switched off (flatpak uninstall com.hayeco.pocketxr.PCScreens removes it)."
 elif [ -n "$HOST" ]; then
   echo "Your phone's Pocket XR can show this Deck's screens (PC screens) while it is in Desktop Mode."
+fi
+if [ "$USB_RULE_STATE" = added ]; then
+  echo "Added $USB_RULE. If your glasses are plugged in, unplug them and plug them back in."
+elif [ "$USB_RULE_STATE" = failed ]; then
+  echo "The USB permission was not added. \"Use the glasses' buttons\" still works, but the buttons come back only when"
+  echo "the glasses reset themselves (up to a few minutes). Run Update Pocket XR again to add it."
+elif [ "$USB_RULE_STATE" = skipped ]; then
+  echo "Skipped the USB permission. \"Use the glasses' buttons\" still works, but the buttons come back only when the"
+  echo "glasses reset themselves (up to a few minutes). Run Update Pocket XR again to add it."
 fi
 if [ "$APP" = reopened ]; then
   echo "Pocket XR was open: it was closed and opened again with the new version."
