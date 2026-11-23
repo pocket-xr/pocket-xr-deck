@@ -1,6 +1,6 @@
 # Changes
 
-## 0.7.8 (not released yet)
+## 0.7.8 (23 Nov 2026)
 
 From Pierre Zammit's report and log on 0.7.7 (Steam Deck LCD, XREAL XBX A01+). Thanks, Pierre.
 
