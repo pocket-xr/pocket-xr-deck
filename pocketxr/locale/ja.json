@@ -209,7 +209,7 @@
   "Stick clicks": "スティック押し込み",
   "In every game: hold L3 to recentre, hold R3 to switch view, click L3 three times to calibrate (lay the glasses down within 5 seconds).": "どのゲームでも：L3 長押しで正面に戻す、R3 長押しでビュー切り替え、L3 を3回押すとキャリブレーション（5秒以内にグラスを置いてください）。",
   "Taps on the glasses": "グラスをタップ",
-  "Tap the glasses' frame twice to recentre, three times to switch view. New: say if it misses taps or reacts on its own.": "グラスのフレームを2回タップで正面に戻す、3回でビュー切り替え。新機能：タップを取りこぼしたり勝手に反応したりしたら教えてください。",
   "Use the glasses' buttons": "グラスのボタンを使う",
-  "Lets go of the glasses so their own buttons work (brightness, for example). Head tracking pauses until you turn this off.": "グラス自身のボタン（明るさなど）が使えるようにグラスを解放します。オフにするまでヘッドトラッキングは止まります。"
+  "Tap the glasses' frame twice to recentre, three times to switch view, at about 2 taps a second (1.5 to 5 a second work). Hold your head still while you tap. New: say if it misses taps or reacts on its own.": "グラスのフレームを2回タップで正面に戻す、3回でビュー切り替え。1秒に約2回のペースで（1秒に1.5〜5回なら反応します）。タップ中は頭を動かさないでください。新機能：タップを取りこぼしたり勝手に反応したりしたら教えてください。",
+  "Lets go of the glasses so their own buttons work (brightness, for example). Head tracking pauses until you turn this off. Set the mode to Off, turn this on and wait for the glasses to blink off and on (up to a few minutes), adjust them, turn this off, then pick a mode.": "グラス自身のボタン（明るさなど）が使えるようにグラスを解放します。オフにするまでヘッドトラッキングは止まります。モードをオフにしてからこれをオンにし、グラスが一度消えてまた点くのを待ち（数分かかることも）、調整したらこれをオフにして、モードを選んでください。"
 }
