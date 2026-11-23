@@ -180,6 +180,11 @@ jolts during fast head turns and the slower ones from walking. Off at first: tur
 Access. Asked for by Pierre Zammit. Checked by tests and against his recorded head movement (no taps found); not yet
 tried with real taps on glasses.
 
+**Use the glasses' buttons**, in Quick Access (XREAL Air family, including the XBX): Pocket XR lets go of the glasses
+until you turn it off again, so their own buttons can work, for brightness say. Head tracking pauses meanwhile.
+Asked for by Pierre Zammit, whose XBX's buttons don't work while Pocket XR reads the glasses. Not yet tried with
+glasses, so whether the buttons come back this way is not known yet.
+
 Good to know:
 
 - The panel needs a recent Decky Loader (3.3 or newer). An older one may not show up in Quick Access at all with

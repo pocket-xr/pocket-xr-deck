@@ -1,5 +1,33 @@
 # Changes
 
+## 0.7.6 (23 Nov 2026)
+
+From Pierre Zammit's report and logs on 0.7.5 (Steam Deck LCD, XREAL XBX A01+). Thanks, Pierre.
+
+- **An update now restarts what is running.** His logs say 0.7.5 and the Quick Access panel 0.7.5, but the Gaming
+  Mode service kept running 0.7.3's code all afternoon (its log lines are 0.7.3's), so 0.7.4's and 0.7.5's changes
+  never ran for him. He updated in Gaming Mode: the installer restarted Decky (the panel came up as 0.7.5) but its
+  restart of the service did not take, and it hid the error. Now:
+  - the installer restarts the service without Steam's own libraries in the way (what a program started from Steam
+    passes on), and says if it still can't, with what to do (restart the Deck);
+  - the service checks every 5 seconds whether a new Pocket XR was installed over it, and starts again to load it;
+  - the service logs its version when it starts, and Quick Access shows a warning when the service and the panel are
+    different versions;
+  - the installer closes Pocket XR's desktop app if it is open, and opens it again in Desktop Mode.
+  Why the old restart failed is not known for sure: its error was hidden. The new restart was tried by tests and a
+  test install (not on a Deck); the service's own restart by tests.
+- **Use the glasses' buttons**, a switch in Quick Access: Pocket XR lets go of the glasses (no motion stream, no
+  heartbeat, every file on them closed) until it is turned off, so their own buttons can work, for brightness say.
+  Head tracking pauses meanwhile. Checked by tests with stand-in glasses; whether his glasses' buttons come back this
+  way is not known yet.
+- **Pointer in Nested Desktop.** Nested Desktop runs Plasma as a Wayland window inside gamescope, and no X screen
+  sees its pointer: gamescope names a Wayland display as the one with the mouse then, and 0.7.5 took the last moved X
+  screen instead, so its pointer could be anywhere. Now Pocket XR's pointer is hidden while a Wayland window has the
+  mouse, and the log says so. The pointer's maths already take the curve and the size into account (it is drawn
+  where the moved picture shows that point). His logs were from 0.7.3's code, so 0.7.5's pointer measured across the
+  game's window has not been tried yet: a log from 0.7.6 will tell. Written from gamescope's source and checked by
+  tests; not yet tried on a Deck.
+
 ## 0.7.5 (23 Nov 2026)
 
 From Pierre Zammit's report and logs on 0.7.4 and 0.7.3 (Steam Deck LCD, XREAL XBX A01+). Thanks, Pierre.

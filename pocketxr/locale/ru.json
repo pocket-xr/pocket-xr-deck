@@ -209,5 +209,7 @@
   "Stick clicks": "Нажатия стиков",
   "In every game: hold L3 to recentre, hold R3 to switch view, click L3 three times to calibrate (lay the glasses down within 5 seconds).": "В любой игре: удерживайте L3, чтобы отцентрировать, R3, чтобы сменить вид, нажмите L3 три раза для калибровки (положите очки в течение 5 секунд).",
   "Taps on the glasses": "Касания очков",
-  "Tap the glasses' frame twice to recentre, three times to switch view. New: say if it misses taps or reacts on its own.": "Коснитесь оправы очков дважды, чтобы отцентрировать, трижды — чтобы сменить вид. Новое: сообщите, если касания не срабатывают или срабатывают сами."
+  "Tap the glasses' frame twice to recentre, three times to switch view. New: say if it misses taps or reacts on its own.": "Коснитесь оправы очков дважды, чтобы отцентрировать, трижды — чтобы сменить вид. Новое: сообщите, если касания не срабатывают или срабатывают сами.",
+  "Use the glasses' buttons": "Кнопки очков",
+  "Lets go of the glasses so their own buttons work (brightness, for example). Head tracking pauses until you turn this off.": "Отпускает очки, чтобы работали их собственные кнопки (например, яркость). Отслеживание головы приостанавливается, пока вы это не выключите."
 }

@@ -209,5 +209,7 @@
   "Stick clicks": "스틱 누르기",
   "In every game: hold L3 to recentre, hold R3 to switch view, click L3 three times to calibrate (lay the glasses down within 5 seconds).": "모든 게임에서: L3를 길게 누르면 가운데로, R3를 길게 누르면 보기 전환, L3를 세 번 누르면 보정해요(5초 안에 안경을 내려놓으세요).",
   "Taps on the glasses": "안경 탭",
-  "Tap the glasses' frame twice to recentre, three times to switch view. New: say if it misses taps or reacts on its own.": "안경테를 두 번 두드리면 가운데로, 세 번 두드리면 보기를 바꿔요. 새 기능: 탭을 놓치거나 저절로 반응하면 알려 주세요."
+  "Tap the glasses' frame twice to recentre, three times to switch view. New: say if it misses taps or reacts on its own.": "안경테를 두 번 두드리면 가운데로, 세 번 두드리면 보기를 바꿔요. 새 기능: 탭을 놓치거나 저절로 반응하면 알려 주세요.",
+  "Use the glasses' buttons": "안경 버튼 사용",
+  "Lets go of the glasses so their own buttons work (brightness, for example). Head tracking pauses until you turn this off.": "안경 자체 버튼(예: 밝기)이 작동하도록 안경을 놓아줘요. 이걸 끌 때까지 머리 추적은 멈춰요."
 }

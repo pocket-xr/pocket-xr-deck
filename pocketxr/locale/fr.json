@@ -209,5 +209,7 @@
   "Stick clicks": "Clics des sticks",
   "In every game: hold L3 to recentre, hold R3 to switch view, click L3 three times to calibrate (lay the glasses down within 5 seconds).": "Dans tous les jeux : maintenez L3 pour recentrer, R3 pour changer de vue, cliquez trois fois sur L3 pour calibrer (posez les lunettes dans les 5 secondes).",
   "Taps on the glasses": "Tapes sur les lunettes",
-  "Tap the glasses' frame twice to recentre, three times to switch view. New: say if it misses taps or reacts on its own.": "Tapez deux fois sur la monture pour recentrer, trois fois pour changer de vue. Nouveau : dites-nous s'il rate des tapes ou réagit tout seul."
+  "Tap the glasses' frame twice to recentre, three times to switch view. New: say if it misses taps or reacts on its own.": "Tapez deux fois sur la monture pour recentrer, trois fois pour changer de vue. Nouveau : dites-nous s'il rate des tapes ou réagit tout seul.",
+  "Use the glasses' buttons": "Utiliser les boutons des lunettes",
+  "Lets go of the glasses so their own buttons work (brightness, for example). Head tracking pauses until you turn this off.": "Libère les lunettes pour que leurs propres boutons fonctionnent (la luminosité, par exemple). Le suivi de la tête est en pause jusqu'à ce que vous désactiviez ceci."
 }

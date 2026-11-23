@@ -26,6 +26,10 @@ moved last, and a tester's log (Pierre Zammit, 22 Nov 2026) flips between :0 192
 running, so the pointer could be placed by the wrong screen's size. gamescope names the screen that has the mouse in
 GAMESCOPE_MOUSE_FOCUS_DISPLAY on :0's root window (steamcompmgr.cpp), so that one is taken when it is set; the last
 moved one otherwise. gamescope stores the name as 32 bit items, so the name's first 4 bytes are in the first item.
+When the app with the mouse is a Wayland window (Nested Desktop runs Plasma as one), gamescope names its Wayland
+display there (gamescope-0) instead, and no X screen sees that pointer: 0.7.5 then took the last moved X screen, so
+its pointer was somewhere else. Now Pocket XR's pointer is hidden then (a tester, Pierre Zammit, 23 Nov 2026, saw it
+off in Nested Desktop). Written from gamescope's source; not yet tried on a Deck.
 
 Which part of it: the effect runs on gamescope's first layer, the focused app's window, not the whole X screen, so a
 game whose window is smaller than its X screen (a 1280x720 game on the Deck's 1280x800, say) put 0.7.4's pointer off.
@@ -146,6 +150,16 @@ def display_names(root="/tmp/.X11-unix"):
     return [":" + os.path.basename(p)[1:] for p in sorted(glob.glob(os.path.join(root, "X[0-9]*")))]
 
 
+def wayland_focus(items):
+    """Whether gamescope's GAMESCOPE_MOUSE_FOCUS_DISPLAY names a Wayland display (gamescope-0, say) rather than an X
+    one: the app with the mouse is a Wayland window (Nested Desktop, for example), whose pointer no X screen shows.
+    Only the name's first 4 bytes are read (see the module's docstring)."""
+    if not items:
+        return False
+    raw = (int(items[0]) & 0xFFFFFFFF).to_bytes(4, "little").split(b"\0")[0]
+    return bool(raw) and not raw.startswith(b":")
+
+
 def focus_name(items):
     """The X display name in gamescope's GAMESCOPE_MOUSE_FOCUS_DISPLAY (a list of 32 bit items), or None."""
     if not items:
@@ -234,8 +248,9 @@ class Screen:
                 self.x11.XFree(data)
 
     def mouse_focus(self):
-        """The display gamescope says has the mouse, or None."""
-        return focus_name(self._items("GAMESCOPE_MOUSE_FOCUS_DISPLAY"))
+        """(the X display gamescope says has the mouse or None, whether that is a Wayland window instead)."""
+        items = self._items("GAMESCOPE_MOUSE_FOCUS_DISPLAY")
+        return focus_name(items), wayland_focus(items)
 
     def focused_window(self):
         """(display name, X window) of the window gamescope shows as the app (its first layer), or (None, 0)."""
@@ -313,6 +328,7 @@ def main(argv=None):
     unopened = set()
     focus = None
     app_display, app_win, area = None, 0, None
+    in_wayland, said_wayland = False, False
     while True:
         now = time.monotonic()
         if now >= next_open:
@@ -343,7 +359,12 @@ def main(argv=None):
         if screens:
             if now >= next_cursor:
                 first = screens[min(screens, key=lambda n: int(n[1:]) if n[1:].isdigit() else 99)]
-                focus = first.mouse_focus()
+                focus, in_wayland = first.mouse_focus()
+                if in_wayland != said_wayland:
+                    said_wayland = in_wayland
+                    print("focus the app with the mouse is a Wayland window: no X screen has its pointer, so "
+                          "Pocket XR's pointer is hidden" if in_wayland else "focus the app with the mouse is on an "
+                          "X screen", flush=True)
                 app_display, app_win = first.focused_window()
             s = pick(screens, focus)
             if s is not current:
@@ -351,7 +372,7 @@ def main(argv=None):
                 print(f"display {s.name} {s.size[0]}x{s.size[1]}", flush=True)
             if now >= next_cursor:
                 next_cursor = now + CURSOR_CHECK_S
-                shown = s.shown()
+                shown = s.shown() and not in_wayland
                 new_area = s.window_area(app_win) if (app_win and app_display == s.name) else None
                 if new_area != area:
                     area = new_area

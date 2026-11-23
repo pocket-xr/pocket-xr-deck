@@ -209,5 +209,7 @@
   "Stick clicks": "Clic delle levette",
   "In every game: hold L3 to recentre, hold R3 to switch view, click L3 three times to calibrate (lay the glasses down within 5 seconds).": "In ogni gioco: tieni premuto L3 per ricentrare, R3 per cambiare vista, clicca L3 tre volte per calibrare (appoggia gli occhiali entro 5 secondi).",
   "Taps on the glasses": "Tocchi sugli occhiali",
-  "Tap the glasses' frame twice to recentre, three times to switch view. New: say if it misses taps or reacts on its own.": "Tocca la montatura degli occhiali due volte per ricentrare, tre volte per cambiare vista. Novità: segnala se perde dei tocchi o reagisce da solo."
+  "Tap the glasses' frame twice to recentre, three times to switch view. New: say if it misses taps or reacts on its own.": "Tocca la montatura degli occhiali due volte per ricentrare, tre volte per cambiare vista. Novità: segnala se perde dei tocchi o reagisce da solo.",
+  "Use the glasses' buttons": "Usa i tasti degli occhiali",
+  "Lets go of the glasses so their own buttons work (brightness, for example). Head tracking pauses until you turn this off.": "Rilascia gli occhiali perché funzionino i loro tasti (la luminosità, per esempio). Il tracciamento della testa si ferma finché non lo disattivi."
 }
