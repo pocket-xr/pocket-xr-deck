@@ -16,7 +16,7 @@ HZ = 1000.0  # the XBX sends about 1000 reports a second (his imu-raw.log)
 
 
 def run(seconds, accel=lambda t: (0.0, 0.0, 0.0), gyro=lambda t: (0.0, 0.0, 0.0), taps_at=(), tap_g=2.0,
-        tap_s=0.004, t0=100.0, ring_g=0.1, lines=None):
+        tap_s=0.004, t0=100.0, ring_g=0.1, lines=None, ring_s=0.04):
     """Feeds Taps a head at rest (gravity along y) plus accel(t) (in g) and gyro(t) (deg/s), with a tap of tap_g for
     tap_s at each time in taps_at, ringing down after it; returns the runs it reported."""
     got = []
@@ -29,7 +29,7 @@ def run(seconds, accel=lambda t: (0.0, 0.0, 0.0), gyro=lambda t: (0.0, 0.0, 0.0)
         for at in taps_at:
             if at <= t < at + tap_s:
                 az += tap_g
-            elif at + tap_s <= t < at + 0.04:  # the frame ringing on after the tap
+            elif at + tap_s <= t < at + ring_s:  # the frame ringing on after the tap
                 az += ring_g * math.sin((t - at) * 2 * math.pi * 150)
         g = tuple(math.radians(x) for x in gyro(t))
         tp.feed(t0 + t, g, (ax * T.G, ay * T.G, az * T.G))
@@ -50,7 +50,10 @@ class Taps(unittest.TestCase):
 
     def test_soft_or_long_jolts_are_not_taps(self):
         self.assertEqual(run(2.5, taps_at=(1.0, 1.25), tap_g=0.2), [])
-        self.assertEqual(run(2.5, taps_at=(1.0, 1.25), tap_s=0.12), [])  # a push, not a tap
+        def push(t):  # a push: a smooth 2 g swell over 250 ms, twice
+            p = t - (1.0 if t < 1.6 else 1.6)
+            return (0.0, 0.0, 2.0 * math.sin(math.pi * p / 0.25) if 0.0 <= p < 0.25 else 0.0)
+        self.assertEqual(run(2.5, accel=push), [])
 
     def test_the_first_half_second_is_skipped(self):
         # his recordings start with one junk report (3.5 g): it is not a tap
@@ -102,6 +105,10 @@ class SoftTaps(unittest.TestCase):
         # the frame ringing at 0.3 g for 40 ms after each tap: one tap each, and the second still counts
         self.assertEqual(run(3.0, taps_at=(1.0, 1.25), tap_g=0.4, ring_g=0.3), [2])
         self.assertEqual(run(3.0, taps_at=(1.0, 1.3, 1.6), tap_g=0.4, ring_g=0.3), [3])
+
+    def test_firm_taps_ringing_for_100_ms(self):
+        # 0.7.7: his firm taps lasted up to 101 ms with their swing, and the third of three was left out
+        self.assertEqual(run(3.5, taps_at=(1.0, 1.43, 1.86), tap_g=3.0, ring_g=0.6, ring_s=0.1), [3])
 
     def test_too_close_together(self):
         # putting the glasses on gave two sharp jolts 134 ms apart: not a run

@@ -1,5 +1,31 @@
 # Changes
 
+## 0.7.8 (not released yet)
+
+From Pierre Zammit's report and log on 0.7.7 (Steam Deck LCD, XREAL XBX A01+). Thanks, Pierre.
+
+- **Triple taps: firm taps count.** Double taps worked; triple taps mostly didn't. His firm taps (0.8 to 5 g)
+  lasted 61 to 101 ms with the frame's swing after them, and the third taps that were left out were 86, 100 and
+  101 ms long, over 0.7.7's 80 ms. A tap may now last up to 150 ms. His recordings of head movement and of putting
+  the glasses on still give no gesture (even at 200 ms). One run reached four taps and did nothing: that was four
+  real taps (all firm and sharp, about 440 ms apart), not an echo; each tap's echo is a small slow rebound 95 to 150
+  ms later, which already doesn't count. That stays as it is. The jolt log allows 120 lines a minute (30 before ran
+  out, so two gestures had no lines before them). Checked by tests and his recordings; not yet tried on glasses.
+- **The USB reset is gone.** In his log the reset went through (with 0.7.7's USB permission) but the glasses carried
+  on, and their buttons came back 2 min 40 s later as before: a reset leaves the glasses powered, so their
+  controller keeps the mode Pocket XR's handshake put it in. Deauthorising them in sysfs also leaves them powered;
+  cutting the port's power isn't something most USB hubs can do, and on the Deck's USB-C port the power comes from
+  its USB Power Delivery controller. No public driver documents a command that ends that mode. The installer no
+  longer offers the USB permission, says it's unused if it's there, and uninstall.sh still removes it. "Use the
+  glasses' buttons" stays, with the steps (wait for the glasses to blink off and on).
+- **Glasses brightness in Quick Access.** Instead of letting go of the glasses, Pocket XR can set their brightness
+  while it has them, through their controller: Monado's XREAL Air driver (BSL-1.0) reads it with message 0x03 and
+  sets it with 0x04 (one byte, 0 to 7), in the same frames Pocket XR already sends the XBX. A slider in Quick Access
+  shows it while the controller is awake (the XBX's heartbeat). The glasses' own button presses (message 0x6C05) are
+  logged, and when one says brightness up or down with the new level, Pocket XR sets that level, in case the glasses
+  only report the press. Monado wrote these for the Air, Air 2 and Air 2 Pro; whether the XBX takes them is not
+  known yet: the log says what it answers.
+
 ## 0.7.7 (23 Nov 2026)
 
 From Pierre Zammit's report and logs on 0.7.6 (Steam Deck LCD, XREAL XBX A01+). Thanks, Pierre.

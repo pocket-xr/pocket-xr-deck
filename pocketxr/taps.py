@@ -18,6 +18,11 @@ for SETTLE_S (the swing after a tap is part of the same jolt). It counts as a ta
 - QUIET_BEFORE_S passed since the last jolt ended,
 - the head turned slower than TURN_MAX on average over the 150 ms before it.
 
+With 0.7.7 his firm taps (0.8 to 5 g) lasted 61 to 101 ms, and three of them were left out as longer than 0.7.7's
+80 ms; so SPIKE_MAX_S is 150 ms. His recordings of head movement and of putting the glasses on give no gesture even
+at 200 ms. Each tap is followed 95 to 150 ms later by a small slow rebound (0.15 to 0.26 g, not sharp), which is not a
+tap; a run of four of his (four firm taps about 440 ms apart) was four real taps, so it does nothing, as meant.
+
 Taps TAP_GAP_MIN_S to TAP_GAP_MAX_S apart make a run: from about 1.5 to 5 taps a second, so 2 a second works. His
 taps were about 320 ms apart. Putting the glasses on gave two sharp jolts 134 ms apart (his 16:05 recording): too
 close together for a run. Once
@@ -35,7 +40,7 @@ TAP_G = 0.25          # a tap's peak, away from the 30 ms average
 JERK_G = 0.15         # a tap's jump within JERK_S
 JERK_S = 0.003
 SETTLE_S = 0.008      # a jolt ends after this long under LOG_G
-SPIKE_MAX_S = 0.08
+SPIKE_MAX_S = 0.15
 QUIET_BEFORE_S = 0.06
 TURN_MAX = math.radians(60)  # rad/s
 TAP_GAP_MIN_S = 0.2
@@ -44,7 +49,7 @@ RUN_END_S = 0.75
 WARMUP_S = 0.5
 AVG_S = 0.03
 TURN_AVG_S = 0.15
-LOG_MAX = 30          # jolt lines a minute
+LOG_MAX = 120         # jolt lines a minute
 
 
 class Taps:

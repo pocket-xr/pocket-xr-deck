@@ -27,6 +27,10 @@ type Status = {
   sticks?: boolean; // the Deck's stick clicks do Pocket XR's jobs (hold L3, hold R3, L3 three times)
   taps?: boolean; // taps on the glasses: two recentre, three switch view
   glasses_buttons?: boolean | null; // let go of the glasses so their own buttons work; null: not offered
+  brightness?: number | null; // the glasses' brightness, 0 to brightness_max, while Pocket XR has them; null: hidden
+  brightness_max?: number;
+  brightness_label?: string;
+  brightness_line?: string;
   glasses_buttons_label?: string;
   glasses_buttons_line?: string;
   taps_label?: string;
@@ -243,6 +247,21 @@ function Content() {
             <div style={{ fontSize: "12px", lineHeight: "16px", color: "#8b929a", marginTop: "6px" }}>{st.keys_line}</div>
           ) : null}
         </PanelSectionRow>
+        {st?.brightness_label && st.brightness !== null && st.brightness !== undefined ? (
+          <PanelSectionRow>
+            <SliderField
+              label={st.brightness_label}
+              description={st.brightness_line}
+              value={st.brightness}
+              min={0}
+              max={st.brightness_max || 7}
+              step={1}
+              showValue
+              disabled={!ready}
+              onChange={(v: number) => send({ op: "set_brightness", level: v })}
+            />
+          </PanelSectionRow>
+        ) : null}
         {st?.glasses_buttons_label && st.glasses_buttons !== null && st.glasses_buttons !== undefined ? (
           <PanelSectionRow>
             <ToggleField

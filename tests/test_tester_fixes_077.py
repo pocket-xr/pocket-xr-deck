@@ -25,105 +25,91 @@ class TapValues(unittest.TestCase):
         self.assertGreater(T.TAP_GAP_MIN_S, 0.134)  # putting the glasses on: two jolts 134 ms apart
 
 
-class UsbReset(unittest.TestCase):
-    def test_usb_node_from_the_interface(self):
-        d = tempfile.mkdtemp()
-        dev = os.path.join(d, "usb1", "1-1")
-        os.makedirs(os.path.join(dev, "1-1:1.0"))
-        with open(os.path.join(dev, "busnum"), "w") as f:
-            f.write("1\n")
-        with open(os.path.join(dev, "devnum"), "w") as f:
-            f.write("7\n")
-        self.assertEqual(hidimu.usb_node(os.path.join(dev, "1-1:1.0")), "/dev/bus/usb/001/007")
-        self.assertIsNone(hidimu.usb_node(os.path.join(d, "nothing", "1-1:1.0")))
+class NoUsbReset(unittest.TestCase):
+    """0.7.7's USB reset went through on his XBX but the glasses kept their mode (Pierre Zammit, 23 Nov 2026): gone."""
 
-    def test_reset_said_or_refused(self):
-        calls = []
+    def test_reset_and_rule_are_gone(self):
+        src = open(os.path.join(ROOT, "pocketxr", "hidimu.py"), encoding="utf-8").read()
+        self.assertNotIn("USBDEVFS_RESET =", src)
+        self.assertNotIn("_reset_for_buttons", src)
+        with open(os.path.join(ROOT, "install.sh"), encoding="utf-8") as f:
+            sh = f.read()
+        self.assertNotIn('ENV{DEVTYPE}=="usb_device"', sh)
+        self.assertNotIn("sudo udevadm trigger --subsystem-match=usb", sh)
+        self.assertIn("no longer uses the USB permission", sh)
+        with open(os.path.join(ROOT, "uninstall.sh"), encoding="utf-8") as f:
+            self.assertIn("71-pocket-xr-usb.rules", f.read())  # still removed on uninstall
 
-        def opener(path, flags):
-            calls.append((path, flags))
-            return os.open(os.devnull, os.O_WRONLY)
-        self.assertIsNone(hidimu.usb_reset("/dev/bus/usb/001/007", opener, lambda fd, req, arg: calls.append(req)))
-        self.assertEqual(calls, [("/dev/bus/usb/001/007", os.O_WRONLY), hidimu.USBDEVFS_RESET])
 
-        def refused(path, flags):
-            raise PermissionError(13, "Permission denied")
-        why = hidimu.usb_reset("/dev/bus/usb/001/007", refused, None)
-        self.assertEqual(why, "/dev/bus/usb/001/007 not writable (Permission denied)")
-        self.assertEqual(hidimu.USBDEVFS_RESET, (ord("U") << 8) | 20)  # _IO('U', 20)
+class Brightness(unittest.TestCase):
+    """Brightness through the MCU, as Monado's XREAL Air driver does (BSL-1.0)."""
 
-    def reader(self, result):
+    def frame(self, msg, data):
+        return hidimu.mcu_command(msg, bytes(data))
+
+    def reader(self):
         lines = []
         r = hidimu.AirReader(lambda *a: None, 0x0442, log=lines.append, nodes=lambda: [])
-        r.last_nodes = [(0, "/dev/hidraw4", 0x0442, "/sys/x/usb1/1-1/1-1:1.0")]
-        done = []
-        r._usb_reset = lambda node: done.append(node) or result
-        hidimu_node, hidimu.usb_node = hidimu.usb_node, (lambda iface: "/dev/bus/usb/001/007")
-        self.addCleanup(setattr, hidimu, "usb_node", hidimu_node)
-        return r, lines, done
+        r._mcu_running = lambda: True
+        return r, lines
 
-    def test_only_after_the_handshake(self):
-        r, lines, done = self.reader(None)
-        r._reset_for_buttons()
-        self.assertEqual(done, [])  # nothing was sent to the glasses, nothing to undo
-        r.handshake = True
-        r._reset_for_buttons()
-        self.assertEqual(done, ["/dev/bus/usb/001/007"])
-        self.assertIn("imu: glasses reset over USB (/dev/bus/usb/001/007), so their own buttons work again", lines)
-        self.assertFalse(r.handshake)
+    def test_frames_match_monados(self):
+        f = hidimu.mcu_command(hidimu.MCU_W_BRIGHTNESS, bytes([5]))
+        self.assertEqual(f[0], 0xFD)
+        self.assertEqual(f[5:7], (17 + 1).to_bytes(2, "little"))  # length
+        self.assertEqual(f[15:17], (0x04).to_bytes(2, "little"))  # message id
+        self.assertEqual(f[17:22], bytes(5))  # reserved
+        self.assertEqual(f[22:], bytes([5]))
+        self.assertEqual(hidimu.mcu_parse(f), (hidimu.MCU_W_BRIGHTNESS, bytes([5])))
+        self.assertIsNone(hidimu.mcu_parse(bytes([1, 2]) + bytes(40)))
+        self.assertEqual((hidimu.MCU_R_BRIGHTNESS, hidimu.MCU_W_BRIGHTNESS, hidimu.MCU_P_BUTTON),
+                         (0x03, 0x04, 0x6C05))
 
-    def test_refused_is_logged(self):
-        r, lines, done = self.reader("/dev/bus/usb/001/007 not writable (Permission denied)")
-        r.handshake = True
-        r._reset_for_buttons()
-        self.assertTrue(any(x.startswith("imu: no USB reset of the glasses: /dev/bus/usb/001/007 not writable")
-                            and "up to a few minutes" in x for x in lines), lines)
+    def test_read_set_and_answers(self):
+        r, lines = self.reader()
+        r._mcu_frame(self.frame(hidimu.MCU_R_BRIGHTNESS, [0, 4]))
+        self.assertEqual(r.brightness, 4)
+        self.assertTrue(r.set_brightness(9))  # clamped
+        self.assertEqual(r.brightness, 7)
+        self.assertEqual(hidimu.mcu_parse(r._mcu_out[-1]), (hidimu.MCU_W_BRIGHTNESS, bytes([7])))
+        r._mcu_frame(self.frame(hidimu.MCU_W_BRIGHTNESS, [0]))
+        r._mcu_frame(self.frame(hidimu.MCU_W_BRIGHTNESS, [1]))
+        self.assertIn("imu: the glasses' brightness is 4 of 7", lines)
+        self.assertIn("imu: brightness set", lines)
+        self.assertTrue(any(x.startswith("imu: brightness not set") for x in lines), lines)
 
-    def test_new_nodes_mean_no_handshake_yet(self):
+    def test_not_while_the_mcu_is_closed(self):
         r = hidimu.AirReader(lambda *a: None, 0x0442, log=lambda x: None, nodes=lambda: [])
-        r.handshake = True
-        r.last_nodes = [(0, "/dev/hidraw4", 0x0442, "/sys/a")]
-        r.stop = True  # _find stops at once
-        r._find([(0, "/dev/hidraw9", 0x0442, "/sys/a")])
-        self.assertFalse(r.handshake)
+        self.assertFalse(r.set_brightness(3))
+        self.assertEqual(r._mcu_out, [])
+
+    def test_the_glasses_buttons_are_logged_and_their_brightness_applied(self):
+        r, lines = self.reader()
+        data = [2, 0, 0, 0, hidimu.BUTTON_BRIGHTNESS_UP, 0, 0, 0, 5]
+        r._mcu_frame(self.frame(hidimu.MCU_P_BUTTON, data))
+        self.assertIn("imu: glasses button 2, action 6, value 5", lines)
+        self.assertEqual(r.brightness, 5)
+        self.assertEqual(hidimu.mcu_parse(r._mcu_out[-1]), (hidimu.MCU_W_BRIGHTNESS, bytes([5])))
+        r._mcu_out.clear()
+        r._mcu_frame(self.frame(hidimu.MCU_P_BUTTON, [1, 0, 0, 0, 1, 0, 0, 0, 1]))  # display toggle: logged only
+        self.assertEqual(r._mcu_out, [])
+
+    def test_asked_for_when_the_heartbeat_starts(self):
+        src = open(os.path.join(ROOT, "pocketxr", "hidimu.py"), encoding="utf-8").read()
+        self.assertIn("self._mcu_out.append(mcu_command(MCU_R_BRIGHTNESS))", src)
+
+    def test_quick_access(self):
+        with open(os.path.join(ROOT, "decky", "src", "index.tsx"), encoding="utf-8") as f:
+            self.assertIn('op: "set_brightness"', f.read())
+        for lang in ("ko", "ja", "zh_CN", "zh_TW", "es", "pt_BR", "fr", "de", "it", "ru"):
+            with open(os.path.join(ROOT, "pocketxr", "locale", lang + ".json"), encoding="utf-8") as f:
+                self.assertIn("Glasses brightness", json.load(f), lang)
 
 
-class UsbRule(unittest.TestCase):
-    """The installer's udev rule that lets the seated user reset XREAL and VITURE glasses (Mike, 23 Nov 2026)."""
-
-    def read(self, name):
-        with open(os.path.join(ROOT, name), encoding="utf-8") as f:
-            return f.read()
-
-    def test_installer_offers_it_for_these_glasses_only(self):
-        sh = self.read("install.sh")
-        self.assertIn('/etc/udev/rules.d/71-pocket-xr-usb.rules', sh)
-        self.assertIn('SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ATTR{idVendor}=="3318", TAG+="uaccess"', sh)
-        self.assertIn('SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ATTR{idVendor}=="35ca", TAG+="uaccess"', sh)
-        self.assertEqual(sh.count('SUBSYSTEM=="usb"'), 2)  # no other USB devices in that rule
-        self.assertIn("sudo udevadm trigger --subsystem-match=usb --action=change", sh)
-        self.assertIn("unplug them and plug them back in", sh)
-        self.assertIn("Skipped the USB permission", sh)
-        self.assertIn(hidimu.USB_RULE, sh)
-
-    def test_uninstall_removes_it(self):
-        sh = self.read("uninstall.sh")
-        self.assertIn("/etc/udev/rules.d/71-pocket-xr-usb.rules", sh)
-        self.assertIn("sudo rm -f $RULES", sh)
-
-    def test_the_log_says_the_reset_needs_the_rule(self):
-        lines = []
-        r = hidimu.AirReader(lambda *a: None, 0x0442, log=lines.append, nodes=lambda: [])
-        r.last_nodes = [(0, "/dev/hidraw4", 0x0442, "/sys/x/usb1/1-1/1-1:1.0")]
-        r.handshake = True
-        r._usb_reset = lambda node: f"{node} not writable (Permission denied)"
-        saved = hidimu.usb_node, hidimu.USB_RULE
-        hidimu.usb_node, hidimu.USB_RULE = (lambda iface: "/dev/bus/usb/001/007"), "/nonexistent/71-pocket-xr-usb.rules"
-        try:
-            r._reset_for_buttons()
-        finally:
-            hidimu.usb_node, hidimu.USB_RULE = saved
-        self.assertTrue(any("the reset needs the USB permission the installer offers" in x for x in lines), lines)
+class FirmTaps(unittest.TestCase):
+    def test_his_firm_taps_fit(self):
+        self.assertGreaterEqual(T.SPIKE_MAX_S, 0.101)  # his longest firm tap with 0.7.7
+        self.assertLess(T.SPIKE_MAX_S, 0.25)
 
 
 class GamingSwitch(unittest.TestCase):

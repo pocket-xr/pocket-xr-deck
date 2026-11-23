@@ -50,43 +50,32 @@ AIR_XBX = frozenset({0x0440, 0x0442})
 # Letting go of the XBX for its own buttons (Gaming Mode's "Use the glasses' buttons"): with 0.7.6 his buttons came
 # back only 1 min 20 s to 3 min 25 s after the heartbeat stopped and the files closed, when the glasses reset
 # themselves. The handshake above puts the MCU in a mode it keeps until then. No public driver documents a command
-# that ends it (xrealAirLinuxDriver's list has none, and its close only closes the file), so none is sent. A USB reset
-# of the glasses (USBDEVFS_RESET, as unplugging and plugging them in) is tried instead; it needs write access to the
-# glasses' /dev/bus/usb node, which udev's default (root, 0664) does not give the user: the installer offers a rule
-# (USB_RULE, uaccess for XREAL and VITURE glasses only). Without it the reset is refused, and the log says so.
-USBDEVFS_RESET = 0x5514  # _IO('U', 20), linux/usbdevice_fs.h
-USB_RULE = "/etc/udev/rules.d/71-pocket-xr-usb.rules"  # install.sh's rule giving the seated user that access
+# that ends it, so none is sent. 0.7.7 tried a USB reset (USBDEVFS_RESET): on his A01+ it went through but the glasses
+# went on as before and their buttons came back 2 min 40 s later, so the reset is gone. A reset leaves the glasses
+# powered, so their controller keeps running; so does deauthorising them in sysfs.
+#
+# Brightness while Pocket XR has the glasses, from Monado's XREAL Air driver (xreal_air_hmd.c, Tobias Frisch,
+# BSL-1.0), whose control frames are the same as MCU frames here (mcu_command): R_BRIGHTNESS (0x03) answers status 0
+# and the level in its data's first two bytes, W_BRIGHTNESS (0x04) takes the level as one byte, 0 to 7. A button
+# press comes as P_BUTTON_PRESSED (0x6C05): data[0] the physical button, data[4] the action, data[8] the value; for
+# brightness up (6) and down (7) the value is the brightness after the press. Monado wrote it for the Air, Air 2 and
+# Air 2 Pro; whether the XBX takes the same messages is not known yet, so what it answers is logged.
+MCU_R_BRIGHTNESS = 0x03
+MCU_W_BRIGHTNESS = 0x04
+MCU_P_BUTTON = 0x6C05
+BUTTON_BRIGHTNESS_UP = 0x06
+BUTTON_BRIGHTNESS_DOWN = 0x07
+BRIGHTNESS_MAX = 7
 
 
-def usb_node(iface_sysfs):
-    """The /dev/bus/usb node of the USB device an interface (its sysfs path, ...-1-1:1.0) belongs to, or None."""
-    dev = os.path.dirname(iface_sysfs.rstrip("/"))
-    try:
-        with open(os.path.join(dev, "busnum")) as f:
-            bus = int(f.read())
-        with open(os.path.join(dev, "devnum")) as f:
-            num = int(f.read())
-    except (OSError, ValueError):
+def mcu_parse(frame):
+    """(message id, data) of an MCU frame, or None."""
+    frame = bytes(frame)
+    if len(frame) < 22 or frame[0] != MCU_HEAD:
         return None
-    return f"/dev/bus/usb/{bus:03d}/{num:03d}"
+    return struct.unpack_from("<H", frame, 15)[0], frame[22:]
 
 
-def usb_reset(node, opener=os.open, ioctl=None):
-    """Resets a USB device (as unplugging it). Returns None when done, else why not."""
-    if ioctl is None:
-        import fcntl  # Linux only
-        ioctl = fcntl.ioctl
-    try:
-        fd = opener(node, os.O_WRONLY)
-    except OSError as e:
-        return f"{node} not writable ({e.strerror or e})"
-    try:
-        ioctl(fd, USBDEVFS_RESET, 0)
-        return None
-    except OSError as e:
-        return f"reset of {node} failed ({e.strerror or e})"
-    finally:
-        os.close(fd)
 XBX_MCU = 0
 MCU_HEAD = 0xFD
 MCU_HEARTBEAT = 0x1A
@@ -341,10 +330,8 @@ class AirReader(_HidReader):
         # closed, until it is set back. A tester (Pierre Zammit, 23 Nov 2026) asked for this: his XBX's buttons
         # (brightness) don't work while Pocket XR reads the glasses.
         self.released = False
-        self.handshake = False  # the MCU handshake was sent to the glasses now attached
-        self.reset_done = False  # tried (or done) the USB reset for this letting go
-        self.last_nodes = []
-        self._usb_reset = usb_reset
+        self.brightness = None  # 0 to BRIGHTNESS_MAX, from the glasses' MCU while the heartbeat runs
+        self._mcu_out = []  # MCU frames for the heartbeat's thread to write
         self.last_beat = None  # time.monotonic() of the last heartbeat written
         self.beats = 0  # heartbeats written
         self._nodes = nodes or (lambda: hidraw_map(0x3318, self.pid))
@@ -421,8 +408,9 @@ class AirReader(_HidReader):
             self.log(f"imu: MCU on {dev} failed ({e})")
             os.close(fd)
             return False
-        self.handshake = True
         state = {"run": True}
+        self.brightness = None
+        self._mcu_out.append(mcu_command(MCU_R_BRIGHTNESS))
 
         def beat():
             # One heartbeat every HEARTBEAT_S, as XREAL's driver sends it; answers and button reports are read in
@@ -444,9 +432,11 @@ class AirReader(_HidReader):
                     if now - since >= self.BEAT_LOG_S:
                         self.log(f"imu: MCU heartbeat: {counted / (now - since):.1f} a second")
                         counted, since = 0, now
+                    while self._mcu_out:
+                        os.write(fd, self._mcu_out.pop(0))
                     r, _, _ = select.select([fd], [], [], max(0.0, next_at - time.monotonic()))
                     if r:
-                        self._read(fd, dev)
+                        self._mcu_frame(self._read(fd, dev))
                 except OSError as e:
                     if state["run"]:
                         state["failed"] = True
@@ -458,25 +448,39 @@ class AirReader(_HidReader):
         self.log(f"imu: MCU heartbeat running on interface {num} ({dev})")
         return True
 
-    def _reset_for_buttons(self):
-        """Once per letting go, after the handshake: a USB reset of the glasses, so they leave the handshake's mode
-        at once (see USBDEVFS_RESET)."""
-        if not self.handshake:
+    def set_brightness(self, level):
+        """Sets the glasses' brightness (0 to BRIGHTNESS_MAX) through their MCU; False when the heartbeat isn't running
+        (the MCU is only open then)."""
+        if not self._mcu_running():
+            return False
+        level = max(0, min(BRIGHTNESS_MAX, int(level)))
+        self._mcu_out.append(mcu_command(MCU_W_BRIGHTNESS, bytes([level])))
+        self.brightness = level
+        self.log(f"imu: brightness {level} of {BRIGHTNESS_MAX} asked for")
+        return True
+
+    def _mcu_frame(self, frame):
+        """What the MCU says while the heartbeat runs: the brightness, and the glasses' own buttons."""
+        got = mcu_parse(frame)
+        if not got:
             return
-        iface = next((n[3] for n in self.last_nodes if len(n) > 3), None)
-        node = usb_node(iface) if iface else None
-        if not node:
-            self.log("imu: no USB reset of the glasses: their USB device was not found")
-            return
-        why = self._usb_reset(node)
-        if why:
-            rule = "" if os.path.exists(USB_RULE) else (f"; the reset needs the USB permission the installer offers "
-                                                        f"({USB_RULE}: run Update Pocket XR and say yes)")
-            self.log(f"imu: no USB reset of the glasses: {why}{rule}; their buttons come back when they reset "
-                     "themselves (up to a few minutes)")
-        else:
-            self.handshake = False
-            self.log(f"imu: glasses reset over USB ({node}), so their own buttons work again")
+        msg, data = got
+        if msg == MCU_R_BRIGHTNESS:
+            if len(data) >= 2 and data[0] == 0 and data[1] <= BRIGHTNESS_MAX:
+                self.brightness = data[1]
+                self.log(f"imu: the glasses' brightness is {data[1]} of {BRIGHTNESS_MAX}")
+            else:
+                self.log(f"imu: brightness not read (answer {hexstart(data, 4)})")
+        elif msg == MCU_W_BRIGHTNESS:
+            ok = data[:1] == b"\0"
+            self.log("imu: brightness set" if ok else f"imu: brightness not set (answer {hexstart(data, 4)})")
+        elif msg == MCU_P_BUTTON and len(data) >= 9:
+            phys, action, value = data[0], data[4], data[8]
+            self.log(f"imu: glasses button {phys}, action {action}, value {value}")
+            if action in (BUTTON_BRIGHTNESS_UP, BUTTON_BRIGHTNESS_DOWN) and value <= BRIGHTNESS_MAX:
+                # The value is the brightness after the press (Monado). Setting it again does nothing if the glasses
+                # already took it, and sets it if they only reported the press.
+                self.set_brightness(value)
 
     def _stop_mcu(self, why=""):
         if not self._mcu:
@@ -524,9 +528,6 @@ class AirReader(_HidReader):
 
     def _find(self, nodes):
         """(fd, node) of the interface that streams, tried in the order the class docstring gives, else (None, None)."""
-        if [n[1] for n in nodes] != [n[1] for n in self.last_nodes]:
-            self.handshake = False  # other nodes: the glasses were plugged in again (or reset)
-        self.last_nodes = list(nodes)
         for n in nodes:
             self.log(f"imu: {os.path.basename(n[1])} is interface {n[0]}" + (f" ({n[3]})" if len(n) > 3 else ""))
         self._logged = {}
@@ -600,11 +601,6 @@ class AirReader(_HidReader):
         while not self.stop:
             if self.released:
                 self._stop_mcu("let go for the glasses' own buttons")
-                if not self.reset_done:
-                    self.reset_done = True
-                    self._reset_for_buttons()
-            else:
-                self.reset_done = False
             if self.held:
                 time.sleep(0.5)
                 continue
