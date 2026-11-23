@@ -186,10 +186,14 @@ A few steps of walking with sharp heel strikes could count as taps; not yet trie
 until you turn it off again, so their own buttons can work, for brightness say. Head tracking pauses meanwhile.
 Asked for by Pierre Zammit, whose XBX's buttons don't work while Pocket XR reads the glasses. With 0.7.6 they came
 back, but only 1 to 4 minutes later, when the glasses reset themselves (they blink off and on). So: set the mode to
-Off, turn this on, wait for the glasses to blink, adjust them, turn this off, then pick a mode. From 0.7.7 it also
-resets the glasses over USB at once (as unplugging them), when the installer's USB permission is there: it offers
-a udev rule for that, `/etc/udev/rules.d/71-pocket-xr-usb.rules`, with your password, for XREAL and VITURE glasses
-only. Without it, the wait above. Not yet tried on a Deck.
+Off, turn this on, wait for the glasses to blink, adjust them, turn this off, then pick a mode. (0.7.7 also reset
+the glasses over USB; on his XBX that didn't bring the buttons back sooner, so it's gone.)
+
+**Glasses brightness**, a slider in Quick Access while Pocket XR has XREAL glasses (on the XBX, while it keeps their
+controller awake), so their buttons aren't needed: it sets the brightness from 0 to 7 with the commands Monado's
+XREAL Air driver uses. When the glasses' own brightness buttons report a press, Pocket XR applies the new level too,
+and logs each button. Monado wrote these for the Air, Air 2 and Air 2 Pro; not yet tried on any glasses, the XBX
+included.
 
 Good to know:
 

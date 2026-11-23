@@ -173,6 +173,12 @@ class Gaming:
                                             "4 seconds."),
             "keys_line": i18n.tr("Another controller: in Steam Input, map a button to the Stop media key to recentre "
                                  "and to Next to switch view."),
+            # The glasses' brightness, 0 to 7, while their MCU is open (the XBX's heartbeat): None hides the slider
+            "brightness": self._brightness(),
+            "brightness_max": hidimu.BRIGHTNESS_MAX,
+            "brightness_label": i18n.tr("Glasses brightness"),
+            "brightness_line": i18n.tr("Sets the glasses' brightness while Pocket XR has them, so you don't need "
+                                       "their buttons. New: say if it does nothing on your glasses."),
             # Only for the Air family's reader (hidimu.AirReader): None hides the switch
             "glasses_buttons": (self.buttons_released if isinstance(self.reader, hidimu.AirReader) else None),
             "glasses_buttons_label": i18n.tr("Use the glasses' buttons"),
@@ -321,6 +327,10 @@ class Gaming:
                 self._start_calibration()
             elif op == "set_readability":
                 self._set_readability(bool(req.get("on")))
+            elif op == "set_brightness":
+                r = self.reader
+                if isinstance(r, hidimu.AirReader) and r.set_brightness(int(req.get("level", 0))):
+                    self.log(f"gaming: glasses brightness {r.brightness} (Quick Access)")
             elif op == "glasses_buttons":
                 self._glasses_buttons(bool(req.get("on")))
             elif op == "set_taps":
@@ -384,10 +394,16 @@ class Gaming:
             elif name == "R4":
                 self.next_mode()
 
+    def _brightness(self):
+        r = self.reader
+        if isinstance(r, hidimu.AirReader) and r._mcu_running():
+            return r.brightness
+        return None
+
     def _glasses_buttons(self, on):
-        """Lets go of the glasses (no stream, no heartbeat, their files closed, and on the XBX a USB reset if allowed)
-        so their own buttons work, or takes them back. Kept while the service runs, also when the glasses come back
-        after the reset; not kept when the service starts again."""
+        """Lets go of the glasses (no stream, no heartbeat, their files closed) so their own buttons work once the
+        glasses reset themselves, or takes them back. Kept while the service runs, also when the glasses come back;
+        not kept when the service starts again."""
         r = self.reader
         if not isinstance(r, hidimu.AirReader) or self.buttons_released == on:
             return

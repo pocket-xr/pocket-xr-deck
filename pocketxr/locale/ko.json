@@ -211,5 +211,7 @@
   "Taps on the glasses": "안경 탭",
   "Use the glasses' buttons": "안경 버튼 사용",
   "Tap the glasses' frame twice to recentre, three times to switch view, at about 2 taps a second (1.5 to 5 a second work). Hold your head still while you tap. New: say if it misses taps or reacts on its own.": "안경테를 두 번 두드리면 가운데로, 세 번 두드리면 보기를 바꿔요. 1초에 2번 정도로 두드리세요(1초에 1.5~5번이면 돼요). 두드리는 동안 머리를 움직이지 마세요. 새 기능: 탭을 놓치거나 저절로 반응하면 알려 주세요.",
-  "Lets go of the glasses so their own buttons work (brightness, for example). Head tracking pauses until you turn this off. Set the mode to Off, turn this on and wait for the glasses to blink off and on (up to a few minutes), adjust them, turn this off, then pick a mode.": "안경 자체 버튼(예: 밝기)이 작동하도록 안경을 놓아줘요. 이걸 끌 때까지 머리 추적은 멈춰요. 모드를 끔으로 하고 이걸 켠 다음 안경이 꺼졌다 켜질 때까지 기다리고(몇 분 걸릴 수 있어요), 조절한 뒤 이걸 끄고 모드를 고르세요."
+  "Lets go of the glasses so their own buttons work (brightness, for example). Head tracking pauses until you turn this off. Set the mode to Off, turn this on and wait for the glasses to blink off and on (up to a few minutes), adjust them, turn this off, then pick a mode.": "안경 자체 버튼(예: 밝기)이 작동하도록 안경을 놓아줘요. 이걸 끌 때까지 머리 추적은 멈춰요. 모드를 끔으로 하고 이걸 켠 다음 안경이 꺼졌다 켜질 때까지 기다리고(몇 분 걸릴 수 있어요), 조절한 뒤 이걸 끄고 모드를 고르세요.",
+  "Glasses brightness": "안경 밝기",
+  "Sets the glasses' brightness while Pocket XR has them, so you don't need their buttons. New: say if it does nothing on your glasses.": "Pocket XR이 안경을 쓰는 동안 밝기를 바꿔요. 안경 버튼이 필요 없어요. 새 기능: 내 안경에서 바뀌지 않으면 알려 주세요."
 }

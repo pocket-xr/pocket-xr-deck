@@ -211,5 +211,7 @@
   "Taps on the glasses": "輕敲眼鏡",
   "Use the glasses' buttons": "使用眼鏡按鍵",
   "Tap the glasses' frame twice to recentre, three times to switch view, at about 2 taps a second (1.5 to 5 a second work). Hold your head still while you tap. New: say if it misses taps or reacts on its own.": "輕敲眼鏡框兩次回到正前方，三次切換檢視，每秒約 2 下（每秒 1.5 到 5 下都可以）。輕敲時保持頭部不動。新功能：如果漏掉輕敲或自己觸發，請告訴我們。",
-  "Lets go of the glasses so their own buttons work (brightness, for example). Head tracking pauses until you turn this off. Set the mode to Off, turn this on and wait for the glasses to blink off and on (up to a few minutes), adjust them, turn this off, then pick a mode.": "釋放眼鏡，讓它自己的按鍵可用（例如亮度）。在關閉此項之前，頭部追蹤會暫停。先把模式設為關閉，開啟此項，等眼鏡熄滅再亮起（最多幾分鐘），調整好後關閉此項，再選擇一個模式。"
+  "Lets go of the glasses so their own buttons work (brightness, for example). Head tracking pauses until you turn this off. Set the mode to Off, turn this on and wait for the glasses to blink off and on (up to a few minutes), adjust them, turn this off, then pick a mode.": "釋放眼鏡，讓它自己的按鍵可用（例如亮度）。在關閉此項之前，頭部追蹤會暫停。先把模式設為關閉，開啟此項，等眼鏡熄滅再亮起（最多幾分鐘），調整好後關閉此項，再選擇一個模式。",
+  "Glasses brightness": "眼鏡亮度",
+  "Sets the glasses' brightness while Pocket XR has them, so you don't need their buttons. New: say if it does nothing on your glasses.": "在 Pocket XR 使用眼鏡時調整亮度，不需眼鏡按鍵。新功能：如果在你的眼鏡上沒有效果，請告訴我們。"
 }
