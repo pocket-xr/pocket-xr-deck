@@ -43,6 +43,9 @@ AIR_ULTRA = 0x0426
 # guess (not proven): once the SDK handshake is sent, the firmware resets the link when the SDK client goes quiet. So
 # from 0.7.4 the heartbeat, once started, keeps going while the glasses are attached, through Off too, and stops only
 # when the glasses go, the reader stops, or a write fails. The cost: on 0.6.1 his buttons were off while it ran.
+# With 0.7.4 his head tracking stopped about 3 minutes in, every time, and then every write and open on the glasses
+# timed out (ETIMEDOUT): the MCU had hung. The heartbeat loop sent the next heartbeat as soon as the MCU answered,
+# hundreds a second, not one every 100 ms. 0.7.5 sends exactly one every 100 ms (HEARTBEAT_S), and logs the rate.
 AIR_XBX = frozenset({0x0440, 0x0442})
 XBX_MCU = 0
 MCU_HEAD = 0xFD
@@ -282,6 +285,8 @@ class AirReader(_HidReader):
     first bytes of whatever the glasses' nodes send. On the XBX it first wakes the MCU on interface 0 (the heartbeat
     above), then asks interface 1, then interface 2, and logs which one streamed."""
     WAIT_S = 6.0         # how long an interface may stay silent before the next one is tried
+    HEARTBEAT_S = 0.1    # the XBX MCU heartbeat's period, as XREAL's driver
+    BEAT_LOG_S = 60.0    # how often the heartbeat's rate goes in the log
     RETRY_S = 10.0       # after every interface was silent
     LOGGED_PER_NODE = 12  # raw reports logged per node per try
     RECORD_S = 5.0          # every report in full, this long after the samples start (record_path)
@@ -293,6 +298,7 @@ class AirReader(_HidReader):
         self.recorded = False
         self.paused = False  # Gaming Mode's "off": no motion stream (the XBX heartbeat keeps going, see AIR_XBX)
         self.last_beat = None  # time.monotonic() of the last heartbeat written
+        self.beats = 0  # heartbeats written
         self._nodes = nodes or (lambda: hidraw_map(0x3318, self.pid))
         self._open = opener or (lambda path: os.open(path, os.O_RDWR))
         self._logged = {}
@@ -365,14 +371,28 @@ class AirReader(_HidReader):
         state = {"run": True}
 
         def beat():
+            # One heartbeat every HEARTBEAT_S, as XREAL's driver sends it; answers and button reports are read in
+            # between so they don't pile up (the first few logged). Up to 0.7.4 the next one went out as soon as an
+            # answer came, which is within milliseconds: a flood (see AIR_XBX).
+            next_at = time.monotonic()
+            counted, since = 0, next_at
             while state["run"] and not self.stop:
                 try:
-                    os.write(fd, mcu_heartbeat())
-                    self.last_beat = time.monotonic()
-                    r, _, _ = select.select([fd], [], [], 0.1)
-                    while r:  # answers and button reports: read so they don't pile up, the first few logged
+                    now = time.monotonic()
+                    if now >= next_at:
+                        os.write(fd, mcu_heartbeat())
+                        self.last_beat = now
+                        self.beats += 1
+                        counted += 1
+                        next_at += self.HEARTBEAT_S
+                        if next_at <= now:  # late (a slow write): no burst to catch up
+                            next_at = now + self.HEARTBEAT_S
+                    if now - since >= self.BEAT_LOG_S:
+                        self.log(f"imu: MCU heartbeat: {counted / (now - since):.1f} a second")
+                        counted, since = 0, now
+                    r, _, _ = select.select([fd], [], [], max(0.0, next_at - time.monotonic()))
+                    if r:
                         self._read(fd, dev)
-                        r, _, _ = select.select([fd], [], [], 0)
                 except OSError as e:
                     if state["run"]:
                         state["failed"] = True

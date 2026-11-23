@@ -207,5 +207,7 @@
   "Calibrating: take the glasses off and lay them on something still for 4 seconds.": "보정 중: 안경을 벗어서 움직이지 않는 곳에 4초 동안 내려놓으세요.",
   "Another controller: in Steam Input, map a button to the Stop media key to recentre and to Next to switch view.": "다른 컨트롤러: Steam Input에서 버튼을 미디어 키 Stop에 지정하면 가운데로, Next에 지정하면 보기를 바꿔요.",
   "Stick clicks": "스틱 누르기",
-  "In every game: hold L3 to recentre, hold R3 to switch view, click L3 three times to calibrate (lay the glasses down within 5 seconds).": "모든 게임에서: L3를 길게 누르면 가운데로, R3를 길게 누르면 보기 전환, L3를 세 번 누르면 보정해요(5초 안에 안경을 내려놓으세요)."
+  "In every game: hold L3 to recentre, hold R3 to switch view, click L3 three times to calibrate (lay the glasses down within 5 seconds).": "모든 게임에서: L3를 길게 누르면 가운데로, R3를 길게 누르면 보기 전환, L3를 세 번 누르면 보정해요(5초 안에 안경을 내려놓으세요).",
+  "Taps on the glasses": "안경 탭",
+  "Tap the glasses' frame twice to recentre, three times to switch view. New: say if it misses taps or reacts on its own.": "안경테를 두 번 두드리면 가운데로, 세 번 두드리면 보기를 바꿔요. 새 기능: 탭을 놓치거나 저절로 반응하면 알려 주세요."
 }
