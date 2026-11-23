@@ -21,8 +21,29 @@ if command -v gsettings >/dev/null 2>&1 && gsettings list-schemas 2>/dev/null | 
     ;;
   esac
 fi
-if [ -f /etc/udev/rules.d/70-pocket-xr.rules ]; then
-  echo "The glasses' USB permission stays; to remove it too: sudo rm /etc/udev/rules.d/70-pocket-xr.rules"
+# The udev rules the installer added with your password: the glasses' USB permissions (reading them, resetting them)
+RULES=""
+for r in /etc/udev/rules.d/70-pocket-xr.rules /etc/udev/rules.d/71-pocket-xr-usb.rules; do
+  [ -f "$r" ] && RULES="$RULES $r"
+done
+if [ -n "$RULES" ]; then
+  echo "Pocket XR added the glasses' USB permissions:$RULES"
+  answer=""
+  if [ -t 0 ]; then
+    read -r -p "Remove them too (sudo, your password)? [Y/n] " answer || answer=n
+  else
+    answer=n
+  fi
+  case "$answer" in
+    ""|[Yy]*)
+      if sudo rm -f $RULES && sudo udevadm control --reload-rules; then
+        echo "Removed."
+      else
+        echo "Not removed. Later: sudo rm$RULES" >&2
+      fi
+      ;;
+    *) echo "They stay. Later: sudo rm$RULES" ;;
+  esac
 fi
 if [ -d "$HOME/homebrew/plugins/PocketXR" ] && [ -O "$HOME/homebrew/plugins" ]; then
   chmod u+w "$HOME/homebrew/plugins" && chmod -R u+w "$HOME/homebrew/plugins/PocketXR"

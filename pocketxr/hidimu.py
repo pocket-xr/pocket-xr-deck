@@ -52,9 +52,10 @@ AIR_XBX = frozenset({0x0440, 0x0442})
 # themselves. The handshake above puts the MCU in a mode it keeps until then. No public driver documents a command
 # that ends it (xrealAirLinuxDriver's list has none, and its close only closes the file), so none is sent. A USB reset
 # of the glasses (USBDEVFS_RESET, as unplugging and plugging them in) is tried instead; it needs write access to the
-# glasses' /dev/bus/usb node, which udev's default (root, 0664) does not give the user, so it may well be refused:
-# the log says which.
+# glasses' /dev/bus/usb node, which udev's default (root, 0664) does not give the user: the installer offers a rule
+# (USB_RULE, uaccess for XREAL and VITURE glasses only). Without it the reset is refused, and the log says so.
 USBDEVFS_RESET = 0x5514  # _IO('U', 20), linux/usbdevice_fs.h
+USB_RULE = "/etc/udev/rules.d/71-pocket-xr-usb.rules"  # install.sh's rule giving the seated user that access
 
 
 def usb_node(iface_sysfs):
@@ -469,8 +470,10 @@ class AirReader(_HidReader):
             return
         why = self._usb_reset(node)
         if why:
-            self.log(f"imu: no USB reset of the glasses: {why}; their buttons come back when they reset themselves "
-                     "(up to a few minutes)")
+            rule = "" if os.path.exists(USB_RULE) else (f"; the reset needs the USB permission the installer offers "
+                                                        f"({USB_RULE}: run Update Pocket XR and say yes)")
+            self.log(f"imu: no USB reset of the glasses: {why}{rule}; their buttons come back when they reset "
+                     "themselves (up to a few minutes)")
         else:
             self.handshake = False
             self.log(f"imu: glasses reset over USB ({node}), so their own buttons work again")

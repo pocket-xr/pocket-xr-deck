@@ -88,6 +88,44 @@ class UsbReset(unittest.TestCase):
         self.assertFalse(r.handshake)
 
 
+class UsbRule(unittest.TestCase):
+    """The installer's udev rule that lets the seated user reset XREAL and VITURE glasses (Mike, 23 Nov 2026)."""
+
+    def read(self, name):
+        with open(os.path.join(ROOT, name), encoding="utf-8") as f:
+            return f.read()
+
+    def test_installer_offers_it_for_these_glasses_only(self):
+        sh = self.read("install.sh")
+        self.assertIn('/etc/udev/rules.d/71-pocket-xr-usb.rules', sh)
+        self.assertIn('SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ATTR{idVendor}=="3318", TAG+="uaccess"', sh)
+        self.assertIn('SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ATTR{idVendor}=="35ca", TAG+="uaccess"', sh)
+        self.assertEqual(sh.count('SUBSYSTEM=="usb"'), 2)  # no other USB devices in that rule
+        self.assertIn("sudo udevadm trigger --subsystem-match=usb --action=change", sh)
+        self.assertIn("unplug them and plug them back in", sh)
+        self.assertIn("Skipped the USB permission", sh)
+        self.assertIn(hidimu.USB_RULE, sh)
+
+    def test_uninstall_removes_it(self):
+        sh = self.read("uninstall.sh")
+        self.assertIn("/etc/udev/rules.d/71-pocket-xr-usb.rules", sh)
+        self.assertIn("sudo rm -f $RULES", sh)
+
+    def test_the_log_says_the_reset_needs_the_rule(self):
+        lines = []
+        r = hidimu.AirReader(lambda *a: None, 0x0442, log=lines.append, nodes=lambda: [])
+        r.last_nodes = [(0, "/dev/hidraw4", 0x0442, "/sys/x/usb1/1-1/1-1:1.0")]
+        r.handshake = True
+        r._usb_reset = lambda node: f"{node} not writable (Permission denied)"
+        saved = hidimu.usb_node, hidimu.USB_RULE
+        hidimu.usb_node, hidimu.USB_RULE = (lambda iface: "/dev/bus/usb/001/007"), "/nonexistent/71-pocket-xr-usb.rules"
+        try:
+            r._reset_for_buttons()
+        finally:
+            hidimu.usb_node, hidimu.USB_RULE = saved
+        self.assertTrue(any("the reset needs the USB permission the installer offers" in x for x in lines), lines)
+
+
 class GamingSwitch(unittest.TestCase):
     def setUp(self):
         try:
