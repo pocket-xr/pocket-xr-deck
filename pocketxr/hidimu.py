@@ -37,6 +37,12 @@ AIR_ULTRA = 0x0426
 # Seen with 0.7.2 on that A01+ (22 Nov 2026): every time the glasses appeared (after boot, and after each USB drop)
 # interface 1 sent nothing for the whole 6 s wait, and samples came within a second of the heartbeat. So the XBX now
 # gets the heartbeat first; interface 1 alone, then 2, are still tried if the MCU doesn't answer.
+# A tester's report (Pierre Zammit, after 0.7.3): with Pocket XR disabled his A01+ stopped disconnecting; with it on,
+# the whole USB-C link (display too) reset about every 10 minutes, with head tracking on and with Off. His first drop
+# was the day after 0.6.2 began stopping the heartbeat 3 s after samples flowed. XREAL's driver keeps it going. The
+# guess (not proven): once the SDK handshake is sent, the firmware resets the link when the SDK client goes quiet. So
+# from 0.7.4 the heartbeat, once started, keeps going while the glasses are attached, through Off too, and stops only
+# when the glasses go, the reader stops, or a write fails. The cost: on 0.6.1 his buttons were off while it ran.
 AIR_XBX = frozenset({0x0440, 0x0442})
 XBX_MCU = 0
 MCU_HEAD = 0xFD
@@ -278,7 +284,6 @@ class AirReader(_HidReader):
     WAIT_S = 6.0         # how long an interface may stay silent before the next one is tried
     RETRY_S = 10.0       # after every interface was silent
     LOGGED_PER_NODE = 12  # raw reports logged per node per try
-    HEARTBEAT_HOLD_S = 3.0  # the XBX heartbeat keeps running this long once samples flow, then stops
     RECORD_S = 5.0          # every report in full, this long after the samples start (record_path)
 
     def __init__(self, on_report, pid, log=print, nodes=None, opener=None, record_path=None):
@@ -286,8 +291,8 @@ class AirReader(_HidReader):
         self.pid = pid
         self.record_path = record_path  # a file for RECORD_S of raw reports, made once per reader
         self.recorded = False
-        self.keep_heartbeat = False  # set once samples stopped right after the heartbeat stopped
-        self.paused = False  # Gaming Mode's "off": no stream and no heartbeat, so the glasses are left alone
+        self.paused = False  # Gaming Mode's "off": no motion stream (the XBX heartbeat keeps going, see AIR_XBX)
+        self.last_beat = None  # time.monotonic() of the last heartbeat written
         self._nodes = nodes or (lambda: hidraw_map(0x3318, self.pid))
         self._open = opener or (lambda path: os.open(path, os.O_RDWR))
         self._logged = {}
@@ -330,8 +335,14 @@ class AirReader(_HidReader):
                 return True
         return False
 
+    def _mcu_running(self):
+        return bool(self._mcu and self._mcu[1].is_alive())
+
     def _start_mcu(self, node):
         num, dev = node[0], node[1]
+        if self._mcu_running():
+            return True
+        self._stop_mcu()  # one that ended on a failed write
         try:
             fd = self._open(dev)
         except OSError as e:
@@ -357,13 +368,15 @@ class AirReader(_HidReader):
             while state["run"] and not self.stop:
                 try:
                     os.write(fd, mcu_heartbeat())
+                    self.last_beat = time.monotonic()
                     r, _, _ = select.select([fd], [], [], 0.1)
                     while r:  # answers and button reports: read so they don't pile up, the first few logged
                         self._read(fd, dev)
                         r, _, _ = select.select([fd], [], [], 0)
                 except OSError as e:
                     if state["run"]:
-                        self.log(f"imu: MCU heartbeat stopped ({e})")
+                        state["failed"] = True
+                        self.log(f"imu: MCU heartbeat stopped ({e}); {self._beat_age()}")
                     return
         t = threading.Thread(target=beat, daemon=True, name="xbx-heartbeat")
         self._mcu = (fd, t, state)
@@ -371,7 +384,7 @@ class AirReader(_HidReader):
         self.log(f"imu: MCU heartbeat running on interface {num} ({dev})")
         return True
 
-    def _stop_mcu(self):
+    def _stop_mcu(self, why=""):
         if not self._mcu:
             return
         fd, t, state = self._mcu
@@ -382,7 +395,8 @@ class AirReader(_HidReader):
         except OSError:
             pass
         self._mcu = None
-        self.log("imu: MCU heartbeat stopped")
+        if not state.get("failed"):  # one that ended on a failed write said so then
+            self.log("imu: MCU heartbeat stopped" + (f" ({why})" if why else ""))
 
     # ---- the IMU ----
     def _try_imu(self, node, seconds):
@@ -428,7 +442,6 @@ class AirReader(_HidReader):
             if fd is not None:
                 return fd, first
         if self.pid not in AIR_XBX or self.stop or self.paused:
-            self._stop_mcu()
             return None, None
         for num in sorted(by_num):
             if num in (XBX_MCU, air_interface(self.pid)) or self.stop or self.paused:
@@ -436,7 +449,6 @@ class AirReader(_HidReader):
             fd = self._try_imu(by_num[num], self.WAIT_S)
             if fd is not None:
                 return fd, by_num[num]
-        self._stop_mcu()
         return None, None
 
     def _start_recording(self):
@@ -458,17 +470,10 @@ class AirReader(_HidReader):
         clock = AirTimestamp()
         quiet = 0
         started = time.monotonic()
-        heartbeat_until = started + self.HEARTBEAT_HOLD_S if self._mcu and not self.keep_heartbeat else None
-        stopped_heartbeat = None
         rec = self._start_recording()
         rec_end = started + self.RECORD_S
         while not self.stop and not self.paused:
             now = time.monotonic()
-            if heartbeat_until and now >= heartbeat_until:
-                heartbeat_until = None
-                stopped_heartbeat = now
-                self._stop_mcu()
-                self.log("imu: samples flowing; the MCU heartbeat is no longer needed, so it stopped")
             if rec and now >= rec_end:
                 rec.close()
                 rec = None
@@ -478,9 +483,6 @@ class AirReader(_HidReader):
                 quiet += 1
                 if quiet >= 3:
                     self.log("imu: samples stopped for 6 s; looking again")
-                    if stopped_heartbeat and time.monotonic() - stopped_heartbeat < 15.0:
-                        self.keep_heartbeat = True
-                        self.log("imu: the samples stopped soon after the heartbeat did; it stays on from now on")
                     if rec:
                         rec.close()
                     return
@@ -516,10 +518,12 @@ class AirReader(_HidReader):
             self.decision = f"interface {node[0]} ({dev})" + (", with the MCU heartbeat" if self._mcu else "")
             self.log(f"imu: Air samples on {self.decision}")
             self.connected_to = dev
+            lost = False
             try:
                 self._stream(fd, dev)
             except OSError as e:
-                self.log(f"imu: Air link lost ({e})")
+                lost = True
+                self.log(f"imu: Air link lost ({e}); {self._beat_age()}")
             finally:
                 try:
                     os.write(fd, air_stream(False))
@@ -527,9 +531,17 @@ class AirReader(_HidReader):
                     pass
                 os.close(fd)
                 self.connected_to = None
-                self._stop_mcu()
+                if lost:
+                    self._stop_mcu("the glasses went")
             self._wait_ok(1.0)
-        self._stop_mcu()
+        self._stop_mcu("Pocket XR stopped reading the glasses")
+
+    def _beat_age(self):
+        """For the log of a USB drop: how long since the last MCU heartbeat went out."""
+        if self.last_beat is None:
+            return "no MCU heartbeat sent"
+        return (f"last MCU heartbeat {time.monotonic() - self.last_beat:.1f} s before"
+                + ("" if self._mcu_running() else ", and it was not running"))
 
 
 def beast_first(nodes):

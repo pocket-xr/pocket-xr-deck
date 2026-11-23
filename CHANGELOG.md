@@ -1,5 +1,20 @@
 # Changes
 
+## 0.7.4 (22 Nov 2026)
+
+From Pierre Zammit's report on his XREAL XBX A01+ (Steam Deck). Thanks, Pierre.
+
+- **XBX: the heartbeat keeps going.** With Pocket XR disabled his glasses stopped disconnecting; with it on, the
+  whole USB-C link (the display too) reset about every 10 minutes, with head tracking on and with Off. His first drop
+  was on 21 Nov, the day after 0.6.2 began stopping the glasses' MCU heartbeat 3 seconds after motion started. XREAL's
+  own driver keeps it going. So now, once Pocket XR has woken the MCU, the heartbeat (every 100 ms) keeps going while
+  the glasses are attached, through Off too (Off still stops the motion stream). It stops when the glasses go, when
+  Pocket XR stops reading them, or when a write to them fails. This is a guess that the glasses reset the link when
+  the heartbeat stops, not proven. The known cost: with 0.6.1, whose heartbeat also kept going, his glasses' buttons
+  did not work while it ran. Checked by tests; not yet tried with glasses.
+- **The logs** say when the heartbeat starts and stops and why, and each drop says how long it was since the last
+  heartbeat.
+
 ## 0.7.3 (22 Nov 2026)
 
 From Pierre Zammit's report and logs on 0.7.2 (Steam Deck LCD, SteamOS 3.9.5, XREAL XBX A01+). Thanks, Pierre.
