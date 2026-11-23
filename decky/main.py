@@ -37,6 +37,7 @@ def _ask(req):
         f.flush()
         answer = json.loads(f.readline())
         answer["running"] = True
+        answer["panel"] = PANEL_VERSION  # so the panel can see when the service is another version (version)
         return answer
     except (OSError, ValueError) as e:
         return {"running": False, "why": str(e)}

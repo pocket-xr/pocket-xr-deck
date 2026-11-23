@@ -50,6 +50,8 @@ SEND_HZ = 500  # how often the loop looks; updates go out as fast as gamescope t
 PREDICT_S = 0.020  # head prediction: gamescope's composite and the glasses' display
 GONE_GRACE_S = 12.0
 EDGE = 0.004  # the screen's soft edge, in screen widths
+VERSION_CHECK_S = 5.0  # how often the service looks for a new Pocket XR installed over it
+RESTART_EXIT = 75  # ends with this, so systemd starts it again (Restart=on-failure)
 CURVE_MAX = 1.0  # the screen bent round the eye (PocketXR.fx)
 
 
@@ -114,6 +116,8 @@ class Gaming:
     def __init__(self, log):
         self.log = log
         self.settings = load_settings()
+        self.version = sendlogs.version()  # the Pocket XR this service was started from
+        self.version_checked = 0.0
         self.glasses = None
         self.missing_since = None
         self.head = None
@@ -148,6 +152,7 @@ class Gaming:
     def status(self):
         self._check_calibration()
         return {
+            "version": self.version,
             "gaming": self.reshade is not None,
             "glasses": self.glasses.name if self.glasses else None,
             "tracking": self.reader is not None,
@@ -167,6 +172,11 @@ class Gaming:
                                             "4 seconds."),
             "keys_line": i18n.tr("Another controller: in Steam Input, map a button to the Stop media key to recentre "
                                  "and to Next to switch view."),
+            # Only for the Air family's reader (hidimu.AirReader): None hides the switch
+            "glasses_buttons": (bool(self.reader.released) if isinstance(self.reader, hidimu.AirReader) else None),
+            "glasses_buttons_label": i18n.tr("Use the glasses' buttons"),
+            "glasses_buttons_line": i18n.tr("Lets go of the glasses so their own buttons work (brightness, for "
+                                            "example). Head tracking pauses until you turn this off."),
             "taps": bool(self.settings.get("taps", False)),
             "taps_label": i18n.tr("Taps on the glasses"),
             "taps_line": i18n.tr("Tap the glasses' frame twice to recentre, three times to switch view. New: say if "
@@ -304,6 +314,8 @@ class Gaming:
                 self._start_calibration()
             elif op == "set_readability":
                 self._set_readability(bool(req.get("on")))
+            elif op == "glasses_buttons":
+                self._glasses_buttons(bool(req.get("on")))
             elif op == "set_taps":
                 self.settings["taps"] = bool(req.get("on"))
                 save_settings(self.settings)
@@ -364,6 +376,16 @@ class Gaming:
                 self.recentre()
             elif name == "R4":
                 self.next_mode()
+
+    def _glasses_buttons(self, on):
+        """Lets go of the glasses (no stream, no heartbeat, their files closed) so their own buttons work, or takes
+        them back. Not kept: new glasses, or the service starting again, read them as usual."""
+        r = self.reader
+        if not isinstance(r, hidimu.AirReader) or r.released == on:
+            return
+        r.released = on
+        self.log("gaming: glasses let go for their own buttons; head tracking paused (Quick Access)" if on
+                 else "gaming: glasses taken back from their own buttons (Quick Access)")
 
     def _report(self, ts_ns, gyro, accel):
         """Each motion report: to the head's fusion, and to the tap reader when taps are on."""
@@ -685,15 +707,29 @@ class Gaming:
         k = math.sin(ang / 2) / (ang / PREDICT_S)
         return fusion.qnorm(fusion.qmul((math.cos(ang / 2), g[0] * k, g[1] * k, g[2] * k), q))
 
+    def _restart_if_updated(self):
+        """Another Pocket XR installed over this one: end, so systemd starts the new one (Restart=on-failure).
+        A tester's update of 0.7.5 (Pierre Zammit, 23 Nov 2026) left 0.7.3's service running all afternoon: the
+        installer restarted Decky but its restart of this service did not take, and its error was hidden. Whichever
+        way Pocket XR is updated, the service now loads the new files within a few seconds."""
+        now_installed = sendlogs.version()
+        if now_installed in ("unknown", self.version):
+            return
+        self.log(f"gaming: Pocket XR {now_installed} was installed over this {self.version}; starting again to load it")
+        sys.exit(RESTART_EXIT)
+
     # ---- the loop ----
     def run(self):
-        self.log("gaming: Pocket XR's Gaming Mode service started")
+        self.log(f"gaming: Pocket XR's Gaming Mode service started (Pocket XR {self.version})")
         next_check = 0.0
         last_stats = time.monotonic()
         last_reports = 0
         step = 1.0 / SEND_HZ
         while True:
             now = time.monotonic()
+            if now - self.version_checked >= VERSION_CHECK_S:
+                self.version_checked = now
+                self._restart_if_updated()
             if now >= next_check:
                 next_check = now + 1.0
                 in_gaming = wlreshade.socket_path() is not None

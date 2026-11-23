@@ -209,5 +209,7 @@
   "Stick clicks": "Clique dos analógicos",
   "In every game: hold L3 to recentre, hold R3 to switch view, click L3 three times to calibrate (lay the glasses down within 5 seconds).": "Em qualquer jogo: segure L3 para centralizar, segure R3 para trocar a visão, clique L3 três vezes para calibrar (apoie os óculos em até 5 segundos).",
   "Taps on the glasses": "Toques nos óculos",
-  "Tap the glasses' frame twice to recentre, three times to switch view. New: say if it misses taps or reacts on its own.": "Toque na armação dos óculos duas vezes para centralizar e três para trocar a visão. Novo: avise se ele perder toques ou reagir sozinho."
+  "Tap the glasses' frame twice to recentre, three times to switch view. New: say if it misses taps or reacts on its own.": "Toque na armação dos óculos duas vezes para centralizar e três para trocar a visão. Novo: avise se ele perder toques ou reagir sozinho.",
+  "Use the glasses' buttons": "Usar os botões dos óculos",
+  "Lets go of the glasses so their own buttons work (brightness, for example). Head tracking pauses until you turn this off.": "Libera os óculos para que os próprios botões funcionem (o brilho, por exemplo). O rastreamento da cabeça pausa até você desligar isto."
 }

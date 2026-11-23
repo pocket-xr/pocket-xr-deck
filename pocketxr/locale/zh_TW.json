@@ -209,5 +209,7 @@
   "Stick clicks": "搖桿按下",
   "In every game: hold L3 to recentre, hold R3 to switch view, click L3 three times to calibrate (lay the glasses down within 5 seconds).": "在任何遊戲中：按住 L3 回到正前方，按住 R3 切換檢視，連按 L3 三次進行校準（在 5 秒內放下眼鏡）。",
   "Taps on the glasses": "輕敲眼鏡",
-  "Tap the glasses' frame twice to recentre, three times to switch view. New: say if it misses taps or reacts on its own.": "輕敲眼鏡框兩次回到正前方，三次切換檢視。新功能：如果漏掉輕敲或自己觸發，請告訴我們。"
+  "Tap the glasses' frame twice to recentre, three times to switch view. New: say if it misses taps or reacts on its own.": "輕敲眼鏡框兩次回到正前方，三次切換檢視。新功能：如果漏掉輕敲或自己觸發，請告訴我們。",
+  "Use the glasses' buttons": "使用眼鏡按鍵",
+  "Lets go of the glasses so their own buttons work (brightness, for example). Head tracking pauses until you turn this off.": "釋放眼鏡，讓它自己的按鍵可用（例如亮度）。在關閉此項之前，頭部追蹤會暫停。"
 }

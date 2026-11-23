@@ -23,6 +23,7 @@ export type Words = {
   logsReady: string;
   logsSaved: string; // {name}
   logsFailed: string; // {error}
+  versionMismatch: string; // {service} {panel}
 };
 
 export const WORDS: Record<string, Words> = {
@@ -51,6 +52,7 @@ export const WORDS: Record<string, Words> = {
     logsSaved:
       "Saved {name} in Downloads. Send it to connect@mikehaye.com from Desktop Mode, or attach it to an issue on GitHub.",
     logsFailed: "Could not make the logs: {error}",
+    versionMismatch: "Pocket XR's Gaming Mode service is {service} and this panel {panel}: restart the Deck to finish the update.",
   },
   ko: {
     looking: "Pocket XR을 찾는 중...",
@@ -77,6 +79,7 @@ export const WORDS: Record<string, Words> = {
     logsSaved:
       "{name} 파일을 다운로드 폴더에 저장했어요. 데스크톱 모드에서 connect@mikehaye.com으로 보내거나 GitHub 이슈에 첨부해 주세요.",
     logsFailed: "로그를 만들지 못했어요: {error}",
+    versionMismatch: "Pocket XR 게임 모드 서비스는 {service}, 이 패널은 {panel}이에요. 업데이트를 마치려면 Deck을 다시 시작하세요.",
   },
   ja: {
     looking: "Pocket XR を探しています...",
@@ -103,6 +106,7 @@ export const WORDS: Record<string, Words> = {
     logsSaved:
       "{name} をダウンロードに保存しました。デスクトップモードから connect@mikehaye.com に送るか、GitHub の Issue に添付してください。",
     logsFailed: "ログを作れませんでした：{error}",
+    versionMismatch: "Pocket XR のゲームモードサービスは {service}、このパネルは {panel} です。更新を終えるには Deck を再起動してください。",
   },
   zh_CN: {
     looking: "正在查找 Pocket XR...",
@@ -127,6 +131,7 @@ export const WORDS: Record<string, Words> = {
     logsReady: "正在准备日志...",
     logsSaved: "已将 {name} 保存到“下载”文件夹。请在桌面模式下把它发到 connect@mikehaye.com，或附加到 GitHub 上的 issue。",
     logsFailed: "无法生成日志：{error}",
+    versionMismatch: "Pocket XR 游戏模式服务是 {service}，此面板是 {panel}：请重启 Deck 以完成更新。",
   },
   zh_TW: {
     looking: "正在尋找 Pocket XR...",
@@ -151,6 +156,7 @@ export const WORDS: Record<string, Words> = {
     logsReady: "正在準備記錄檔...",
     logsSaved: "已將 {name} 儲存到「下載」資料夾。請在桌面模式中寄到 connect@mikehaye.com，或附加到 GitHub 上的 issue。",
     logsFailed: "無法產生記錄檔：{error}",
+    versionMismatch: "Pocket XR 遊戲模式服務是 {service}，此面板是 {panel}：請重新啟動 Deck 以完成更新。",
   },
   es: {
     looking: "Buscando Pocket XR...",
@@ -177,6 +183,7 @@ export const WORDS: Record<string, Words> = {
     logsSaved:
       "{name} se guardó en Descargas. Envíalo a connect@mikehaye.com desde el modo Escritorio o adjúntalo a un issue en GitHub.",
     logsFailed: "No se pudieron crear los registros: {error}",
+    versionMismatch: "El servicio del modo Juego de Pocket XR es {service} y este panel {panel}: reinicia la Deck para terminar la actualización.",
   },
   pt_BR: {
     looking: "Procurando o Pocket XR...",
@@ -203,6 +210,7 @@ export const WORDS: Record<string, Words> = {
     logsSaved:
       "{name} foi salvo em Downloads. Envie para connect@mikehaye.com pelo modo Desktop ou anexe a uma issue no GitHub.",
     logsFailed: "Não foi possível criar os logs: {error}",
+    versionMismatch: "O serviço do Modo de Jogo do Pocket XR é {service} e este painel {panel}: reinicie o Deck para concluir a atualização.",
   },
   fr: {
     looking: "Recherche de Pocket XR…",
@@ -229,6 +237,7 @@ export const WORDS: Record<string, Words> = {
     logsSaved:
       "{name} est enregistré dans Téléchargements. Envoyez-le à connect@mikehaye.com depuis le mode Bureau, ou joignez-le à une issue sur GitHub.",
     logsFailed: "Impossible de créer les journaux : {error}",
+    versionMismatch: "Le service du mode Jeu de Pocket XR est en {service} et ce panneau en {panel} : redémarrez le Deck pour terminer la mise à jour.",
   },
   de: {
     looking: "Suche Pocket XR...",
@@ -255,6 +264,7 @@ export const WORDS: Record<string, Words> = {
     logsSaved:
       "{name} liegt in Downloads. Schick es im Desktop-Modus an connect@mikehaye.com oder häng es an ein Issue auf GitHub an.",
     logsFailed: "Logs konnten nicht erstellt werden: {error}",
+    versionMismatch: "Der Spielmodus-Dienst von Pocket XR ist {service}, dieses Panel {panel}: Starte das Deck neu, um das Update abzuschließen.",
   },
   it: {
     looking: "Cerco Pocket XR...",
@@ -280,6 +290,7 @@ export const WORDS: Record<string, Words> = {
     logsSaved:
       "{name} è stato salvato in Download. Invialo a connect@mikehaye.com dalla modalità Desktop o allegalo a una issue su GitHub.",
     logsFailed: "Impossibile creare i log: {error}",
+    versionMismatch: "Il servizio Modalità gioco di Pocket XR è {service} e questo pannello {panel}: riavvia il Deck per completare l'aggiornamento.",
   },
   ru: {
     looking: "Ищем Pocket XR...",
@@ -306,6 +317,7 @@ export const WORDS: Record<string, Words> = {
     logsSaved:
       "{name} сохранён в «Загрузки». Отправьте его на connect@mikehaye.com из режима рабочего стола или приложите к issue на GitHub.",
     logsFailed: "Не удалось собрать логи: {error}",
+    versionMismatch: "Служба игрового режима Pocket XR — {service}, эта панель — {panel}: перезапустите Deck, чтобы завершить обновление.",
   },
 };
 

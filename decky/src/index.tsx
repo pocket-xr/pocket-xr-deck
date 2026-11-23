@@ -26,6 +26,9 @@ type Status = {
   keys_line?: string; // how another controller does the back buttons' jobs (Steam Input keys)
   sticks?: boolean; // the Deck's stick clicks do Pocket XR's jobs (hold L3, hold R3, L3 three times)
   taps?: boolean; // taps on the glasses: two recentre, three switch view
+  glasses_buttons?: boolean | null; // let go of the glasses so their own buttons work; null: not offered
+  glasses_buttons_label?: string;
+  glasses_buttons_line?: string;
   taps_label?: string;
   taps_line?: string;
   sticks_label?: string;
@@ -36,6 +39,8 @@ type Status = {
   logs?: string;
   logs_error?: string;
   notice?: string; // already in the panel's language: e.g. XR Gaming's driver is running
+  version?: string; // the Gaming Mode service's Pocket XR version (from 0.7.6; none before)
+  panel?: string; // this panel's version, added by its backend (main.py)
   actions?: { op: string; label: string }[]; // fixes the service offers, labels already in the panel's language
   action_result?: string;
 };
@@ -137,6 +142,11 @@ function Content() {
           {st?.notice ? (
             <div style={{ fontSize: "13px", lineHeight: "18px", color: "#ffc857", marginTop: "6px" }}>{st.notice}</div>
           ) : null}
+          {st?.running && st.panel && st.version !== st.panel ? (
+            <div style={{ fontSize: "13px", lineHeight: "18px", color: "#ffc857", marginTop: "6px" }}>
+              {w.versionMismatch.replace("{service}", st.version || "≤ 0.7.5").replace("{panel}", st.panel)}
+            </div>
+          ) : null}
         </PanelSectionRow>
         {(st?.actions || []).map((a) => (
           <PanelSectionRow key={a.op}>
@@ -233,6 +243,17 @@ function Content() {
             <div style={{ fontSize: "12px", lineHeight: "16px", color: "#8b929a", marginTop: "6px" }}>{st.keys_line}</div>
           ) : null}
         </PanelSectionRow>
+        {st?.glasses_buttons_label && st.glasses_buttons !== null && st.glasses_buttons !== undefined ? (
+          <PanelSectionRow>
+            <ToggleField
+              label={st.glasses_buttons_label}
+              description={st.glasses_buttons_line}
+              checked={!!st.glasses_buttons}
+              disabled={!ready}
+              onChange={(on: boolean) => send({ op: "glasses_buttons", on })}
+            />
+          </PanelSectionRow>
+        ) : null}
         {st?.taps_label ? (
           <PanelSectionRow>
             <ToggleField

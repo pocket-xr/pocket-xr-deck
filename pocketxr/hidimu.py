@@ -297,6 +297,10 @@ class AirReader(_HidReader):
         self.record_path = record_path  # a file for RECORD_S of raw reports, made once per reader
         self.recorded = False
         self.paused = False  # Gaming Mode's "off": no motion stream (the XBX heartbeat keeps going, see AIR_XBX)
+        # "Use the glasses' buttons" (Gaming Mode's Quick Access): no stream, no heartbeat, every file on the glasses
+        # closed, until it is set back. A tester (Pierre Zammit, 23 Nov 2026) asked for this: his XBX's buttons
+        # (brightness) don't work while Pocket XR reads the glasses.
+        self.released = False
         self.last_beat = None  # time.monotonic() of the last heartbeat written
         self.beats = 0  # heartbeats written
         self._nodes = nodes or (lambda: hidraw_map(0x3318, self.pid))
@@ -304,6 +308,11 @@ class AirReader(_HidReader):
         self._logged = {}
         self._mcu = None  # (fd, thread, state) while the heartbeat runs
         self.decision = None
+
+    @property
+    def held(self):
+        """Not reading the glasses for now: Off (paused) or let go (released)."""
+        return self.paused or self.released
 
     # ---- raw bytes in the log ----
     def _note(self, dev, data, what="read"):
@@ -327,7 +336,7 @@ class AirReader(_HidReader):
 
     def _wait_ok(self, seconds):
         end = time.monotonic() + seconds
-        while time.monotonic() < end and not self.stop and not self.paused:
+        while time.monotonic() < end and not self.stop and not self.held:
             time.sleep(min(0.2, max(0.0, end - time.monotonic())))
 
     # ---- the XBX's MCU ----
@@ -433,11 +442,11 @@ class AirReader(_HidReader):
             os.write(fd, air_stream(True))
             self.log(f"imu: Air stream asked for on {dev} (interface {num})")
             end = time.monotonic() + seconds
-            while time.monotonic() < end and not self.stop and not self.paused:
+            while time.monotonic() < end and not self.stop and not self.held:
                 r, _, _ = select.select([fd], [], [], max(0.0, min(0.5, end - time.monotonic())))
                 if r and air_parse(self._read(fd, dev)):
                     return fd
-            if not self.stop and not self.paused:
+            if not self.stop and not self.held:
                 self.log(f"imu: no samples on interface {num} in {seconds:g} s")
         except OSError as e:
             self.log(f"imu: {dev} failed ({e})")
@@ -455,16 +464,16 @@ class AirReader(_HidReader):
         self._logged = {}
         by_num = {n[0]: n for n in nodes}
         first = by_num.get(air_interface(self.pid))
-        if self.pid in AIR_XBX and XBX_MCU in by_num and not self.stop and not self.paused:
+        if self.pid in AIR_XBX and XBX_MCU in by_num and not self.stop and not self.held:
             self._start_mcu(by_num[XBX_MCU])
         if first:
             fd = self._try_imu(first, self.WAIT_S)
             if fd is not None:
                 return fd, first
-        if self.pid not in AIR_XBX or self.stop or self.paused:
+        if self.pid not in AIR_XBX or self.stop or self.held:
             return None, None
         for num in sorted(by_num):
-            if num in (XBX_MCU, air_interface(self.pid)) or self.stop or self.paused:
+            if num in (XBX_MCU, air_interface(self.pid)) or self.stop or self.held:
                 continue
             fd = self._try_imu(by_num[num], self.WAIT_S)
             if fd is not None:
@@ -492,7 +501,7 @@ class AirReader(_HidReader):
         started = time.monotonic()
         rec = self._start_recording()
         rec_end = started + self.RECORD_S
-        while not self.stop and not self.paused:
+        while not self.stop and not self.held:
             now = time.monotonic()
             if rec and now >= rec_end:
                 rec.close()
@@ -521,7 +530,9 @@ class AirReader(_HidReader):
 
     def run(self):
         while not self.stop:
-            if self.paused:
+            if self.released:
+                self._stop_mcu("let go for the glasses' own buttons")
+            if self.held:
                 time.sleep(0.5)
                 continue
             nodes = self._nodes()
@@ -530,7 +541,7 @@ class AirReader(_HidReader):
                 continue
             fd, node = self._find(nodes)
             if fd is None:
-                if not self.stop and not self.paused:
+                if not self.stop and not self.held:
                     self.log(f"imu: no interface sent samples; trying again in {self.RETRY_S:g} s")
                 self._wait_ok(self.RETRY_S)
                 continue

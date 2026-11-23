@@ -24,6 +24,12 @@ ask() {  # ask "question": yes for an empty answer or one starting with y; no wh
   read -r -p "$1 [Y/n] " a || return 1
   case "$a" in ""|[Yy]*) return 0 ;; *) return 1 ;; esac
 }
+# systemctl --user without what a program started from Steam passes on (Steam's own libraries, LD_PRELOAD and
+# LD_LIBRARY_PATH), and with the user's bus where none is set. A tester's update of 0.7.5 from Gaming Mode (Pierre
+# Zammit, 23 Nov 2026) restarted Decky but left 0.7.3's Gaming Mode service running; that restart's error was hidden.
+user_systemctl() {
+  env -u LD_PRELOAD -u LD_LIBRARY_PATH XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"     DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-unix:path=/run/user/$(id -u)/bus}" systemctl --user "$@"
+}
 
 # The system pieces Pocket XR loads. SteamOS has them all; Ubuntu leaves Python's Tk out, a minimal install SDL2 too.
 if [ -z "$STEAMOS" ]; then
@@ -163,6 +169,25 @@ if [ -z "$STEAMOS" ] && command -v gsettings >/dev/null 2>&1 && gsettings list-s
   esac
 fi
 
+# Pocket XR's desktop app, if it is open: closed (it puts the glasses back on SIGTERM) and, with a desktop to show it
+# on, opened again, so it runs the new files.
+APP=""
+GAMING=""
+APP_PIDS=$(pgrep -u "$(id -u)" -f -- '-m pocketxr( |$)' || true)
+if [ -n "$APP_PIDS" ]; then
+  kill -TERM $APP_PIDS 2>/dev/null || true
+  for _ in $(seq 20); do
+    pgrep -u "$(id -u)" -f -- '-m pocketxr( |$)' >/dev/null || break
+    sleep 0.5
+  done
+  if [ -n "${DISPLAY}${WAYLAND_DISPLAY}" ]; then
+    setsid "$BIN/pocket-xr" >/dev/null 2>&1 < /dev/null &
+    APP=reopened
+  else
+    APP=closed
+  fi
+fi
+
 # Gaming Mode: a small service that starts with the session and acts only while Gaming Mode runs (pocketxr/gaming.py).
 # For SteamOS's Gaming Mode (gamescope); elsewhere it would only wait for a gamescope that never comes.
 UNITS="$HOME/.config/systemd/user"
@@ -181,9 +206,13 @@ RestartSec=5
 [Install]
 WantedBy=default.target
 EOF
-systemctl --user daemon-reload >/dev/null 2>&1 || true
-systemctl --user enable pocket-xr-gaming.service >/dev/null 2>&1 || true
-systemctl --user restart pocket-xr-gaming.service >/dev/null 2>&1 || true
+user_systemctl daemon-reload >/dev/null 2>&1 || true
+user_systemctl enable pocket-xr-gaming.service >/dev/null 2>&1 || true
+if out=$(user_systemctl restart pocket-xr-gaming.service 2>&1); then
+  GAMING=restarted
+else
+  GAMING="${out:-no reason given}"
+fi
 fi
 
 # PC screens with this Deck as the computer (pocketxr/host): the phone's Pocket XR shows the Deck's screens, each a
@@ -224,10 +253,10 @@ RestartSec=5
 [Install]
 WantedBy=plasma-workspace.target
 EOF
-  systemctl --user daemon-reload >/dev/null 2>&1 || true
-  systemctl --user enable pocket-xr-host.service >/dev/null 2>&1 || true
-  if systemctl --user is-active plasma-workspace.target >/dev/null 2>&1; then
-    systemctl --user restart pocket-xr-host.service >/dev/null 2>&1 || true
+  user_systemctl daemon-reload >/dev/null 2>&1 || true
+  user_systemctl enable pocket-xr-host.service >/dev/null 2>&1 || true
+  if user_systemctl is-active plasma-workspace.target >/dev/null 2>&1; then
+    user_systemctl restart pocket-xr-host.service >/dev/null 2>&1 || true
   fi
   [ -n "$HOST" ] || HOST=yes
 fi
@@ -288,6 +317,14 @@ if [ "$HOST" = replaced ]; then
   echo "are switched off (flatpak uninstall com.hayeco.pocketxr.PCScreens removes it)."
 elif [ -n "$HOST" ]; then
   echo "Your phone's Pocket XR can show this Deck's screens (PC screens) while it is in Desktop Mode."
+fi
+if [ "$APP" = reopened ]; then
+  echo "Pocket XR was open: it was closed and opened again with the new version."
+elif [ "$APP" = closed ]; then
+  echo "Pocket XR was open: it was closed. Open it again from the app menu."
+fi
+if [ -n "$GAMING" ] && [ "$GAMING" != restarted ]; then
+  echo "Pocket XR's Gaming Mode service could not be restarted ($GAMING). Restart the Deck to load the new version."
 fi
 [ -n "$STEAMOS" ] || exit 0  # the rest is about Gaming Mode's Quick Access panel: SteamOS only
 have=$(grep -o '"version": *"[^"]*"' "$PLUGINS/PocketXR/package.json" 2>/dev/null || true)
