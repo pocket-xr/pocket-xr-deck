@@ -207,5 +207,7 @@
   "Calibrating: take the glasses off and lay them on something still for 4 seconds.": "正在校準：摘下眼鏡，放在不動的地方 4 秒。",
   "Another controller: in Steam Input, map a button to the Stop media key to recentre and to Next to switch view.": "其他控制器：在 Steam 輸入中把一個按鍵對應到媒體鍵 Stop 可回到正前方，對應到 Next 可切換檢視。",
   "Stick clicks": "搖桿按下",
-  "In every game: hold L3 to recentre, hold R3 to switch view, click L3 three times to calibrate (lay the glasses down within 5 seconds).": "在任何遊戲中：按住 L3 回到正前方，按住 R3 切換檢視，連按 L3 三次進行校準（在 5 秒內放下眼鏡）。"
+  "In every game: hold L3 to recentre, hold R3 to switch view, click L3 three times to calibrate (lay the glasses down within 5 seconds).": "在任何遊戲中：按住 L3 回到正前方，按住 R3 切換檢視，連按 L3 三次進行校準（在 5 秒內放下眼鏡）。",
+  "Taps on the glasses": "輕敲眼鏡",
+  "Tap the glasses' frame twice to recentre, three times to switch view. New: say if it misses taps or reacts on its own.": "輕敲眼鏡框兩次回到正前方，三次切換檢視。新功能：如果漏掉輕敲或自己觸發，請告訴我們。"
 }

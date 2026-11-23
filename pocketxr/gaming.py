@@ -27,7 +27,7 @@ import threading
 import time
 
 from . import fusion, glasses as gmod, hidimu, imu, readability
-from . import i18n, keys, sendlogs, wlreshade
+from . import i18n, keys, sendlogs, taps, wlreshade
 from .deckpad import DeckButtons
 from .settingsctl import SettingsControl
 
@@ -41,7 +41,8 @@ FOV_V_DEG = 38.0  # the glasses' picture, vertical (as the desktop app)
 ASPECT = 16 / 9
 DEFAULTS = {"mode": "space", "size": 0.8, "curve": 0.0, "readability": False, "readability_saved": None,
             "keys": {},  # keys.py: {"recentre": "KEY_STOPCD", ...} over its defaults
-            "sticks": True}  # the Deck's stick clicks: hold L3 recentres, hold R3 switches view, L3 three times calibrates
+            "sticks": True,  # the Deck's stick clicks: hold L3 recentres, hold R3 switches view, L3 three times calibrates
+            "taps": False}  # taps on the glasses (taps.py): two recentre, three switch view; off until tried with glasses
 STICK_CAL_DELAY_S = 5.0  # a calibration from the stick clicks starts this long after, to take the glasses off first
 # The Quick Access panel (decky/ plugin) talks to the service here: one JSON request per line, one JSON answer per line
 CONTROL_SOCKET = os.path.join(os.environ.get("XDG_RUNTIME_DIR") or f"/run/user/{os.getuid()}", "pocket-xr-gaming.sock")
@@ -124,6 +125,7 @@ class Gaming:
         self.head_log_until = 0.0
         self.cal_text = ""
         self.cal_due = None  # when a calibration asked for with the stick clicks starts
+        self.taps = taps.Taps(self._tapped)
         self.head_logged = 0.0
         self.other_driver = []  # XR Gaming's driver, looked for every few seconds
         self.xr_gaming_enabled = False
@@ -165,6 +167,10 @@ class Gaming:
                                             "4 seconds."),
             "keys_line": i18n.tr("Another controller: in Steam Input, map a button to the Stop media key to recentre "
                                  "and to Next to switch view."),
+            "taps": bool(self.settings.get("taps", False)),
+            "taps_label": i18n.tr("Taps on the glasses"),
+            "taps_line": i18n.tr("Tap the glasses' frame twice to recentre, three times to switch view. New: say if "
+                                 "it misses taps or reacts on its own."),
             "sticks": bool(self.settings.get("sticks", True)),
             "sticks_label": i18n.tr("Stick clicks"),
             "sticks_line": i18n.tr("In every game: hold L3 to recentre, hold R3 to switch view, click L3 three times "
@@ -298,6 +304,10 @@ class Gaming:
                 self._start_calibration()
             elif op == "set_readability":
                 self._set_readability(bool(req.get("on")))
+            elif op == "set_taps":
+                self.settings["taps"] = bool(req.get("on"))
+                save_settings(self.settings)
+                self.log(f"gaming: taps on the glasses {'on' if self.settings['taps'] else 'off'} (Quick Access)")
             elif op == "set_sticks":
                 self.settings["sticks"] = bool(req.get("on"))
                 save_settings(self.settings)
@@ -353,6 +363,27 @@ class Gaming:
             if name == "L4":
                 self.recentre()
             elif name == "R4":
+                self.next_mode()
+
+    def _report(self, ts_ns, gyro, accel):
+        """Each motion report: to the head's fusion, and to the tap reader when taps are on."""
+        head = self.head
+        if head is None:
+            return
+        head.report(ts_ns, gyro, accel)
+        if self.settings.get("taps") and head.cal is None:
+            self.taps.feed(ts_ns / 1e9, gyro, accel)
+
+    def _tapped(self, n):
+        """Taps on the glasses (taps.py), from the motion reader's thread."""
+        if self.reshade is None or self.glasses is None:
+            return
+        with self.lock:
+            if n == 2:
+                self.log("gaming: glasses tapped twice")
+                self.recentre()
+            elif n == 3:
+                self.log("gaming: glasses tapped three times")
                 self.next_mode()
 
     def _stick(self, name, kind):
@@ -589,11 +620,11 @@ class Gaming:
         if self.head.bias_ready:
             self.log(f"gaming: gyro calibration loaded for these glasses ({self._glasses_key(g)})")
         if g.imu == "network":
-            self.reader = imu.ImuReader(self.head.report, log=self.log)
+            self.reader = imu.ImuReader(self._report, log=self.log)
         elif g.imu == "air":
-            self.reader = hidimu.AirReader(self.head.report, g.product, log=self.log, record_path=RAW_IMU)
+            self.reader = hidimu.AirReader(self._report, g.product, log=self.log, record_path=RAW_IMU)
         elif g.imu == "viture" and g.viture_tracking_default():
-            self.reader = hidimu.VitureReader(self.head.report, g.product, log=self.log)
+            self.reader = hidimu.VitureReader(self._report, g.product, log=self.log)
         if self.reader:
             self.reader.start()
         if g.control_link:

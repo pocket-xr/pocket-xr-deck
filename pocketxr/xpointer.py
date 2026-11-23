@@ -15,6 +15,7 @@ goes away (gamescope restarting), and prints one line each time something change
     display <name> <w>x<h>       the X screen the pointer is on (gamescope's Xwayland), when it changes
     none <why>                   no X screen could be opened (and why), tried again every few seconds
     unopened <name> <why>        one X screen would not open; said once, then tried again quietly
+    window <name> <id> at <x>,<y> <w>x<h>   the app's window u, v are measured in, when it changes (or "window none")
     key <code>                   a watched key went down (a Linux KEY_ code), with --keys 119,70
 
 shown is 0 when the app's cursor is hidden or empty (a game that hides it), by XFixes' cursor image.
@@ -25,6 +26,13 @@ moved last, and a tester's log (Pierre Zammit, 22 Nov 2026) flips between :0 192
 running, so the pointer could be placed by the wrong screen's size. gamescope names the screen that has the mouse in
 GAMESCOPE_MOUSE_FOCUS_DISPLAY on :0's root window (steamcompmgr.cpp), so that one is taken when it is set; the last
 moved one otherwise. gamescope stores the name as 32 bit items, so the name's first 4 bytes are in the first item.
+
+Which part of it: the effect runs on gamescope's first layer, the focused app's window, not the whole X screen, so a
+game whose window is smaller than its X screen (a 1280x720 game on the Deck's 1280x800, say) put 0.7.4's pointer off.
+The same tester still saw it off with 0.7.4, where his log shows the game's screen (:1 1280x800) in use. gamescope
+names that window in GAMESCOPE_FOCUSED_WINDOW and its display in GAMESCOPE_FOCUS_DISPLAY (steamcompmgr.cpp), so u, v
+are now measured across that window when it is on the screen the pointer is on, the whole screen otherwise. Written
+from gamescope's source; not yet tried on a Deck.
 
 The keys are read here, not from the input devices: Steam Input sends a controller's keyboard bindings into gamescope's
 X screen (XTest), and a new keyboard device is not readable by the user on SteamOS (checked on a Deck, 22 Nov 2026: a
@@ -78,7 +86,40 @@ def _libs():
         xf.XFixesQueryExtension.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_int), ctypes.POINTER(ctypes.c_int)]
     except OSError:
         xf = None
+    x11.XGetGeometry.argtypes = [ctypes.c_void_p, ctypes.c_ulong, ctypes.POINTER(ctypes.c_ulong),
+                                 ctypes.POINTER(ctypes.c_int), ctypes.POINTER(ctypes.c_int),
+                                 ctypes.POINTER(ctypes.c_uint), ctypes.POINTER(ctypes.c_uint),
+                                 ctypes.POINTER(ctypes.c_uint), ctypes.POINTER(ctypes.c_uint)]
+    x11.XTranslateCoordinates.argtypes = [ctypes.c_void_p, ctypes.c_ulong, ctypes.c_ulong, ctypes.c_int, ctypes.c_int,
+                                          ctypes.POINTER(ctypes.c_int), ctypes.POINTER(ctypes.c_int),
+                                          ctypes.POINTER(ctypes.c_ulong)]
+    x11.XSync.argtypes = [ctypes.c_void_p, ctypes.c_int]
+    x11.XSetErrorHandler.restype = ctypes.c_void_p
+    x11.XSetErrorHandler.argtypes = [_ERROR_HANDLER]
+    x11.XSetErrorHandler(_on_x_error)  # a window gone between looking it up and asking about it ends nothing
     return x11, xf
+
+
+# Xlib's own error handler ends the program on any error, such as asking about a window that just closed
+_ERRORS = [0]
+_ERROR_HANDLER = ctypes.CFUNCTYPE(ctypes.c_int, ctypes.c_void_p, ctypes.c_void_p)
+
+
+def _on_x_error_py(dpy, event):
+    _ERRORS[0] += 1
+    return 0
+
+
+_on_x_error = _ERROR_HANDLER(_on_x_error_py)
+
+
+def to_uv(p, size, area=None):
+    """Where the pointer p (x, y on the X screen) is on the picture gamescope's effect works in: the focused window
+    (area: x, y, w, h) when known, else the whole X screen (size: w, h), from 0 to 1 across and down."""
+    if area:
+        x, y, w, h = area
+        return round((p[0] - x) / max(1, w), 4), round((p[1] - y) / max(1, h), 4)
+    return round(p[0] / max(1, size[0]), 4), round(p[1] / max(1, size[1]), 4)
 
 
 def xauthority_candidates(proc="/proc", names=("gamescope", "steam", "gamescope-wl")):
@@ -170,26 +211,54 @@ class Screen:
         self.moved_at = 0.0
         self.keymap = ctypes.create_string_buffer(32)
         self.down = set()
-        self.focus_atom = x11.XInternAtom(self.dpy, b"GAMESCOPE_MOUSE_FOCUS_DISPLAY", 1)  # 0 if gamescope set none
+        self.atoms = {}
 
-    def mouse_focus(self):
-        """The display gamescope says has the mouse (set on its first Xwayland's root window), or None."""
-        if not self.focus_atom:
-            self.focus_atom = self.x11.XInternAtom(self.dpy, b"GAMESCOPE_MOUSE_FOCUS_DISPLAY", 1)
-            if not self.focus_atom:
-                return None
+    def _items(self, name):
+        """A 32 bit property of this screen's root window (gamescope sets its own on its first Xwayland's), or []."""
+        atom = self.atoms.get(name)
+        if not atom:
+            atom = self.atoms[name] = self.x11.XInternAtom(self.dpy, name.encode(), 1)  # 0 if nobody made it
+            if not atom:
+                return []
         kind, fmt = ctypes.c_ulong(), ctypes.c_int()
         n, left, data = ctypes.c_ulong(), ctypes.c_ulong(), ctypes.c_void_p()
-        if self.x11.XGetWindowProperty(self.dpy, self.root, self.focus_atom, 0, 4, 0, 0, ctypes.byref(kind),
+        if self.x11.XGetWindowProperty(self.dpy, self.root, atom, 0, 4, 0, 0, ctypes.byref(kind),
                                        ctypes.byref(fmt), ctypes.byref(n), ctypes.byref(left), ctypes.byref(data)):
-            return None
+            return []
         try:
             if not data.value or fmt.value != 32 or not n.value:
-                return None
-            return focus_name(ctypes.cast(data, ctypes.POINTER(ctypes.c_ulong))[:n.value])
+                return []
+            return list(ctypes.cast(data, ctypes.POINTER(ctypes.c_ulong))[:n.value])
         finally:
             if data.value:
                 self.x11.XFree(data)
+
+    def mouse_focus(self):
+        """The display gamescope says has the mouse, or None."""
+        return focus_name(self._items("GAMESCOPE_MOUSE_FOCUS_DISPLAY"))
+
+    def focused_window(self):
+        """(display name, X window) of the window gamescope shows as the app (its first layer), or (None, 0)."""
+        win = self._items("GAMESCOPE_FOCUSED_WINDOW")
+        return focus_name(self._items("GAMESCOPE_FOCUS_DISPLAY")), (int(win[0]) & 0xFFFFFFFF) if win else 0
+
+    def window_area(self, win):
+        """(x, y, w, h) of an X window on this screen, in the root window's pixels, or None (gone, or no such
+        window: X errors are caught, see _quiet_errors)."""
+        root, child = ctypes.c_ulong(), ctypes.c_ulong()
+        x, y, rx, ry = ctypes.c_int(), ctypes.c_int(), ctypes.c_int(), ctypes.c_int()
+        w, h, bw, depth = ctypes.c_uint(), ctypes.c_uint(), ctypes.c_uint(), ctypes.c_uint()
+        _ERRORS[0] = 0
+        if not self.x11.XGetGeometry(self.dpy, win, ctypes.byref(root), ctypes.byref(x), ctypes.byref(y),
+                                     ctypes.byref(w), ctypes.byref(h), ctypes.byref(bw), ctypes.byref(depth)):
+            return None
+        if not self.x11.XTranslateCoordinates(self.dpy, win, self.root, 0, 0, ctypes.byref(rx), ctypes.byref(ry),
+                                              ctypes.byref(child)):
+            return None
+        self.x11.XSync(self.dpy, 0)
+        if _ERRORS[0] or w.value < 16 or h.value < 16:
+            return None
+        return rx.value, ry.value, w.value, h.value
 
     def pressed(self, codes):
         """The watched keys (Linux codes) that went down since the last look."""
@@ -243,6 +312,7 @@ def main(argv=None):
     next_open = 0.0
     unopened = set()
     focus = None
+    app_display, app_win, area = None, 0, None
     while True:
         now = time.monotonic()
         if now >= next_open:
@@ -274,6 +344,7 @@ def main(argv=None):
             if now >= next_cursor:
                 first = screens[min(screens, key=lambda n: int(n[1:]) if n[1:].isdigit() else 99)]
                 focus = first.mouse_focus()
+                app_display, app_win = first.focused_window()
             s = pick(screens, focus)
             if s is not current:
                 current = s
@@ -281,8 +352,13 @@ def main(argv=None):
             if now >= next_cursor:
                 next_cursor = now + CURSOR_CHECK_S
                 shown = s.shown()
+                new_area = s.window_area(app_win) if (app_win and app_display == s.name) else None
+                if new_area != area:
+                    area = new_area
+                    print(f"window {s.name} 0x{app_win:x} at {area[0]},{area[1]} {area[2]}x{area[3]}" if area
+                          else f"window none on {s.name}: the whole X screen", flush=True)
             if s.last is not None:
-                line = (round(s.last[0] / max(1, s.size[0]), 4), round(s.last[1] / max(1, s.size[1]), 4), int(shown))
+                line = to_uv(s.last, s.size, area) + (int(shown),)
                 if line != said:
                     said = line
                     out.write(f"pointer {line[0]} {line[1]} {line[2]}\n")

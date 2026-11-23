@@ -174,6 +174,12 @@ not yet tried on a Deck. Other controllers: Steam Input sends their buttons to g
 and Next keys above. Steam's **Guide Button Chord Layout** (Steam's controller settings) applies in every game, so a
 chord there (for example Steam + L3) mapped to Stop may save setting it per game; not yet tried.
 
+**Taps on the glasses**, for any controller or with the Deck put down: tap the glasses' frame **twice** to recentre,
+**three times** to switch the view. Pocket XR reads the taps from the glasses' own motion sensor, and leaves out
+jolts during fast head turns and the slower ones from walking. Off at first: turn on **Taps on the glasses** in Quick
+Access. Asked for by Pierre Zammit. Checked by tests and against his recorded head movement (no taps found); not yet
+tried with real taps on glasses.
+
 Good to know:
 
 - The panel needs a recent Decky Loader (3.3 or newer). An older one may not show up in Quick Access at all with

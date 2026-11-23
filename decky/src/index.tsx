@@ -25,6 +25,9 @@ type Status = {
   calibrate_start_text?: string; // a toast when a calibration starts
   keys_line?: string; // how another controller does the back buttons' jobs (Steam Input keys)
   sticks?: boolean; // the Deck's stick clicks do Pocket XR's jobs (hold L3, hold R3, L3 three times)
+  taps?: boolean; // taps on the glasses: two recentre, three switch view
+  taps_label?: string;
+  taps_line?: string;
   sticks_label?: string;
   sticks_line?: string;
   readability_label?: string; // in the panel's language, from the service
@@ -230,6 +233,17 @@ function Content() {
             <div style={{ fontSize: "12px", lineHeight: "16px", color: "#8b929a", marginTop: "6px" }}>{st.keys_line}</div>
           ) : null}
         </PanelSectionRow>
+        {st?.taps_label ? (
+          <PanelSectionRow>
+            <ToggleField
+              label={st.taps_label}
+              description={st.taps_line}
+              checked={!!st.taps}
+              disabled={!st.running}
+              onChange={(on: boolean) => send({ op: "set_taps", on })}
+            />
+          </PanelSectionRow>
+        ) : null}
         {st?.sticks_label ? (
           <PanelSectionRow>
             <ToggleField

@@ -1,5 +1,33 @@
 # Changes
 
+## 0.7.5 (23 Nov 2026)
+
+From Pierre Zammit's report and logs on 0.7.4 and 0.7.3 (Steam Deck LCD, XREAL XBX A01+). Thanks, Pierre.
+
+- **XBX: the heartbeat at its pace.** With 0.7.4 he had no disconnects, but head tracking stopped about 3 minutes
+  after it started, every time, and then every write to the glasses and every open timed out (ETIMEDOUT): the
+  glasses' controller had stopped answering. Pocket XR sent the next heartbeat as soon as the glasses answered the
+  last one, so far more often than XREAL's driver, which sends one every 100 ms: a test with stand-in glasses that
+  answer at once counted about 6000 a second. Now exactly one goes out every 100 ms, it keeps going while the glasses
+  are attached (as 0.7.4), and the log gives the rate once a minute. A test checks the pacing. Whether this stops the
+  disconnects or the stopped tracking is not known yet: not yet tried with glasses.
+- **Taps on the glasses:** tap the frame twice to recentre, three times to switch the view, with any controller or
+  with the Deck put down. Read from the glasses' motion sensor: a short, sharp jolt after a quiet moment, left out
+  during fast head turns, and walking's slower jolts are too soft or too long to count. Off at first, with a switch in
+  Quick Access. Checked by tests (made-up taps, head turns and walking) and against his four recordings of head
+  movement (no taps found); not yet tried with real taps on glasses.
+- **Gaming Mode's pointer, across the game's window.** His 0.7.4 log shows the game's X screen (:1 1280x800) in use
+  while he played, and the pointer was still off. gamescope's effect works on the game's window, not the whole X
+  screen, so a game whose window is smaller than its screen (a 16:9 game on the Deck's 16:10 screen, say) put the
+  pointer off by the difference. Now the pointer is measured across the window gamescope names as the focused one
+  (GAMESCOPE_FOCUSED_WINDOW), and the log names that window. Written from gamescope's source and checked by tests;
+  not yet tried on a Deck. The second arrow that moves with the head and the trackpad is gamescope's own, drawn
+  after Pocket XR's effect: Pocket XR can't move or hide it.
+- **Brightness in Quick Access: not added.** The glasses' buttons don't work while the heartbeat runs, so he asked
+  for brightness in the panel. The only public driver found that names a brightness command (xrealAirLinuxDriver,
+  MIT: "W_BRIGHTNESS", 0x04) never sends it and doesn't say what it takes, and doesn't cover the XBX. Pocket XR
+  doesn't guess at commands for the glasses, so this is left out.
+
 ## 0.7.4 (22 Nov 2026)
 
 From Pierre Zammit's report on his XREAL XBX A01+ (Steam Deck). Thanks, Pierre.

@@ -443,6 +443,31 @@ def test_xbx_off_stops_the_stream_but_not_the_heartbeat():
     assert sum("MCU heartbeat running" in x for x in lines) == 1, lines
 
 
+def test_xbx_heartbeat_is_paced_at_10_a_second():
+    if not hasattr(__import__("socket"), "AF_UNIX"):
+        return
+    import time
+    fake = FakeXbx(lambda num, awake: num == 1 and awake)  # the fake MCU answers each heartbeat at once
+    lines = []
+    got = []
+    r = hidimu.AirReader(lambda *a: got.append(a), 0x0442, log=lines.append, nodes=fake.nodes, opener=fake.open)
+    r.WAIT_S, r.BEAT_LOG_S = 0.4, 1.0
+    r.start()
+    end = time.monotonic() + 10
+    while time.monotonic() < end and len(got) < 20:
+        time.sleep(0.05)
+    b0, t0 = fake.beats, time.monotonic()
+    time.sleep(2.0)
+    b1, t1 = fake.beats, time.monotonic()
+    r.stop = True
+    r.join(3)
+    rate = (b1 - b0) / (t1 - t0)
+    assert 8.0 <= rate <= 11.5, rate  # 0.7.4 sent the next as soon as an answer came: hundreds a second
+    rates = [x for x in lines if x.startswith("imu: MCU heartbeat: ") and x.endswith(" a second")]
+    assert rates, lines
+    assert 8.0 <= float(rates[-1].split()[3]) <= 11.5, rates
+
+
 def test_xbx_drop_says_how_long_since_the_heartbeat():
     lines = []
     r = hidimu.AirReader(lambda *a: None, 0x0442, log=lines.append, nodes=lambda: [], opener=None)

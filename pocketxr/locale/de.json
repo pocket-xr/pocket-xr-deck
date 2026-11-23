@@ -207,5 +207,7 @@
   "Calibrating: take the glasses off and lay them on something still for 4 seconds.": "Kalibrierung: Nimm die Brille ab und leg sie 4 Sekunden lang auf etwas, das sich nicht bewegt.",
   "Another controller: in Steam Input, map a button to the Stop media key to recentre and to Next to switch view.": "Anderer Controller: Weise in Steam Input einer Taste die Medientaste Stop zum Zentrieren und Next zum Wechseln der Ansicht zu.",
   "Stick clicks": "Stick-Klicks",
-  "In every game: hold L3 to recentre, hold R3 to switch view, click L3 three times to calibrate (lay the glasses down within 5 seconds).": "In jedem Spiel: L3 halten zum Zentrieren, R3 halten zum Wechseln der Ansicht, L3 dreimal klicken zum Kalibrieren (die Brille innerhalb von 5 Sekunden ablegen)."
+  "In every game: hold L3 to recentre, hold R3 to switch view, click L3 three times to calibrate (lay the glasses down within 5 seconds).": "In jedem Spiel: L3 halten zum Zentrieren, R3 halten zum Wechseln der Ansicht, L3 dreimal klicken zum Kalibrieren (die Brille innerhalb von 5 Sekunden ablegen).",
+  "Taps on the glasses": "Tippen auf die Brille",
+  "Tap the glasses' frame twice to recentre, three times to switch view. New: say if it misses taps or reacts on its own.": "Zweimal auf den Brillenrahmen tippen zum Zentrieren, dreimal zum Wechseln der Ansicht. Neu: sag Bescheid, wenn es Tipper verpasst oder von selbst reagiert."
 }
