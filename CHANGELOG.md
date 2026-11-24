@@ -1,6 +1,6 @@
 # Changes
 
-## Next (not released yet)
+## 0.7.12 (24 Nov 2026)
 
 From Pierre Zammit's report on 0.7.11: "if you manage to solve the mouse pointer issue I'd say it would be perfect".
 Thanks, Pierre.
