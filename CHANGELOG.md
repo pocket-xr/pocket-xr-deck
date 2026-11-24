@@ -1,6 +1,6 @@
 # Changes
 
-## Next (not released yet)
+## 0.7.10 (23 Nov 2026)
 
 - **Text size and Readability for the PC screens a phone streams from this Deck or PC**, as in Pocket XR for Mac
   (asked for by Mike after a question on Reddit about text on PC screens). Text size, on the control panel: Standard,
