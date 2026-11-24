@@ -649,8 +649,10 @@ class Gaming:
         threading.Thread(target=self._read_pointer, args=(p,), name="pointer", daemon=True).start()
 
     def _read_pointer(self, p):
-        said_none = False
+        said_none, in_stack = False, False
         for line in p.stdout:
+            if in_stack and getattr(self, "pointer_stalls", 0) > 3:
+                continue  # stuck again and again: its stack was in the log the first 3 times
             parts = line.split()
             if parts[:1] == ["pointer"] and len(parts) == 4:
                 try:
@@ -661,6 +663,14 @@ class Gaming:
                 action = self.key_actions.get(int(parts[1]))
                 if action:
                     self._key(action)
+            elif line.startswith("Timeout ("):
+                # xpointer.py's watch (STUCK_S): a look took too long; its stack follows, then it ends
+                in_stack = True
+                self.pointer_stalls = getattr(self, "pointer_stalls", 0) + 1
+                self.log(f"gaming: pointer reader stuck ({self.pointer_stalls}), as an X screen stopped answering; "
+                         f"where it was, then it starts again:" if self.pointer_stalls <= 3 else
+                         f"gaming: pointer reader stuck again ({self.pointer_stalls}); starts again")
+                continue
             elif parts[:1] == ["none"]:
                 if not said_none:
                     self.log("gaming: pointer: " + line.strip())
