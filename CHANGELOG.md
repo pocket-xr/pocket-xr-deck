@@ -1,5 +1,18 @@
 # Changes
 
+## Next (not released yet)
+
+- **Text size and Readability for the PC screens a phone streams from this Deck or PC**, as in Pocket XR for Mac
+  (asked for by Mike after a question on Reddit about text on PC screens). Text size, on the control panel: Standard,
+  125% or 150%, the Mac's sizes (each 1920x1080 screen laid out as 1920x1080, 1536x864 or 1280x720). Readability lays
+  it out as 1440x810 instead, as the Mac's. Each PC screen is a KWin virtual output at the size the phone asks for;
+  Pocket XR now sets KWin's scale on it when it is made (kscreen-doctor, as Plasma's Display settings), so it keeps
+  all its pixels and text stays sharp. Set at Standard too, as KWin remembers an output's scale. The host's log says
+  what each screen was made at, the scale and what apps see. Plasma on Wayland only; checked by tests, not yet with a
+  phone. Desktop Mode's own Space keeps its Readability (the Deck screen alone, 30 degrees wide: 1280 px at about 43
+  px a degree, the Mac's 1440 px across 34 degrees is about 42); Text size is not offered there, as on X11 KDE has
+  one scale for all screens, so a larger size there could only stretch pixels.
+
 ## 0.7.9 (23 Nov 2026)
 
 From Pierre Zammit's report and log on 0.7.8 (Steam Deck LCD, XREAL XBX A01+). Thanks, Pierre.

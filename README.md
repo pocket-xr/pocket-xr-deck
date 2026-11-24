@@ -264,6 +264,13 @@ install. Put both on the same network. The first time, the Deck asks whether to 
 Pocket XR PC Screens app; the installer switches that app off. How it works and what has been checked:
 `docs/HOST-DECK.md`.
 
+**Text size and Readability on these PC screens**, as in Pocket XR for Mac: **Text size** on the control panel
+(Standard, 125%, 150%) draws everything larger on each PC screen at the same width, laid out as 1536x864 or 1280x720
+on a 1920x1080 screen, and **Readability** lays it out as 1440x810 instead. The PC screen keeps all its pixels: Pocket
+XR sets KWin's own scale on that screen, as Plasma's Display settings do, so text stays sharp. They apply to the next
+PC screen made, and the host's log says what each one was made at. Plasma on Wayland only (GNOME and X11 have no per
+screen scale Pocket XR can set). Not yet tried with a phone.
+
 ## Your PC in the glasses
 
 New, and not yet tried on a Deck: **Show a PC** (on the launcher card and the control panel) opens a screen of your

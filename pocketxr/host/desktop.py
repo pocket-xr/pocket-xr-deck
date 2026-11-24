@@ -72,6 +72,12 @@ def arrange(outs):
     return moves
 
 
+def set_scale(name, scale):
+    """Sets KWin's scale on an output (as Plasma's Display settings do); None when done, else why not."""
+    code, out = _run(["kscreen-doctor", "output.%s.scale.%s" % (name, ("%.4f" % scale).rstrip("0").rstrip("."))])
+    return None if code == 0 else (out.strip() or "kscreen-doctor ended with %s" % code)
+
+
 class Layout:
     """The outputs, cached and refreshed when a stream starts or ends."""
 

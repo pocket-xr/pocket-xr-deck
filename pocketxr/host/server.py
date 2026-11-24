@@ -16,6 +16,7 @@ import urllib.parse
 from xml.sax.saxutils import escape
 
 from . import audio, control, desktop, ossl, rsa, video
+from .. import readability
 from .inputs import Inputs
 
 APP_ID = 1
@@ -547,12 +548,27 @@ class Screen:
     def _placed(self, s, name):
         desktop.close_display_switch(self.log)
         layout = self.host.layout
+        self._scale(s, name)
         layout.refresh(place=True)
         s.output = name
         s.area = layout.area(name)
         self.log("host: %s is %s at %s, %.2f s after PLAY" % (self.name, name, s.area, time.time() - s.started))
         if s.area:
             self.host.inputs.centre(s.area)
+
+    def _scale(self, s, name):
+        """Readability or Text size (readability.py, as Pocket XR for Mac): KWin's scale on this PC screen's output,
+        from the desktop app's settings when the screen is made, and the log says what it was made at."""
+        on, text = readability.desktop_choice()
+        scale = readability.host_scale(s.width, on, text)
+        # Set at Standard (1) too: KWin remembers an output's scale by its name, so a PC screen made again after a
+        # change back to Standard would otherwise keep the old one.
+        err = desktop.set_scale(name, scale)
+        if err:
+            self.log("host: %s (%s) made at %dx%d; scale %g not set (%s)" % (self.name, name, s.width, s.height,
+                                                                               scale, err))
+        else:
+            self.log(readability.host_line(self.name, name, s.width, s.height, on, text, scale))
 
     def _gone(self, s):
         with self.lock:

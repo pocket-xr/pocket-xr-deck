@@ -213,5 +213,8 @@
   "Tap the glasses' frame twice to recentre, three times to switch view, at about 2 taps a second (1.5 to 5 a second work). Hold your head still while you tap. New: say if it misses taps or reacts on its own.": "Tapez deux fois sur la monture pour recentrer, trois fois pour changer de vue, à environ 2 tapes par seconde (de 1,5 à 5 par seconde marchent). Gardez la tête immobile pendant que vous tapez. Nouveau : dites-nous s'il rate des tapes ou réagit tout seul.",
   "Lets go of the glasses so their own buttons work (brightness, for example). Head tracking pauses until you turn this off. Set the mode to Off, turn this on and wait for the glasses to blink off and on (up to a few minutes), adjust them, turn this off, then pick a mode.": "Libère les lunettes pour que leurs propres boutons fonctionnent (la luminosité, par exemple). Le suivi de la tête est en pause jusqu'à ce que vous désactiviez ceci. Mettez le mode sur Désactivé, activez ceci et attendez que les lunettes s'éteignent et se rallument (jusqu'à quelques minutes), réglez-les, désactivez ceci, puis choisissez un mode.",
   "Glasses brightness": "Luminosité des lunettes",
-  "Sets the glasses' brightness while Pocket XR has them, so you don't need their buttons. New: say if it does nothing on your glasses.": "Règle la luminosité des lunettes pendant que Pocket XR les utilise, sans leurs boutons. Nouveau : dites-nous si cela ne fait rien sur vos lunettes."
+  "Sets the glasses' brightness while Pocket XR has them, so you don't need their buttons. New: say if it does nothing on your glasses.": "Règle la luminosité des lunettes pendant que Pocket XR les utilise, sans leurs boutons. Nouveau : dites-nous si cela ne fait rien sur vos lunettes.",
+  "Text size": "Taille du texte",
+  "Larger, still sharp, on the PC screens your phone shows.": "Plus grand, toujours net, sur les écrans PC que montre votre téléphone.",
+  "Standard": "Standard"
 }

@@ -273,6 +273,10 @@ class Panel:
             s = Switch(sp.body, tr(title), tr(sub), lambda on, k=key: send(k, on))
             s.pack(fill="x", padx=2)
             self.switches[key] = s
+        # Text size, as Pocket XR for Mac's: for the PC screens a phone streams from this computer (readability.py)
+        self.text_size = Stepper(sp.body, tr("Text size"), tr("Larger, still sharp, on the PC screens your phone shows."),
+                                 lambda step: send("text_size", step))
+        self.text_size.pack(fill="x", padx=2)
         self.viture = Switch(sp.body, tr("VITURE head tracking"), tr("Experimental on models other than the Beast"),
                              lambda on: send("viture", on))
 
@@ -379,6 +383,8 @@ class Panel:
         b.set(selected=rec)
         for k, s in self.switches.items():
             s.set(bool(st.get(k, k in ("cursor_follows_head", "sbs_3d"))))
+        ts = st.get("text_scale", 100)
+        self.text_size.set(tr("Standard") if ts == 100 else f"{ts}%")
         flat = st.get("flat", False)
         for k in ("Nearer", "Further"):
             self.adjust[k].set(enabled=not flat)
