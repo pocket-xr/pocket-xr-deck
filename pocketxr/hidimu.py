@@ -80,10 +80,11 @@ def mcu_parse(frame):
 
 
 def brightness_answer(data):
-    """The level in an R_BRIGHTNESS answer's data, or None. Monado's Air answers a status (0) and the level; a tester's
-    XBX A01+ (23 Nov 2026) answered the level alone: its frame's length field said 18, so one byte of data, 04."""
-    if len(data) == 1 and data[0] <= BRIGHTNESS_MAX:
-        return data[0]
+    """The level in an R_BRIGHTNESS answer's data, or None. The answer is a status (0 for done) then the level
+    (Monado's Air driver). An XBX A01+'s MCU answers its commands the same way, status first (ermay12/xrdesk,
+    NOTES-xreal.md, GPL-3.0: "Replies carry a status byte first (0 = ok)"). A tester's XBX A01+ answered this one with a
+    single byte, 04, and every brightness set with 04 too (Pierre Zammit, 23 and 24 Nov 2026), and his brightness did
+    not change: 04 is that status, not a level, so the XBX does not take these commands. 0.7.9 read it as level 4."""
     if len(data) >= 2 and data[0] == 0 and data[1] <= BRIGHTNESS_MAX:
         return data[1]
     return None
@@ -344,7 +345,8 @@ class AirReader(_HidReader):
         # (brightness) don't work while Pocket XR reads the glasses.
         self.released = False
         self.brightness = None  # 0 to BRIGHTNESS_MAX, from the glasses' MCU while the heartbeat runs
-        self.brightness_answered = False  # the glasses answered R_BRIGHTNESS at all
+        self.brightness_unsupported = None  # why the glasses don't take MCU brightness, once known
+        self._brightness_sent = None  # the level last set, until a read says whether it took
         self._mcu_out = []  # MCU frames for the heartbeat's thread to write
         self.last_beat = None  # time.monotonic() of the last heartbeat written
         self.beats = 0  # heartbeats written
@@ -424,7 +426,8 @@ class AirReader(_HidReader):
             return False
         state = {"run": True}
         self.brightness = None
-        self.brightness_answered = False
+        self.brightness_unsupported = None
+        self._brightness_sent = None
         self._mcu_out.append(mcu_command(MCU_R_BRIGHTNESS))
 
         def beat():
@@ -466,13 +469,20 @@ class AirReader(_HidReader):
     def set_brightness(self, level):
         """Sets the glasses' brightness (0 to BRIGHTNESS_MAX) through their MCU; False when the heartbeat isn't running
         (the MCU is only open then)."""
-        if not self._mcu_running():
+        if not self._mcu_running() or self.brightness_unsupported:
             return False
         level = max(0, min(BRIGHTNESS_MAX, int(level)))
         self._mcu_out.append(mcu_command(MCU_W_BRIGHTNESS, bytes([level])))
-        self.brightness = level
+        self._mcu_out.append(mcu_command(MCU_R_BRIGHTNESS))  # read back: did it take?
+        self._brightness_sent = level
         self.log(f"imu: brightness {level} of {BRIGHTNESS_MAX} sent")
         return True
+
+    def _no_brightness(self, why):
+        if not self.brightness_unsupported:
+            self.brightness_unsupported = why
+            self.brightness = None
+            self.log(f"imu: these glasses don't take the brightness commands ({why}); the slider is hidden")
 
     def _mcu_frame(self, frame):
         """What the MCU says while the heartbeat runs: the brightness, and the glasses' own buttons."""
@@ -481,16 +491,19 @@ class AirReader(_HidReader):
             return
         msg, data = got
         if msg == MCU_R_BRIGHTNESS:
-            self.brightness_answered = True
             level = brightness_answer(data)
-            if level is not None:
+            sent, self._brightness_sent = self._brightness_sent, None
+            if level is None:
+                self._no_brightness(f"the read answered {data.hex(' ') or 'nothing'}, a status, no level")
+            elif sent is not None and level != sent:
+                self._no_brightness(f"set to {sent}, it reads back {level}")
+            else:
                 self.brightness = level
                 self.log(f"imu: the glasses' brightness is {level} of {BRIGHTNESS_MAX} (answer {data.hex(' ')})")
-            else:
-                self.log(f"imu: brightness answer not understood ({data.hex(' ') or 'no data'})")
         elif msg == MCU_W_BRIGHTNESS:
-            # What a set answers is not documented: logged whole, so a log shows whether the glasses took it
             self.log(f"imu: brightness set answered {data.hex(' ') or 'with no data'}")
+            if data[:1] and data[0] != 0:
+                self._no_brightness(f"the set answered status {data[0]}")
         elif msg == MCU_P_BUTTON and len(data) >= 9:
             phys, action, value = data[0], data[4], data[8]
             self.log(f"imu: glasses button {phys}, action {action}, value {value}")

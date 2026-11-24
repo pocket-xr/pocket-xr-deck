@@ -19,11 +19,13 @@ def his_answer():
 
 
 class BrightnessAnswer(unittest.TestCase):
-    def test_his_frame_is_level_4(self):
+    def test_his_frame_is_a_status_not_a_level(self):
+        # 0.7.9 read the one byte, 04, as level 4; it answered every set with 04 too and the brightness never
+        # changed (24 Nov 2026): it is the MCU's status byte (xrdesk's notes: replies carry a status byte first)
         msg, data = hidimu.mcu_parse(his_answer())
         self.assertEqual(msg, hidimu.MCU_R_BRIGHTNESS)
         self.assertEqual(data, bytes([4]))  # the length field (18 = 17 + 1) leaves the padding out
-        self.assertEqual(hidimu.brightness_answer(data), 4)
+        self.assertIsNone(hidimu.brightness_answer(data))
 
     def test_monados_layout_still_read(self):
         self.assertEqual(hidimu.brightness_answer(bytes([0, 6])), 6)
@@ -38,20 +40,14 @@ class BrightnessAnswer(unittest.TestCase):
         f[5:7] = struct.pack("<H", 200)
         self.assertEqual(len(hidimu.mcu_parse(bytes(f))[1]), 64 - 22)
 
-    def test_reader_logs_and_keeps_the_level(self):
+    def test_reader_hides_brightness_for_his_glasses(self):
         lines = []
         r = hidimu.AirReader(lambda *a: None, 0x0442, log=lines.append, nodes=lambda: [])
         r._mcu_frame(his_answer())
-        self.assertEqual(r.brightness, 4)
-        self.assertTrue(r.brightness_answered)
-        self.assertIn("imu: the glasses' brightness is 4 of 7 (answer 04)", lines)
-        r2 = hidimu.AirReader(lambda *a: None, 0x0442, log=lines.append, nodes=lambda: [])
-        f = bytearray(his_answer())
-        f[22] = 9
-        r2._mcu_frame(bytes(f))
-        self.assertIsNone(r2.brightness)
-        self.assertTrue(r2.brightness_answered)
-        self.assertIn("imu: brightness answer not understood (09)", lines)
+        self.assertIsNone(r.brightness)
+        self.assertTrue(r.brightness_unsupported)
+        self.assertTrue(any(x.startswith("imu: these glasses don't take the brightness commands (the read answered 04")
+                            for x in lines), lines)
 
 
 class GamingService(unittest.TestCase):
@@ -105,15 +101,13 @@ class GamingService(unittest.TestCase):
             self.gaming.save_settings = saved
         self.assertEqual(g.settings["mode"], "space")
 
-    def test_slider_shows_once_the_glasses_answered(self):
+    def test_slider_only_with_a_level_that_takes(self):
         g = self.fake("space", False)
         g.reader._mcu_running = lambda: True
         self.assertIsNone(self.gaming.Gaming._brightness(g))
-        g.reader.brightness_answered = True
-        self.assertEqual(self.gaming.Gaming._brightness(g), 0)
         g.reader.brightness = 4
         self.assertEqual(self.gaming.Gaming._brightness(g), 4)
-        g.reader._mcu_running = lambda: False
+        g.reader.brightness_unsupported = "set to 5, it reads back 4"
         self.assertIsNone(self.gaming.Gaming._brightness(g))
 
     def test_switching_taps_rechecks_off(self):

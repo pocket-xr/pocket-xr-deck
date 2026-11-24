@@ -140,6 +140,9 @@ The Deck's back buttons work at any time, alongside Steam's controls:
 **Recentre** makes where you look straight ahead, up or down as well as sideways: lying back or looking down at a
 desk, the screen comes to where you look. The picture stays level (the head's roll is not taken). Switching the view
 does the same. (0.7.1 took the up or down only past 15 degrees, so near level it moved the screen sideways alone.)
+In Gaming Mode, **Recentre includes head tilt** in Quick Access (off at first) takes the roll too: lying on one side,
+the picture lines up with your eyes instead of the room's horizon, and fills the glasses' picture. Asked for by
+Pierre Zammit; checked by tests, not yet with glasses.
 
 **No back buttons?** A Steam Controller or another pad has no L4 or R4, but Steam Input can map any of its buttons to
 a keyboard key, and Pocket XR does the back buttons' jobs from keys too: the media key **Stop** recentres and
@@ -180,7 +183,10 @@ Pocket XR reads the taps from the glasses' own motion sensor: a tap is a small j
 during fast head turns, slower ones and longer ones are left out. Off at first: turn on **Taps on the glasses** in
 Quick Access. Asked for by Pierre Zammit. With 0.7.6 his taps on the top of the frame mostly didn't count; 0.7.7
 takes softer taps (his recorded ones count) and puts every jolt in the log with why it did or didn't count.
-A few steps of walking with sharp heel strikes could count as taps; not yet tried while walking.
+A few steps of walking with sharp heel strikes could count as taps; not yet tried while walking. **Tap
+sensitivity** in Quick Access, 25% to 300% (100% at first, the values Pierre found "more sensitive than I expected, in
+a good way"): higher catches softer taps, lower only firm ones. Pressing the glasses' buttons can count as a tap, more
+so when it is high.
 
 **Use the glasses' buttons**, in Quick Access (XREAL Air family, including the XBX): Pocket XR lets go of the glasses
 until you turn it off again, so their own buttons can work, for brightness say. Head tracking pauses meanwhile.
@@ -189,11 +195,11 @@ back, but only 1 to 4 minutes later, when the glasses reset themselves (they bli
 Off, turn this on, wait for the glasses to blink, adjust them, turn this off, then pick a mode. (0.7.7 also reset
 the glasses over USB; on his XBX that didn't bring the buttons back sooner, so it's gone.)
 
-**Glasses brightness**, a slider in Quick Access while Pocket XR has XREAL glasses (on the XBX, while it keeps their
-controller awake), so their buttons aren't needed: it sets the brightness from 0 to 7 with the commands Monado's
-XREAL Air driver uses. When the glasses' own brightness buttons report a press, Pocket XR applies the new level too,
-and logs each button. Monado wrote these for the Air, Air 2 and Air 2 Pro; not yet tried on any glasses, the XBX
-included.
+**Glasses brightness**, a slider in Quick Access while Pocket XR has XREAL glasses, with the brightness commands
+Monado's XREAL Air driver uses (for the Air, Air 2 and Air 2 Pro; not yet tried on them). It shows only when the
+glasses read out a level, and hides itself if a level set doesn't read back. The XBX A01+ doesn't take these commands
+(Pierre Zammit's log: every set answered the same status and the brightness stayed), so it has no slider; no public
+source documents an XBX brightness command.
 
 Good to know:
 

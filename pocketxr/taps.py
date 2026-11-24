@@ -49,6 +49,7 @@ RUN_END_S = 0.75
 WARMUP_S = 0.5
 AVG_S = 0.03
 TURN_AVG_S = 0.15
+SENSITIVITY = (25, 300)  # Tap sensitivity's range, percent; 100 is the values above
 LOG_MAX = 120         # jolt lines a minute
 
 
@@ -59,8 +60,25 @@ class Taps:
     def __init__(self, on_taps, on_log=None):
         self.on_taps = on_taps
         self.on_log = on_log
+        self.set_sensitivity(100)
         self.logged = []  # times of the jolt lines, for LOG_MAX
         self.reset()
+
+    def set_sensitivity(self, percent):
+        """Tap sensitivity, percent (SENSITIVITY): above 100 softer and less sudden jolts count (the jolt and jump a
+        tap needs are divided by it), below 100 only firmer ones. 100 keeps TAP_G and JERK_G, the values a tester
+        liked (Pierre Zammit, 24 Nov 2026: "more sensitive than I expected, in a good way"; pressing the glasses'
+        buttons counted too)."""
+        try:
+            p = float(percent)
+        except (TypeError, ValueError):
+            p = 100.0
+        p = max(SENSITIVITY[0], min(SENSITIVITY[1], p if p == p else 100.0))
+        self.sensitivity = int(round(p))
+        k = 100.0 / p
+        self.tap_g = TAP_G * k
+        self.jerk_g = JERK_G * k
+        self.log_g = min(LOG_G, self.tap_g * 0.6)
 
     def reset(self):
         self.t0 = None
@@ -101,13 +119,13 @@ class Taps:
             return
         j = self.jolt
         if j is None:
-            if d >= LOG_G:
+            if d >= self.log_g:
                 self.jolt = {"start": t, "peak": d, "jerk": jump, "turn": turn_before,
                              "quiet": t - self.quiet_from, "under": None}
         else:
             j["peak"] = max(j["peak"], d)
             j["jerk"] = max(j["jerk"], jump)
-            if d >= LOG_G:
+            if d >= self.log_g:
                 j["under"] = None
             elif j["under"] is None:
                 j["under"] = t
@@ -126,10 +144,10 @@ class Taps:
     def _judge(self, j, lasted):
         gap = j["start"] - self.taps[-1] if self.taps else None
         why = None
-        if j["peak"] < TAP_G:
-            why = f"too soft (under {TAP_G:g} g)"
-        elif j["jerk"] < JERK_G:
-            why = f"not sharp (a tap jumps {JERK_G:g} g within {JERK_S * 1000:g} ms)"
+        if j["peak"] < self.tap_g:
+            why = f"too soft (under {self.tap_g:.2f} g)"
+        elif j["jerk"] < self.jerk_g:
+            why = f"not sharp (a tap jumps {self.jerk_g:.2f} g within {JERK_S * 1000:g} ms)"
         elif lasted > SPIKE_MAX_S:
             why = f"too long (a tap is under {SPIKE_MAX_S * 1000:g} ms)"
         elif j["quiet"] < QUIET_BEFORE_S:

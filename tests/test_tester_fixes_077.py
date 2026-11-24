@@ -70,13 +70,17 @@ class Brightness(unittest.TestCase):
         r._mcu_frame(self.frame(hidimu.MCU_R_BRIGHTNESS, [0, 4]))
         self.assertEqual(r.brightness, 4)
         self.assertTrue(r.set_brightness(9))  # clamped
-        self.assertEqual(r.brightness, 7)
-        self.assertEqual(hidimu.mcu_parse(r._mcu_out[-1]), (hidimu.MCU_W_BRIGHTNESS, bytes([7])))
+        self.assertEqual(hidimu.mcu_parse(r._mcu_out[-2]), (hidimu.MCU_W_BRIGHTNESS, bytes([7])))
+        self.assertEqual(hidimu.mcu_parse(r._mcu_out[-1])[0], hidimu.MCU_R_BRIGHTNESS)  # then read back
         r._mcu_frame(self.frame(hidimu.MCU_W_BRIGHTNESS, [0]))
-        r._mcu_frame(self.frame(hidimu.MCU_W_BRIGHTNESS, [1]))
+        r._mcu_frame(self.frame(hidimu.MCU_R_BRIGHTNESS, [0, 7]))  # it took
+        self.assertEqual(r.brightness, 7)
+        self.assertIsNone(r.brightness_unsupported)
         self.assertIn("imu: the glasses' brightness is 4 of 7 (answer 00 04)", lines)
         self.assertIn("imu: brightness set answered 00", lines)
-        self.assertIn("imu: brightness set answered 01", lines)
+        r._mcu_frame(self.frame(hidimu.MCU_W_BRIGHTNESS, [1]))  # a refusing status
+        self.assertTrue(r.brightness_unsupported)
+        self.assertFalse(r.set_brightness(3))
 
     def test_not_while_the_mcu_is_closed(self):
         r = hidimu.AirReader(lambda *a: None, 0x0442, log=lambda x: None, nodes=lambda: [])
@@ -88,8 +92,7 @@ class Brightness(unittest.TestCase):
         data = [2, 0, 0, 0, hidimu.BUTTON_BRIGHTNESS_UP, 0, 0, 0, 5]
         r._mcu_frame(self.frame(hidimu.MCU_P_BUTTON, data))
         self.assertIn("imu: glasses button 2, action 6, value 5", lines)
-        self.assertEqual(r.brightness, 5)
-        self.assertEqual(hidimu.mcu_parse(r._mcu_out[-1]), (hidimu.MCU_W_BRIGHTNESS, bytes([5])))
+        self.assertEqual(hidimu.mcu_parse(r._mcu_out[-2]), (hidimu.MCU_W_BRIGHTNESS, bytes([5])))
         r._mcu_out.clear()
         r._mcu_frame(self.frame(hidimu.MCU_P_BUTTON, [1, 0, 0, 0, 1, 0, 0, 0, 1]))  # display toggle: logged only
         self.assertEqual(r._mcu_out, [])

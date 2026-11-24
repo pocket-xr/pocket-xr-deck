@@ -216,5 +216,9 @@
   "Sets the glasses' brightness while Pocket XR has them, so you don't need their buttons. New: say if it does nothing on your glasses.": "Stellt die Helligkeit der Brille ein, während Pocket XR sie nutzt, sodass du ihre Tasten nicht brauchst. Neu: sag Bescheid, wenn es bei deiner Brille nichts bewirkt.",
   "Text size": "Textgröße",
   "Larger, still sharp, on the PC screens your phone shows.": "Größer und trotzdem scharf auf den PC-Bildschirmen, die dein Handy zeigt.",
-  "Standard": "Standard"
+  "Standard": "Standard",
+  "Tap sensitivity": "Tipp-Empfindlichkeit",
+  "Higher catches softer taps, lower only firm ones. Pressing the glasses' buttons can count as a tap, more so when it is high.": "Höher erkennt sanftere Tipper, niedriger nur feste. Ein Druck auf die Tasten der Brille kann als Tipper zählen, besonders bei hohen Werten.",
+  "Recentre includes head tilt": "Zentrieren mit Kopfneigung",
+  "For lying on one side: Recentre lines the picture up with your eyes, not the room's horizon.": "Zum Liegen auf der Seite: Zentrieren richtet das Bild an deinen Augen aus, nicht am Horizont des Raums."
 }

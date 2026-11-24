@@ -42,7 +42,9 @@ ASPECT = 16 / 9
 DEFAULTS = {"mode": "space", "size": 0.8, "curve": 0.0, "readability": False, "readability_saved": None,
             "keys": {},  # keys.py: {"recentre": "KEY_STOPCD", ...} over its defaults
             "sticks": True,  # the Deck's stick clicks: hold L3 recentres, hold R3 switches view, L3 three times calibrates
-            "taps": False}  # taps on the glasses (taps.py): two recentre, three switch view; off until tried with glasses
+            "taps": False,  # taps on the glasses (taps.py): two recentre, three switch view; off until tried with glasses
+            "tap_sensitivity": 100,  # percent (taps.SENSITIVITY); 100 is the values a tester liked
+            "recentre_roll": False}  # Recentre includes head tilt: the head's roll too (fusion.recentre follow_roll)
 STICK_CAL_DELAY_S = 5.0  # a calibration from the stick clicks starts this long after, to take the glasses off first
 # The Quick Access panel (decky/ plugin) talks to the service here: one JSON request per line, one JSON answer per line
 CONTROL_SOCKET = os.path.join(os.environ.get("XDG_RUNTIME_DIR") or f"/run/user/{os.getuid()}", "pocket-xr-gaming.sock")
@@ -131,6 +133,7 @@ class Gaming:
         self.cal_due = None  # when a calibration asked for with the stick clicks starts
         self.buttons_released = False  # "Use the glasses' buttons" (Quick Access)
         self.taps = taps.Taps(self._tapped, on_log=lambda line: self.log("gaming: " + line))
+        self.taps.set_sensitivity(self.settings.get("tap_sensitivity", 100))
         self.head_logged = 0.0
         self.other_driver = []  # XR Gaming's driver, looked for every few seconds
         self.xr_gaming_enabled = False
@@ -189,6 +192,15 @@ class Gaming:
                                             "Off, turn this on and wait for the glasses to blink off and on (up to a "
                                             "few minutes), adjust them, turn this off, then pick a mode."),
             "taps": bool(self.settings.get("taps", False)),
+            "tap_sensitivity": self.taps.sensitivity,
+            "tap_sensitivity_range": list(taps.SENSITIVITY),
+            "tap_sensitivity_label": i18n.tr("Tap sensitivity"),
+            "tap_sensitivity_line": i18n.tr("Higher catches softer taps, lower only firm ones. Pressing the glasses' "
+                                            "buttons can count as a tap, more so when it is high."),
+            "recentre_roll": bool(self.settings.get("recentre_roll")),
+            "recentre_roll_label": i18n.tr("Recentre includes head tilt"),
+            "recentre_roll_line": i18n.tr("For lying on one side: Recentre lines the picture up with your eyes, not "
+                                          "the room's horizon."),
             "taps_label": i18n.tr("Taps on the glasses"),
             # taps.py takes taps 0.2 to 0.7 s apart: about 1.5 to 5 a second
             "taps_line": i18n.tr("Tap the glasses' frame twice to recentre, three times to switch view, at about 2 "
@@ -329,10 +341,22 @@ class Gaming:
                 self._set_readability(bool(req.get("on")))
             elif op == "set_brightness":
                 r = self.reader
-                if isinstance(r, hidimu.AirReader) and r.set_brightness(int(req.get("level", 0))):
-                    self.log(f"gaming: glasses brightness {r.brightness} (Quick Access)")
+                level = int(req.get("level", 0))
+                if isinstance(r, hidimu.AirReader) and r.set_brightness(level):
+                    self.log(f"gaming: glasses brightness {level} asked for (Quick Access)")
             elif op == "glasses_buttons":
                 self._glasses_buttons(bool(req.get("on")))
+            elif op == "set_tap_sensitivity":
+                self.taps.set_sensitivity(req.get("percent", 100))
+                self.settings["tap_sensitivity"] = self.taps.sensitivity
+                save_settings(self.settings)
+                self.log(f"gaming: tap sensitivity {self.taps.sensitivity}%: a tap needs {self.taps.tap_g:.2f} g "
+                         f"and a {self.taps.jerk_g:.2f} g jump (Quick Access)")
+            elif op == "set_recentre_roll":
+                self.settings["recentre_roll"] = bool(req.get("on"))
+                save_settings(self.settings)
+                self.log("gaming: recentre includes head tilt " + ("on" if self.settings["recentre_roll"] else "off")
+                         + " (Quick Access)")
             elif op == "set_taps":
                 self.settings["taps"] = bool(req.get("on"))
                 save_settings(self.settings)
@@ -397,10 +421,10 @@ class Gaming:
 
     def _brightness(self):
         r = self.reader
-        known = isinstance(r, hidimu.AirReader) and (r.brightness is not None or r.brightness_answered)
-        if known and r._mcu_running():
-            # The last level known; once the glasses answered at all, 0 until one is known (a set says what it sent)
-            return r.brightness if r.brightness is not None else 0
+        # Only with a level the glasses read out and while their MCU is open; hidden once they turn out not to take
+        # the commands (an XBX A01+, 24 Nov 2026)
+        if isinstance(r, hidimu.AirReader) and r.brightness is not None and not r.brightness_unsupported                 and r._mcu_running():
+            return r.brightness
         return None
 
     def _glasses_buttons(self, on):
@@ -482,7 +506,7 @@ class Gaming:
     def recentre(self):
         self.head_log_until = time.monotonic() + HEAD_LOG_S
         if self.head:
-            self.head.recentre(follow_tilt=True)
+            self.head.recentre(follow_tilt=True, follow_roll=bool(self.settings.get("recentre_roll")))
         if self.control and self.mode() == "steady":
             self.control.recentre()
         self.log("gaming: recentred")
@@ -529,7 +553,7 @@ class Gaming:
         if self.control:
             self.control.want("steady" if m == "steady" else "3dof")
         if self.head:
-            self.head.recentre(follow_tilt=True)
+            self.head.recentre(follow_tilt=True, follow_roll=bool(self.settings.get("recentre_roll")))
         self._effect(m == "space")
 
     # ---- gamescope ----

@@ -81,6 +81,20 @@ def save_bias(key, bias, path=None):
     os.replace(tmp, path)
 
 
+def head_roll(q, yaw, pitch):
+    """The roll left in [q] once its heading [yaw] and [pitch] are taken out (q = yaw, then pitch, then roll)."""
+    rest = qmul(qconj(qmul(about_y(yaw), about_x(pitch))), q)
+    w, x, y, z = rest
+    if w < 0:
+        w, z = -w, -z
+    return 2.0 * math.atan2(z, w)
+
+
+def about_z(angle):
+    """A turn about the head's z axis (back, along the line of sight): roll."""
+    return (math.cos(angle / 2), 0.0, 0.0, math.sin(angle / 2))
+
+
 def about_x(angle):
     """Positive turns the forward (0, 0, -1) up."""
     return (math.cos(angle / 2), math.sin(angle / 2), 0.0, 0.0)
@@ -153,6 +167,11 @@ class HeadFusion:
         self.ref_pitch = 0.0  # radians up that count as straight ahead, from the last recentre that took the tilt
         self.recentre_sets_tilt = False
         self.recentre_follows_tilt = False
+        # radians of roll (about the forward axis) that count as level, from the last recentre that took the roll:
+        # "Recentre includes head tilt", for lying on one side (a tester, Pierre Zammit, 24 Nov 2026: lying sideways,
+        # the picture stayed level with the room, skewed in the glasses and not using their whole picture)
+        self.ref_roll = 0.0
+        self.recentre_follows_roll = False
         self.last_gyro = (0.0, 0.0, 0.0)
         self.cal = None  # while a hold-still calibration runs: its sums
         self.cal_result = None  # ("ok", mean deg/s, spread deg/s) or ("moved", mean, spread), once one has ended
@@ -208,7 +227,8 @@ class HeadFusion:
         The fusion's own recentres keep the pitch the last one took."""
         f = qrot(self.q, (0.0, 0.0, -1.0))
         head_pitch = math.asin(max(-1.0, min(1.0, f[1])))
-        if self.recentre_sets_tilt:
+        sets = self.recentre_sets_tilt
+        if sets:
             self.ref_pitch = head_pitch if self.recentre_follows_tilt else 0.0
             self.recentre_sets_tilt = False
         yaw = yaw_of(self.q)
@@ -216,12 +236,15 @@ class HeadFusion:
             r = qrot(self.q, (1.0, 0.0, 0.0))  # up x right: where the head faces along the floor
             if math.hypot(r[0], r[2]) >= 0.2:
                 yaw = math.atan2(-r[2], r[0])
-        if self.ref_pitch == 0.0:
+        if sets:
+            self.ref_roll = head_roll(self.q, yaw, head_pitch) if self.recentre_follows_roll else 0.0
+        if self.ref_pitch == 0.0 and self.ref_roll == 0.0:
             self.ref = about_y(yaw - self.recentre_yaw)
         else:
-            # the heading, then the pitch, then the windows' middle turn about the level up axis: the view at the
-            # recentre is that turn alone, level
-            self.ref = qnorm(qmul(qmul(about_y(yaw), about_x(self.ref_pitch)), about_y(-self.recentre_yaw)))
+            # the heading, then the pitch, then the roll, then the windows' middle turn about the view's up axis: the
+            # view at the recentre is that turn alone, level with the eyes (with the roll) or the room (without)
+            base = qmul(qmul(about_y(yaw), about_x(self.ref_pitch)), about_z(self.ref_roll))
+            self.ref = qnorm(qmul(base, about_y(-self.recentre_yaw)))
 
     def _rest_block(self, g, ts_ns):
         """
@@ -306,13 +329,15 @@ class HeadFusion:
         else:
             self.cal_result = ("moved",) + deg
 
-    def recentre(self, yaw_deg=0.0, follow_tilt=False):
+    def recentre(self, yaw_deg=0.0, follow_tilt=False, follow_roll=False):
         """The head's heading becomes straight ahead, with the view turned [yaw_deg] (left positive): as on Android,
         the windows' middle comes in front of the head rather than the room's zero. With [follow_tilt], the head's
-        pitch becomes straight ahead too, however small."""
+        pitch becomes straight ahead too, however small; with [follow_roll], its roll becomes level too, so the
+        picture lines up with the eyes lying on one side."""
         with self.lock:
             self.recentre_yaw = math.radians(yaw_deg)
             self.recentre_follows_tilt = bool(follow_tilt)
+            self.recentre_follows_roll = bool(follow_roll)
             self.recentre_sets_tilt = True
             self.want_recentre = True
 

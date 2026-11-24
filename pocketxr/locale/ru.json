@@ -216,5 +216,9 @@
   "Sets the glasses' brightness while Pocket XR has them, so you don't need their buttons. New: say if it does nothing on your glasses.": "Меняет яркость очков, пока ими пользуется Pocket XR, без их кнопок. Новое: сообщите, если на ваших очках ничего не меняется.",
   "Text size": "Размер текста",
   "Larger, still sharp, on the PC screens your phone shows.": "Крупнее и по-прежнему чётко на экранах ПК, которые показывает телефон.",
-  "Standard": "Стандартный"
+  "Standard": "Стандартный",
+  "Tap sensitivity": "Чувствительность касаний",
+  "Higher catches softer taps, lower only firm ones. Pressing the glasses' buttons can count as a tap, more so when it is high.": "Выше — ловит более лёгкие касания, ниже — только сильные. Нажатие кнопок очков может считаться касанием, особенно при высоком значении.",
+  "Recentre includes head tilt": "Центрирование учитывает наклон головы",
+  "For lying on one side: Recentre lines the picture up with your eyes, not the room's horizon.": "Чтобы лежать на боку: центрирование выравнивает картинку по глазам, а не по горизонту комнаты."
 }

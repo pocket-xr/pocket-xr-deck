@@ -216,5 +216,9 @@
   "Sets the glasses' brightness while Pocket XR has them, so you don't need their buttons. New: say if it does nothing on your glasses.": "在 Pocket XR 使用眼鏡時調整亮度，不需眼鏡按鍵。新功能：如果在你的眼鏡上沒有效果，請告訴我們。",
   "Text size": "文字大小",
   "Larger, still sharp, on the PC screens your phone shows.": "在手機顯示的電腦螢幕上更大，依然清晰。",
-  "Standard": "標準"
+  "Standard": "標準",
+  "Tap sensitivity": "輕敲靈敏度",
+  "Higher catches softer taps, lower only firm ones. Pressing the glasses' buttons can count as a tap, more so when it is high.": "調高可辨識更輕的輕敲，調低只辨識用力的。按眼鏡按鍵也可能被當作輕敲，調得越高越容易。",
+  "Recentre includes head tilt": "回到正前方時包括頭部傾斜",
+  "For lying on one side: Recentre lines the picture up with your eyes, not the room's horizon.": "側躺時用：回到正前方會讓畫面對齊你的眼睛，而不是房間的水平線。"
 }

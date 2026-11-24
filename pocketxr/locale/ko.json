@@ -216,5 +216,9 @@
   "Sets the glasses' brightness while Pocket XR has them, so you don't need their buttons. New: say if it does nothing on your glasses.": "Pocket XR이 안경을 쓰는 동안 밝기를 바꿔요. 안경 버튼이 필요 없어요. 새 기능: 내 안경에서 바뀌지 않으면 알려 주세요.",
   "Text size": "글자 크기",
   "Larger, still sharp, on the PC screens your phone shows.": "휴대폰에 보이는 PC 화면에서 선명하게 더 크게.",
-  "Standard": "표준"
+  "Standard": "표준",
+  "Tap sensitivity": "탭 감도",
+  "Higher catches softer taps, lower only firm ones. Pressing the glasses' buttons can count as a tap, more so when it is high.": "높이면 약한 탭도, 낮추면 강한 탭만 잡아요. 안경 버튼을 눌러도 탭으로 셀 수 있고, 높을수록 더 그래요.",
+  "Recentre includes head tilt": "가운데로 맞출 때 머리 기울기 포함",
+  "For lying on one side: Recentre lines the picture up with your eyes, not the room's horizon.": "옆으로 누웠을 때: 가운데로 맞추면 방의 수평선이 아니라 눈에 맞춰 화면을 정렬해요."
 }

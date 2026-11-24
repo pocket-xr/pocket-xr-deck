@@ -1,5 +1,29 @@
 # Changes
 
+## Next (not released yet)
+
+From Pierre Zammit's report and log on 0.7.10 (Steam Deck LCD, XREAL XBX A01+). Thanks, Pierre.
+
+- **Tap sensitivity**, a slider in Quick Access under Taps on the glasses: 25% to 300%, 100% at first, which is the
+  values he found "more sensitive than I expected, in a good way". It divides the jolt and the sudden jump a tap needs
+  (0.25 g and 0.15 g at 100%), so higher catches softer taps and lower only firm ones. Pressing the glasses' buttons
+  can count as a tap (he found it does), more so when it is high. The log gives the values when it changes. Checked
+  by tests; not yet tried on glasses.
+- **Recentre includes head tilt**, a switch in Quick Access, off at first: Recentre takes the head's roll too, as well
+  as where it faces and its up or down, so lying on one side the picture lines up with the eyes and fills the
+  glasses' picture, instead of staying level with the room ("a skewed picture"). Off keeps the horizon level, as
+  before: on, a small tilt of the head sitting up would tilt the picture. Looking almost straight up or down, roll
+  and heading are the same turn, so it behaves as without. Checked by tests (the view at a recentre is level with the
+  eyes for any heading, pitch and roll); not yet tried with glasses.
+- **Glasses brightness: not on the XBX.** Every set, 1 to 7, was answered "04" and his brightness stayed. The XBX's
+  controller answers with a status byte first (0 for done: ermay12/xrdesk's notes on the A01+, GPL-3.0), so 04 is a
+  status, not a level: 0.7.9's reading of it as "level 4" was wrong, and the XBX doesn't take Monado's commands. Now
+  the slider shows only when the glasses read out a level (status 0, then the level), each set is read back, and it
+  hides itself, with a line in the log saying why, when the answer is a refusing status or the level doesn't change.
+  No public source documents a brightness command for the XBX. Those notes also say what his presses were: on the
+  XBX, buttons 2 and 3 are volume up and down (1 is the menu), sent to Pocket XR while it has the glasses; still only
+  logged.
+
 ## 0.7.10 (23 Nov 2026)
 
 - **Text size and Readability for the PC screens a phone streams from this Deck or PC**, as in Pocket XR for Mac
