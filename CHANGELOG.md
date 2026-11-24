@@ -1,6 +1,6 @@
 # Changes
 
-## Next (not released yet)
+## 0.7.11 (24 Nov 2026)
 
 From Pierre Zammit's report and log on 0.7.10 (Steam Deck LCD, XREAL XBX A01+). Thanks, Pierre.
 
