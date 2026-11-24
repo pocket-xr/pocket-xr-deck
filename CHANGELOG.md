@@ -1,5 +1,22 @@
 # Changes
 
+## 0.7.9 (23 Nov 2026)
+
+From Pierre Zammit's report and log on 0.7.8 (Steam Deck LCD, XREAL XBX A01+). Thanks, Pierre.
+
+- **Three taps bring the screen back from Off.** Triple taps worked, but only from the screen in space to Off. Off
+  stopped the glasses' motion stream (the heartbeat keeps going), so in Off no tap could be seen. Now, with Taps on
+  the glasses on, Off keeps reading the motion, for the taps only (the screen stays off), and three taps go back to
+  the screen in space. With Taps off, Off stops the stream as before. "Use the glasses' buttons" still lets go of the
+  glasses completely, so there taps can't work. Checked by tests; not yet tried on glasses.
+- **The brightness slider shows.** His glasses answered the brightness question, but 0.7.8 expected Monado's layout
+  (a status byte, then the level) and set the answer aside. The XBX's answer frame says by its length field (18 = 17
+  + 1) that it carries one byte, 04: the level, 4 of 7. Now a frame's data is cut to its length field, and a one-byte
+  answer is read as the level (Monado's two-byte layout still works). The slider shows once the glasses answer at
+  all, with the last level known. Each answer is logged whole, and so is what the glasses answer to each set, so a log
+  shows whether the XBX takes the set (not known yet). His log also shows the XBX reporting its own button presses
+  in this mode (button 3, actions 16, 17 and 1); they are logged, not acted on, as what they mean isn't documented.
+
 ## 0.7.8 (23 Nov 2026)
 
 From Pierre Zammit's report and log on 0.7.7 (Steam Deck LCD, XREAL XBX A01+). Thanks, Pierre.

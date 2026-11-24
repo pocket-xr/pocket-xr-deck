@@ -337,6 +337,7 @@ class Gaming:
                 self.settings["taps"] = bool(req.get("on"))
                 save_settings(self.settings)
                 self.log(f"gaming: taps on the glasses {'on' if self.settings['taps'] else 'off'} (Quick Access)")
+                self._update_paused()
             elif op == "set_sticks":
                 self.settings["sticks"] = bool(req.get("on"))
                 save_settings(self.settings)
@@ -396,8 +397,10 @@ class Gaming:
 
     def _brightness(self):
         r = self.reader
-        if isinstance(r, hidimu.AirReader) and r._mcu_running():
-            return r.brightness
+        known = isinstance(r, hidimu.AirReader) and (r.brightness is not None or r.brightness_answered)
+        if known and r._mcu_running():
+            # The last level known; once the glasses answered at all, 0 until one is known (a set says what it sent)
+            return r.brightness if r.brightness is not None else 0
         return None
 
     def _glasses_buttons(self, on):
@@ -506,15 +509,23 @@ class Gaming:
         self.log(f"gaming: mode {nxt}")
         self._apply_mode()
 
+    def _update_paused(self):
+        """Off stops the Air family's motion stream (the XBX heartbeat keeps going), unless taps on the glasses are on:
+        then the stream goes on, for the taps only (the screen is off), so three taps can bring the screen back. With
+        0.7.8 a tester's triple tap turned it off but never on again (Pierre Zammit, 23 Nov 2026)."""
+        if not isinstance(self.reader, hidimu.AirReader):
+            return
+        off = self.settings.get("mode", "space") == "off"
+        paused = off and not self.settings.get("taps")
+        if paused != self.reader.paused:
+            self.reader.paused = paused
+            self.log("gaming: head tracking paused (off)" if paused
+                     else ("gaming: motion read for the taps only (off)" if off else "gaming: head tracking on"))
+
     def _apply_mode(self):
         m = self.mode()
         self.head_log_until = time.monotonic() + HEAD_LOG_S
-        if isinstance(self.reader, hidimu.AirReader):
-            # Off leaves the Air family's glasses alone: no motion stream, and on the XBX no MCU heartbeat.
-            paused = self.settings.get("mode", "space") == "off"
-            if paused != self.reader.paused:
-                self.reader.paused = paused
-                self.log("gaming: head tracking paused (off)" if paused else "gaming: head tracking on")
+        self._update_paused()
         if self.control:
             self.control.want("steady" if m == "steady" else "3dof")
         if self.head:

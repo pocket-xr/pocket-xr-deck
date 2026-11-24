@@ -74,9 +74,9 @@ class Brightness(unittest.TestCase):
         self.assertEqual(hidimu.mcu_parse(r._mcu_out[-1]), (hidimu.MCU_W_BRIGHTNESS, bytes([7])))
         r._mcu_frame(self.frame(hidimu.MCU_W_BRIGHTNESS, [0]))
         r._mcu_frame(self.frame(hidimu.MCU_W_BRIGHTNESS, [1]))
-        self.assertIn("imu: the glasses' brightness is 4 of 7", lines)
-        self.assertIn("imu: brightness set", lines)
-        self.assertTrue(any(x.startswith("imu: brightness not set") for x in lines), lines)
+        self.assertIn("imu: the glasses' brightness is 4 of 7 (answer 00 04)", lines)
+        self.assertIn("imu: brightness set answered 00", lines)
+        self.assertIn("imu: brightness set answered 01", lines)
 
     def test_not_while_the_mcu_is_closed(self):
         r = hidimu.AirReader(lambda *a: None, 0x0442, log=lambda x: None, nodes=lambda: [])
