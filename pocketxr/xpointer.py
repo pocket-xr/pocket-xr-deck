@@ -67,6 +67,11 @@ POLL_S = 1 / 120
 CURSOR_CHECK_S = 0.25
 BUTTON1_MASK = 1 << 8  # X's Button1Mask in XQueryPointer's mask
 HIDE_CHECK_S = 1 / 30  # while gamescope's arrow is hidden: how soon a cursor the app sets again is blanked
+# 0.7.13: a look that takes longer than this is stuck (an X screen that stopped answering): the program prints where
+# it was and ends, and gaming.py starts it again. A tester's 0.7.12 log (Pierre Zammit, 24 Nov 2026) has this reader
+# say one line at start and then nothing for 17 minutes, never ending: no pointer of Pocket XR's own, gamescope's arrow
+# never hidden, so the only arrow was gamescope's, off from where clicks land.
+STUCK_S = 10.0
 
 
 class _XColor(ctypes.Structure):
@@ -448,6 +453,8 @@ def main(argv=None):
     try:
         return _main(out, argv, screens)
     finally:
+        import faulthandler
+        faulthandler.cancel_dump_traceback_later()
         for q in screens.values():
             try:
                 q.restore()
@@ -470,7 +477,11 @@ def _main(out, argv, screens):
     focus = None
     app_display, app_win, area = None, 0, None
     in_wayland, said_wayland = False, False
+    import faulthandler
     while True:
+        # Each turn starts the watch again: only a turn stuck for STUCK_S prints its stack (to stdout, which
+        # quietly() never redirects) and ends the program.
+        faulthandler.dump_traceback_later(STUCK_S, exit=True, file=sys.stdout)
         now = time.monotonic()
         if commands_open:
             got = read_commands(sys.stdin, 0.0, commands_buf)

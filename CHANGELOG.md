@@ -1,5 +1,20 @@
 # Changes
 
+## 0.7.13 (24 Nov 2026)
+
+From Pierre Zammit's video and log on 0.7.12 ("I have taken a video of what the issue with the cursor/mouse pointer
+is"). Thanks, Pierre.
+
+- **The pointer reader starts again when it gets stuck.** His video shows one arrow, to the left of where clicks land.
+  His log shows why: Pocket XR's pointer reader started, said one line and then nothing for the 17 minutes logged,
+  without ending. So Pocket XR drew no pointer of its own, never hid gamescope's arrow and logged no clicks, and the
+  arrow he saw was gamescope's, which is never where clicks land with the screen in space. The same reader on an X
+  server here (WSLg) answered at once, so on his Deck one of gamescope's X screens most likely stopped answering a
+  question. Now a look that takes more than 10 seconds prints where the reader was stuck into the log, the reader ends
+  and Pocket XR starts it again 10 seconds later, as it does when gamescope restarts. The first three times the whole
+  stack goes in the log, so the next log shows which X call it was. Checked by a test with an X screen that never
+  answers; not yet tried on a Deck. During those 10 seconds Pocket XR's pointer and the back buttons' keys still don't work.
+
 ## 0.7.12 (24 Nov 2026)
 
 From Pierre Zammit's report on 0.7.11: "if you manage to solve the mouse pointer issue I'd say it would be perfect".
