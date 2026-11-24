@@ -213,5 +213,8 @@
   "Tap the glasses' frame twice to recentre, three times to switch view, at about 2 taps a second (1.5 to 5 a second work). Hold your head still while you tap. New: say if it misses taps or reacts on its own.": "Zweimal auf den Brillenrahmen tippen zum Zentrieren, dreimal zum Wechseln der Ansicht, mit etwa 2 Tippern pro Sekunde (1,5 bis 5 pro Sekunde gehen). Halte den Kopf beim Tippen still. Neu: sag Bescheid, wenn es Tipper verpasst oder von selbst reagiert.",
   "Lets go of the glasses so their own buttons work (brightness, for example). Head tracking pauses until you turn this off. Set the mode to Off, turn this on and wait for the glasses to blink off and on (up to a few minutes), adjust them, turn this off, then pick a mode.": "Gibt die Brille frei, damit ihre eigenen Tasten funktionieren (zum Beispiel die Helligkeit). Die Kopfverfolgung pausiert, bis du das wieder ausschaltest. Stell den Modus auf Aus, schalte das ein und warte, bis die Brille kurz aus- und wieder angeht (bis zu ein paar Minuten), stell sie ein, schalte das aus und wähle dann einen Modus.",
   "Glasses brightness": "Helligkeit der Brille",
-  "Sets the glasses' brightness while Pocket XR has them, so you don't need their buttons. New: say if it does nothing on your glasses.": "Stellt die Helligkeit der Brille ein, während Pocket XR sie nutzt, sodass du ihre Tasten nicht brauchst. Neu: sag Bescheid, wenn es bei deiner Brille nichts bewirkt."
+  "Sets the glasses' brightness while Pocket XR has them, so you don't need their buttons. New: say if it does nothing on your glasses.": "Stellt die Helligkeit der Brille ein, während Pocket XR sie nutzt, sodass du ihre Tasten nicht brauchst. Neu: sag Bescheid, wenn es bei deiner Brille nichts bewirkt.",
+  "Text size": "Textgröße",
+  "Larger, still sharp, on the PC screens your phone shows.": "Größer und trotzdem scharf auf den PC-Bildschirmen, die dein Handy zeigt.",
+  "Standard": "Standard"
 }

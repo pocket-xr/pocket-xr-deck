@@ -46,6 +46,7 @@ DEFAULTS = {"view": "3dof", "source": "deck", "distance": 2.0, "scale": 1.0, "ca
             "snap": False, "locked": False, "cursor_speed": 5, "curve_default": 0.0, "cursor_follows_head": True, "sbs_3d": True,
             "viture_tracking": None, "steady_gap_px": STEADY_GAP_DEFAULT_PX,
             "readability": False, "readability_saved": None,
+            "text_scale": 100,  # Text size (readability.py): the PC screens a phone streams from this computer
             "keys": {}}  # keys.py: {"recentre": "KEY_STOPCD", ...} over its defaults
 
 # 3DoF: a window 1600 px wide is this wide at 1.0, in metres (the Deck's screen 1.28 m, an app's 1920 px screen 1.92 m:
@@ -609,6 +610,8 @@ class App:
                 self.space.scale_all_or_focused(int(value))
         elif cmd == "steady_gap":
             self.set_gap(int(value))
+        elif cmd == "text_size":
+            self.set_text_size(int(value))
         elif cmd == "distance":
             key = self.space.focus if self.space.focus in self.space.poses else next(iter(self.space.poses), None)
             if key is not None and not self.settings.get("locked", False):
@@ -793,6 +796,20 @@ class App:
             self.settings["scale"] = min(2.5, max(0.4, self.settings["scale"] * (1.1 if step > 0 else 1 / 1.1)))
         save_settings(self.settings)
 
+    def set_text_size(self, step):
+        """Text size, as Pocket XR for Mac's: Standard, 125% or 150%, one step at a time. For the PC screens a phone
+        streams from this computer (readability.host_scale), from the next one made; Readability takes its place."""
+        scales = readability.TEXT_SCALES
+        old = readability.text_scale_of(self.settings.get("text_scale", 100))
+        new = scales[max(0, min(len(scales) - 1, scales.index(old) + step))]
+        if new == old:
+            return
+        self.settings["text_scale"] = new
+        save_settings(self.settings)
+        w, h = readability.screen_size(new)
+        self.log(f"text size: {old}% -> {new}%, PC screens laid out at {w}x{h} (at 1920x1080) from the next one"
+                 + (", once Readability is off" if self.settings.get("readability") else ""))
+
     def set_gap(self, step):
         """Screen gap: the space between screens in Steady mode, 10 canvas pixels a step, 0 to 120."""
         self.settings["steady_gap_px"] = steady_gap_px(self.settings["steady_gap_px"] + STEADY_GAP_STEP_PX * step)
@@ -896,6 +913,7 @@ class App:
             "steady_ok": bool(g and g.steady_6dof),
             "flat": self._flat(),
             "steady_gap_px": self.settings["steady_gap_px"],
+            "text_scale": readability.text_scale_of(self.settings.get("text_scale", 100)),
             "viture": bool(g and g.family == "viture"),
             "viture_on": bool(g and g.family == "viture" and self._viture_on()),
             "viture_label": tr("VITURE head tracking") if g and g.beast else tr("Experimental VITURE head tracking"),

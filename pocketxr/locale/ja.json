@@ -213,5 +213,8 @@
   "Tap the glasses' frame twice to recentre, three times to switch view, at about 2 taps a second (1.5 to 5 a second work). Hold your head still while you tap. New: say if it misses taps or reacts on its own.": "グラスのフレームを2回タップで正面に戻す、3回でビュー切り替え。1秒に約2回のペースで（1秒に1.5〜5回なら反応します）。タップ中は頭を動かさないでください。新機能：タップを取りこぼしたり勝手に反応したりしたら教えてください。",
   "Lets go of the glasses so their own buttons work (brightness, for example). Head tracking pauses until you turn this off. Set the mode to Off, turn this on and wait for the glasses to blink off and on (up to a few minutes), adjust them, turn this off, then pick a mode.": "グラス自身のボタン（明るさなど）が使えるようにグラスを解放します。オフにするまでヘッドトラッキングは止まります。モードをオフにしてからこれをオンにし、グラスが一度消えてまた点くのを待ち（数分かかることも）、調整したらこれをオフにして、モードを選んでください。",
   "Glasses brightness": "グラスの明るさ",
-  "Sets the glasses' brightness while Pocket XR has them, so you don't need their buttons. New: say if it does nothing on your glasses.": "Pocket XR がグラスを使っている間に明るさを変えます。グラスのボタンは要りません。新機能：お使いのグラスで変わらなければ教えてください。"
+  "Sets the glasses' brightness while Pocket XR has them, so you don't need their buttons. New: say if it does nothing on your glasses.": "Pocket XR がグラスを使っている間に明るさを変えます。グラスのボタンは要りません。新機能：お使いのグラスで変わらなければ教えてください。",
+  "Text size": "文字サイズ",
+  "Larger, still sharp, on the PC screens your phone shows.": "スマホに映す PC 画面で、くっきりしたまま大きく。",
+  "Standard": "標準"
 }

@@ -15,7 +15,9 @@ shown 30 degrees wide). On the Deck:
 Off puts back exactly what on changed, from the values saved when it was turned on (in the settings file, so a quit
 or a crash in between changes nothing: it is still on at the next start, and off still puts them back).
 """
+import json
 import math
+import os
 
 WIDTH_DEG = 30.0
 DECK_SCREEN = (1280, 800)
@@ -79,3 +81,79 @@ def gaming_off(settings):
     if saved.get("size") is not None:
         changes["size"] = saved["size"]
     return changes
+
+
+# ---- Text size, and both for the PC screens a phone streams from this computer (pocketxr/host) ----
+# As Pocket XR for Mac (SpaceSettings: normalScreenSize, readabilityScreenSize, textScales, screenSize(textScale:)):
+# Standard screens are 1920x1080; Text size 125% and 150% lay each one out as 1536x864 and 1280x720 (1920x1080 over
+# the scale, kept 16:9 and a multiple of 16 wide), so everything is drawn larger at the same width as seen; Readability
+# lays it out as 1440x810 and takes the place of Text size.
+#
+# A PC screen here is a KWin virtual output at the size the phone asks for (its window's shape, often 1920x1080). The
+# phone decides how wide it is seen, so this side changes how the desktop is drawn into it: KWin's scale on that output,
+# as Plasma's own Display settings set it. The output keeps all its pixels and KWin and its apps draw at that scale, so
+# text stays sharp (on the Mac, the same comes from HiDPI virtual displays). Plasma's Wayland session only: on X11 KDE
+# has one scale for every screen, and GNOME on Ubuntu shows only the main screen, which Pocket XR does not make.
+NORMAL_SCREEN = (1920, 1080)
+READABILITY_SCREEN = (1440, 810)
+TEXT_SCALES = (100, 125, 150)
+TEXT_SCALE_KEY = "text_scale"
+SCALE_MAX = 3.0
+
+
+def text_scale_of(value):
+    """A Text size the app offers: the nearest of TEXT_SCALES, Standard (100) for anything else."""
+    try:
+        v = float(value)
+    except (TypeError, ValueError):
+        return 100
+    if v != v:
+        return 100
+    return min(TEXT_SCALES, key=lambda s: (abs(s - v), s))
+
+
+def screen_size(text_scale):
+    """A screen's layout size for a Text size, as the Mac's: 1920x1080 over it, 16:9 and a multiple of 16 wide."""
+    s = min(max(float(text_scale), 100.0), 400.0) / 100.0
+    w = int(round(NORMAL_SCREEN[0] / s / 16.0)) * 16
+    return w, w * 9 // 16
+
+
+def label(text_scale):
+    return "Standard" if text_scale_of(text_scale) == 100 else f"{text_scale_of(text_scale)}%"
+
+
+def host_scale(width, readability_on, text_scale):
+    """KWin's scale for a PC screen [width] pixels wide: Readability lays it out READABILITY_SCREEN wide, else Text
+    size draws everything larger by its scale. 1 (none) at Standard; never below 1, so a small screen is not made
+    smaller; rounded to 1/120, the steps Wayland's fractional scaling uses."""
+    if readability_on:
+        s = float(width) / READABILITY_SCREEN[0]
+    else:
+        s = text_scale_of(text_scale) / 100.0
+    s = max(1.0, min(SCALE_MAX, s))
+    return round(round(s * 120) / 120.0, 4)
+
+
+def host_line(name, output, width, height, readability_on, text_scale, scale):
+    """The log's line for what a PC screen was made at."""
+    lw, lh = int(round(width / scale)), int(round(height / scale))
+    why = "Readability" if readability_on else f"Text size {label(text_scale)}"
+    return (f"host: {name} ({output}) made at {width}x{height}, scale {scale:g} ({why}): apps see {lw}x{lh}")
+
+
+DESKTOP_SETTINGS = os.path.join(os.environ.get("XDG_CONFIG_HOME", os.path.expanduser("~/.config")), "pocket-xr-deck",
+                                "settings.json")  # the desktop app's (app.CONFIG)
+
+
+def desktop_choice(path=None):
+    """(Readability on, Text size) from the desktop app's settings file, which the host service reads when a PC
+    screen is made; (False, 100) without one."""
+    try:
+        with open(path or DESKTOP_SETTINGS) as f:
+            s = json.load(f)
+    except (OSError, ValueError):
+        return False, 100
+    if not isinstance(s, dict):
+        return False, 100
+    return bool(s.get("readability")), text_scale_of(s.get(TEXT_SCALE_KEY, 100))
