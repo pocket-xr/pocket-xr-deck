@@ -216,5 +216,9 @@
   "Sets the glasses' brightness while Pocket XR has them, so you don't need their buttons. New: say if it does nothing on your glasses.": "Pocket XR がグラスを使っている間に明るさを変えます。グラスのボタンは要りません。新機能：お使いのグラスで変わらなければ教えてください。",
   "Text size": "文字サイズ",
   "Larger, still sharp, on the PC screens your phone shows.": "スマホに映す PC 画面で、くっきりしたまま大きく。",
-  "Standard": "標準"
+  "Standard": "標準",
+  "Tap sensitivity": "タップの感度",
+  "Higher catches softer taps, lower only firm ones. Pressing the glasses' buttons can count as a tap, more so when it is high.": "高くすると軽いタップも、低くすると強いタップだけを拾います。グラスのボタンを押してもタップと数えることがあり、高いほどそうなりやすいです。",
+  "Recentre includes head tilt": "正面に戻すときに頭の傾きも使う",
+  "For lying on one side: Recentre lines the picture up with your eyes, not the room's horizon.": "横向きに寝るとき用：正面に戻すと、部屋の水平ではなく目に合わせて画面をそろえます。"
 }

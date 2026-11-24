@@ -26,6 +26,13 @@ type Status = {
   keys_line?: string; // how another controller does the back buttons' jobs (Steam Input keys)
   sticks?: boolean; // the Deck's stick clicks do Pocket XR's jobs (hold L3, hold R3, L3 three times)
   taps?: boolean; // taps on the glasses: two recentre, three switch view
+  tap_sensitivity?: number; // percent
+  tap_sensitivity_range?: number[];
+  tap_sensitivity_label?: string;
+  tap_sensitivity_line?: string;
+  recentre_roll?: boolean; // Recentre includes head tilt
+  recentre_roll_label?: string;
+  recentre_roll_line?: string;
   glasses_buttons?: boolean | null; // let go of the glasses so their own buttons work; null: not offered
   brightness?: number | null; // the glasses' brightness, 0 to brightness_max, while Pocket XR has them; null: hidden
   brightness_max?: number;
@@ -281,6 +288,33 @@ function Content() {
               checked={!!st.taps}
               disabled={!st.running}
               onChange={(on: boolean) => send({ op: "set_taps", on })}
+            />
+          </PanelSectionRow>
+        ) : null}
+        {st?.taps && st.tap_sensitivity_label ? (
+          <PanelSectionRow>
+            <SliderField
+              label={st.tap_sensitivity_label}
+              description={st.tap_sensitivity_line}
+              value={st.tap_sensitivity ?? 100}
+              min={(st.tap_sensitivity_range || [25, 300])[0]}
+              max={(st.tap_sensitivity_range || [25, 300])[1]}
+              step={25}
+              showValue
+              valueSuffix="%"
+              disabled={!st.running}
+              onChange={(v: number) => send({ op: "set_tap_sensitivity", percent: v })}
+            />
+          </PanelSectionRow>
+        ) : null}
+        {st?.recentre_roll_label ? (
+          <PanelSectionRow>
+            <ToggleField
+              label={st.recentre_roll_label}
+              description={st.recentre_roll_line}
+              checked={!!st.recentre_roll}
+              disabled={!st.running}
+              onChange={(on: boolean) => send({ op: "set_recentre_roll", on })}
             />
           </PanelSectionRow>
         ) : null}

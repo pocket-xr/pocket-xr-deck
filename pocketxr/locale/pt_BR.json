@@ -216,5 +216,9 @@
   "Sets the glasses' brightness while Pocket XR has them, so you don't need their buttons. New: say if it does nothing on your glasses.": "Ajusta o brilho dos óculos enquanto o Pocket XR os usa, sem precisar dos botões. Novo: avise se não fizer nada nos seus óculos.",
   "Text size": "Tamanho do texto",
   "Larger, still sharp, on the PC screens your phone shows.": "Maior e ainda nítido nas telas de PC que o celular mostra.",
-  "Standard": "Padrão"
+  "Standard": "Padrão",
+  "Tap sensitivity": "Sensibilidade dos toques",
+  "Higher catches softer taps, lower only firm ones. Pressing the glasses' buttons can count as a tap, more so when it is high.": "Mais alto pega toques mais leves; mais baixo, só os firmes. Apertar os botões dos óculos pode contar como toque, ainda mais quando está alto.",
+  "Recentre includes head tilt": "Centralizar inclui a inclinação da cabeça",
+  "For lying on one side: Recentre lines the picture up with your eyes, not the room's horizon.": "Para deitar de lado: Centralizar alinha a imagem com os seus olhos, não com o horizonte do cômodo."
 }
