@@ -220,5 +220,7 @@
   "Tap sensitivity": "Sensibilidad de los toques",
   "Higher catches softer taps, lower only firm ones. Pressing the glasses' buttons can count as a tap, more so when it is high.": "Más alto detecta toques más suaves; más bajo, solo los firmes. Pulsar los botones de las gafas puede contar como un toque, sobre todo si es alto.",
   "Recentre includes head tilt": "Centrar incluye la inclinación de la cabeza",
-  "For lying on one side: Recentre lines the picture up with your eyes, not the room's horizon.": "Para estar tumbado de lado: Centrar alinea la imagen con tus ojos, no con el horizonte de la habitación."
+  "For lying on one side: Recentre lines the picture up with your eyes, not the room's horizon.": "Para estar tumbado de lado: Centrar alinea la imagen con tus ojos, no con el horizonte de la habitación.",
+  "Hide the moving pointer": "Ocultar el puntero que se mueve",
+  "With the screen in space, hides gamescope's own arrow, which moves with your head and is not where clicks land. Pocket XR's pointer stays.": "Con la pantalla en el espacio, oculta la flecha propia de gamescope, que se mueve con tu cabeza y no está donde caen los clics. El puntero de Pocket XR se queda."
 }

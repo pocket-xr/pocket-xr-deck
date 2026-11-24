@@ -210,10 +210,13 @@ Good to know:
   game's picture.
 - **The mouse pointer:** gamescope draws its own cursor after Pocket XR's effect too, where the pointer is on the
   Deck's screen, so on a moved or resized screen it isn't over what it points at. Pocket XR now draws a pointer of
-  its own on the screen in space, a white arrow, where it lines up: follow that one. gamescope's cursor still shows,
-  and Pocket XR can't move it. Pocket XR's arrow stays while the game shows a cursor, even when the pointer is
-  still (0.7.1 hid it after 3 seconds, leaving only gamescope's). Reported by Pierre Zammit. On a Deck, gamescope compiled the new effect and the pointer's position was read from gamescope's
-  screen; not yet seen with glasses.
+  its own on the screen in space, a white arrow, where it lines up: follow that one. Pocket XR's arrow stays while
+  the game shows a cursor, even when the pointer is still (0.7.1 hid it after 3 seconds, leaving only gamescope's).
+  From 0.7.12, **Hide the moving pointer** in Quick Access (on at first) hides gamescope's own arrow while the screen
+  is in space, so only Pocket XR's shows: gamescope draws no arrow when the app's cursor is blank, so Pocket XR gives
+  the window under the pointer a blank cursor, and gives it back when the screen goes flat. Reported by Pierre Zammit.
+  On a Deck, gamescope compiled the new effect and the pointer's position was read from gamescope's screen; the
+  blanking was tried on an X server (not gamescope's), not yet on a Deck or with glasses.
 - **Calibrate (hold still)**, in Quick Access: take the glasses off and lay them on something still for 4 seconds,
   and the slow drift to one side they may have is measured, taken out and saved for those glasses. A notification
   says when it starts and how it went. Pocket XR also keeps learning

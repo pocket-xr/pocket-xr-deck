@@ -220,5 +220,7 @@
   "Tap sensitivity": "タップの感度",
   "Higher catches softer taps, lower only firm ones. Pressing the glasses' buttons can count as a tap, more so when it is high.": "高くすると軽いタップも、低くすると強いタップだけを拾います。グラスのボタンを押してもタップと数えることがあり、高いほどそうなりやすいです。",
   "Recentre includes head tilt": "正面に戻すときに頭の傾きも使う",
-  "For lying on one side: Recentre lines the picture up with your eyes, not the room's horizon.": "横向きに寝るとき用：正面に戻すと、部屋の水平ではなく目に合わせて画面をそろえます。"
+  "For lying on one side: Recentre lines the picture up with your eyes, not the room's horizon.": "横向きに寝るとき用：正面に戻すと、部屋の水平ではなく目に合わせて画面をそろえます。",
+  "Hide the moving pointer": "動くポインターを隠す",
+  "With the screen in space, hides gamescope's own arrow, which moves with your head and is not where clicks land. Pocket XR's pointer stays.": "画面を空間に置いているとき、頭と一緒に動き、クリックする場所とずれる gamescope 自身の矢印を隠します。Pocket XR のポインターは残ります。"
 }

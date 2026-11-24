@@ -220,5 +220,7 @@
   "Tap sensitivity": "轻敲灵敏度",
   "Higher catches softer taps, lower only firm ones. Pressing the glasses' buttons can count as a tap, more so when it is high.": "调高可识别更轻的轻敲，调低只识别用力的。按眼镜按键也可能被当作轻敲，调得越高越容易。",
   "Recentre includes head tilt": "回到正前方时包括头部倾斜",
-  "For lying on one side: Recentre lines the picture up with your eyes, not the room's horizon.": "侧躺时用：回到正前方会让画面对齐你的眼睛，而不是房间的水平线。"
+  "For lying on one side: Recentre lines the picture up with your eyes, not the room's horizon.": "侧躺时用：回到正前方会让画面对齐你的眼睛，而不是房间的水平线。",
+  "Hide the moving pointer": "隐藏会移动的指针",
+  "With the screen in space, hides gamescope's own arrow, which moves with your head and is not where clicks land. Pocket XR's pointer stays.": "屏幕放在空间中时，隐藏 gamescope 自己的箭头：它随头部移动，也不在点击落下的位置。Pocket XR 的指针保留。"
 }
