@@ -44,7 +44,8 @@ DEFAULTS = {"mode": "space", "size": 0.8, "curve": 0.0, "readability": False, "r
             "sticks": True,  # the Deck's stick clicks: hold L3 recentres, hold R3 switches view, L3 three times calibrates
             "taps": False,  # taps on the glasses (taps.py): two recentre, three switch view; off until tried with glasses
             "tap_sensitivity": 100,  # percent (taps.SENSITIVITY); 100 is the values a tester liked
-            "recentre_roll": False}  # Recentre includes head tilt: the head's roll too (fusion.recentre follow_roll)
+            "recentre_roll": False,
+            "hide_gamescope_pointer": True}  # Screen in space: gamescope's own arrow blanked (xpointer.py)  # Recentre includes head tilt: the head's roll too (fusion.recentre follow_roll)
 STICK_CAL_DELAY_S = 5.0  # a calibration from the stick clicks starts this long after, to take the glasses off first
 # The Quick Access panel (decky/ plugin) talks to the service here: one JSON request per line, one JSON answer per line
 CONTROL_SOCKET = os.path.join(os.environ.get("XDG_RUNTIME_DIR") or f"/run/user/{os.getuid()}", "pocket-xr-gaming.sock")
@@ -197,6 +198,10 @@ class Gaming:
             "tap_sensitivity_label": i18n.tr("Tap sensitivity"),
             "tap_sensitivity_line": i18n.tr("Higher catches softer taps, lower only firm ones. Pressing the glasses' "
                                             "buttons can count as a tap, more so when it is high."),
+            "hide_pointer": bool(self.settings.get("hide_gamescope_pointer", True)),
+            "hide_pointer_label": i18n.tr("Hide the moving pointer"),
+            "hide_pointer_line": i18n.tr("With the screen in space, hides gamescope's own arrow, which moves with your "
+                                         "head and is not where clicks land. Pocket XR's pointer stays."),
             "recentre_roll": bool(self.settings.get("recentre_roll")),
             "recentre_roll_label": i18n.tr("Recentre includes head tilt"),
             "recentre_roll_line": i18n.tr("For lying on one side: Recentre lines the picture up with your eyes, not "
@@ -352,6 +357,12 @@ class Gaming:
                 save_settings(self.settings)
                 self.log(f"gaming: tap sensitivity {self.taps.sensitivity}%: a tap needs {self.taps.tap_g:.2f} g "
                          f"and a {self.taps.jerk_g:.2f} g jump (Quick Access)")
+            elif op == "set_hide_pointer":
+                self.settings["hide_gamescope_pointer"] = bool(req.get("on"))
+                save_settings(self.settings)
+                self.log("gaming: hide the moving pointer " + ("on" if self.settings["hide_gamescope_pointer"] else "off")
+                         + " (Quick Access)")
+                self._pointer_hide()
             elif op == "set_recentre_roll":
                 self.settings["recentre_roll"] = bool(req.get("on"))
                 save_settings(self.settings)
@@ -557,6 +568,21 @@ class Gaming:
         self._effect(m == "space")
 
     # ---- gamescope ----
+    def _pointer_hide(self):
+        """Tells xpointer.py whether to blank gamescope's own arrow: while the screen is in space (the arrow is drawn
+        after Pocket XR's effect, where the pointer would be on a flat screen, so it moves with the head and is never
+        where a click lands) and "hide_gamescope_pointer" is on. Pocket XR's own pointer stays."""
+        p = self.pointer_proc
+        want = bool(self.effect_on and self.settings.get("hide_gamescope_pointer", True))
+        if p is None or p.poll() is not None or p.stdin is None or want == getattr(self, "pointer_hide_sent", None):
+            return
+        try:
+            p.stdin.write("hide %d\n" % want)
+            p.stdin.flush()
+            self.pointer_hide_sent = want
+        except (OSError, ValueError):
+            pass
+
     def _effect(self, on):
         if self.reshade is None:
             return
@@ -567,10 +593,12 @@ class Gaming:
                 self.reshade.enable()
                 self.effect_on = True
                 self.log("gaming: screen in space on")
+                self._pointer_hide()
             elif not on and self.effect_on:
                 self.reshade.disable()
                 self.effect_on = False
                 self.log("gaming: screen in space off")
+                self._pointer_hide()
         except OSError as e:
             self._lost_gamescope(e)
 
@@ -609,13 +637,15 @@ class Gaming:
             args = [sys.executable, "-m", "pocketxr.xpointer"]
             if self.key_actions:
                 args += ["--keys", ",".join(str(c) for c in sorted(self.key_actions))]
-            p = subprocess.Popen(args, stdout=subprocess.PIPE,
+            p = subprocess.Popen(args, stdout=subprocess.PIPE, stdin=subprocess.PIPE,
                                  stderr=subprocess.STDOUT, text=True, bufsize=1,
                                  cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         except OSError as e:
             self.log(f"gaming: pointer reader did not start ({e})")
             return
         self.pointer_proc = p
+        self.pointer_hide_sent = None  # a new reader starts with gamescope's arrow shown
+        self._pointer_hide()
         threading.Thread(target=self._read_pointer, args=(p,), name="pointer", daemon=True).start()
 
     def _read_pointer(self, p):
@@ -651,8 +681,8 @@ class Gaming:
         """The pointer to the effect when it changes: drawn while the screen is in space and the app's own cursor is
         showing. It stays when the pointer is still: 0.7.1 hid it after 3 seconds still, as gamescope hides its own
         (SteamOS starts gamescope with --hide-cursor-delay 3000), but a tester (Pierre Zammit, 22 Nov 2026) then saw
-        only gamescope's arrow, which is not over what it points at on a moved screen. gamescope's own cursor still
-        shows; hiding it from outside gamescope is not tried."""
+        only gamescope's arrow, which is not over what it points at on a moved screen. From 0.7.12 gamescope's own
+        arrow is blanked while the screen is in space (_pointer_hide, xpointer.py), so only this one shows."""
         ptr = self.pointer
         shown = bool(ptr and ptr[2])
         value = (ptr[0], ptr[1], 1.0 if shown else 0.0, 0.0) if ptr else (0.0, 0.0, 0.0, 0.0)

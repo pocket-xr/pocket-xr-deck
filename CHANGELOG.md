@@ -1,5 +1,28 @@
 # Changes
 
+## Next (not released yet)
+
+From Pierre Zammit's report on 0.7.11: "if you manage to solve the mouse pointer issue I'd say it would be perfect".
+Thanks, Pierre.
+
+- **Only one pointer with the screen in space.** What was wrong, looked at end to end in gamescope's source and his
+  logs: Pocket XR reads the pointer from the X screen gamescope says has the mouse, and since 0.7.5 measures it across
+  the game's window, which his 0.7.10 log shows as the whole 1920x1080 X screen; gamescope runs Pocket XR's effect on
+  that window's picture at its own size (rendervulkan.cpp, vulkan_composite), so the effect's arrow is drawn on the
+  same point of the game's picture, after the curve and the size, where a click lands. gamescope then draws its own
+  arrow after the effect (steamcompmgr.cpp, MouseCursor::paint), at the pointer's place on a flat screen: with the
+  screen moved, smaller or curved it is somewhere else, and it moves with the head. gamescope has no option or
+  property to hide it, but draws nothing when the app's cursor image is empty. So now, while the screen is in space,
+  Pocket XR gives the app's window under the pointer a blank cursor (any X program may), and gives it back when the
+  screen goes flat, the switch is turned off, or Pocket XR's pointer reader ends. It keeps track of whether the game
+  wants a cursor, so Pocket XR's own arrow still shows and hides with the game's. **Hide the moving pointer** in Quick
+  Access turns it off; it is on at first. Tried on an X server (WSLg's Xwayland): the cursor image went empty while
+  hidden and came back after; not yet tried in gamescope on a Deck. While it is hidden, a game that changes its cursor
+  may flash it for up to a thirtieth of a second. Given back, the window has the X screen's own arrow until the game
+  sets its cursor again.
+- **Clicks in the log.** The pointer reader logs where the left button went down (at most once a second): the X
+  screen, the pointer there and where Pocket XR draws it on the picture, so a log can show any offset left.
+
 ## 0.7.11 (24 Nov 2026)
 
 From Pierre Zammit's report and log on 0.7.10 (Steam Deck LCD, XREAL XBX A01+). Thanks, Pierre.

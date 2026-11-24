@@ -220,5 +220,7 @@
   "Tap sensitivity": "Чувствительность касаний",
   "Higher catches softer taps, lower only firm ones. Pressing the glasses' buttons can count as a tap, more so when it is high.": "Выше — ловит более лёгкие касания, ниже — только сильные. Нажатие кнопок очков может считаться касанием, особенно при высоком значении.",
   "Recentre includes head tilt": "Центрирование учитывает наклон головы",
-  "For lying on one side: Recentre lines the picture up with your eyes, not the room's horizon.": "Чтобы лежать на боку: центрирование выравнивает картинку по глазам, а не по горизонту комнаты."
+  "For lying on one side: Recentre lines the picture up with your eyes, not the room's horizon.": "Чтобы лежать на боку: центрирование выравнивает картинку по глазам, а не по горизонту комнаты.",
+  "Hide the moving pointer": "Скрыть движущийся указатель",
+  "With the screen in space, hides gamescope's own arrow, which moves with your head and is not where clicks land. Pocket XR's pointer stays.": "Когда экран в пространстве, скрывает собственную стрелку gamescope, которая движется вместе с головой и не совпадает с местом щелчка. Указатель Pocket XR остаётся."
 }

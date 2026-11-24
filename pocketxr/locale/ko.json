@@ -220,5 +220,7 @@
   "Tap sensitivity": "탭 감도",
   "Higher catches softer taps, lower only firm ones. Pressing the glasses' buttons can count as a tap, more so when it is high.": "높이면 약한 탭도, 낮추면 강한 탭만 잡아요. 안경 버튼을 눌러도 탭으로 셀 수 있고, 높을수록 더 그래요.",
   "Recentre includes head tilt": "가운데로 맞출 때 머리 기울기 포함",
-  "For lying on one side: Recentre lines the picture up with your eyes, not the room's horizon.": "옆으로 누웠을 때: 가운데로 맞추면 방의 수평선이 아니라 눈에 맞춰 화면을 정렬해요."
+  "For lying on one side: Recentre lines the picture up with your eyes, not the room's horizon.": "옆으로 누웠을 때: 가운데로 맞추면 방의 수평선이 아니라 눈에 맞춰 화면을 정렬해요.",
+  "Hide the moving pointer": "움직이는 포인터 숨기기",
+  "With the screen in space, hides gamescope's own arrow, which moves with your head and is not where clicks land. Pocket XR's pointer stays.": "화면을 공간에 둘 때, 머리와 함께 움직이고 클릭되는 곳에 있지 않은 gamescope 자체 화살표를 숨겨요. Pocket XR 포인터는 그대로예요."
 }

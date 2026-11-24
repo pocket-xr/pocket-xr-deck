@@ -220,5 +220,7 @@
   "Tap sensitivity": "Tipp-Empfindlichkeit",
   "Higher catches softer taps, lower only firm ones. Pressing the glasses' buttons can count as a tap, more so when it is high.": "Höher erkennt sanftere Tipper, niedriger nur feste. Ein Druck auf die Tasten der Brille kann als Tipper zählen, besonders bei hohen Werten.",
   "Recentre includes head tilt": "Zentrieren mit Kopfneigung",
-  "For lying on one side: Recentre lines the picture up with your eyes, not the room's horizon.": "Zum Liegen auf der Seite: Zentrieren richtet das Bild an deinen Augen aus, nicht am Horizont des Raums."
+  "For lying on one side: Recentre lines the picture up with your eyes, not the room's horizon.": "Zum Liegen auf der Seite: Zentrieren richtet das Bild an deinen Augen aus, nicht am Horizont des Raums.",
+  "Hide the moving pointer": "Wandernden Zeiger ausblenden",
+  "With the screen in space, hides gamescope's own arrow, which moves with your head and is not where clicks land. Pocket XR's pointer stays.": "Mit dem Bildschirm im Raum wird gamescopes eigener Pfeil ausgeblendet, der sich mit dem Kopf bewegt und nicht dort ist, wo Klicks landen. Der Zeiger von Pocket XR bleibt."
 }

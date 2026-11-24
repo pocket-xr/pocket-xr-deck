@@ -31,6 +31,9 @@ type Status = {
   tap_sensitivity_label?: string;
   tap_sensitivity_line?: string;
   recentre_roll?: boolean; // Recentre includes head tilt
+  hide_pointer?: boolean; // blank gamescope's own arrow while the screen is in space
+  hide_pointer_label?: string;
+  hide_pointer_line?: string;
   recentre_roll_label?: string;
   recentre_roll_line?: string;
   glasses_buttons?: boolean | null; // let go of the glasses so their own buttons work; null: not offered
@@ -304,6 +307,17 @@ function Content() {
               valueSuffix="%"
               disabled={!st.running}
               onChange={(v: number) => send({ op: "set_tap_sensitivity", percent: v })}
+            />
+          </PanelSectionRow>
+        ) : null}
+        {st?.hide_pointer_label ? (
+          <PanelSectionRow>
+            <ToggleField
+              label={st.hide_pointer_label}
+              description={st.hide_pointer_line}
+              checked={!!st.hide_pointer}
+              disabled={!st.running}
+              onChange={(on: boolean) => send({ op: "set_hide_pointer", on })}
             />
           </PanelSectionRow>
         ) : null}

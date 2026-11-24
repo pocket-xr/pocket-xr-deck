@@ -5,8 +5,19 @@ gamescope runs its ReShade effect (Pocket XR's PocketXR.fx) on the app's picture
 it, on top, where the pointer really is on the Deck's screen (gamescope's src/rendervulkan.cpp, vulkan_composite: the
 effect runs on layer 0). With the screen moved, shrunk or curved in the glasses, that cursor is no longer over what it
 points at (a tester, Pierre Zammit, 22 Nov 2026: hovering looked like it was on a button but wasn't). So the effect
-draws a pointer of its own, in the picture's coordinates, where it lines up. gamescope's own cursor still shows; no
-outside program can move or hide it.
+draws a pointer of its own, in the picture's coordinates, where it lines up.
+
+gamescope's own arrow (MouseCursor::paint in steamcompmgr.cpp) is drawn at the pointer's place in the app's window,
+scaled into the output, after the effect: where the pointer would be on a flat screen. So with the screen in space it
+moves with the head and is never where a click lands; it only lines up when the screen is where a flat one would be.
+The same tester kept seeing two arrows apart (24 Nov 2026: "the mouse pointer issue ... the only thing I can fault").
+gamescope has no option or property to hide it, but it draws nothing when the X cursor's image is empty
+(m_imageEmpty: every pixel transparent). So while the screen is in space ("hide 1" from gaming.py), this blanks the
+cursor of the app's window under the pointer (XDefineCursor, which any X client may do to any window), keeping track of
+whether the app itself wants a cursor (its own image, before it is blanked: cursor_decision), so Pocket XR's pointer
+still shows and hides with the app's. "hide 0", the end of this program, or SIGTERM give the cursors back
+(XUndefineCursor: the app's own comes back when it sets one again; until then the X screen's default arrow). Written
+from gamescope's source; not yet tried on a Deck.
 
 This runs as its own process (python3 -m pocketxr.xpointer), because Xlib ends the whole program when its X server
 goes away (gamescope restarting), and prints one line each time something changes:
@@ -17,6 +28,8 @@ goes away (gamescope restarting), and prints one line each time something change
     unopened <name> <why>        one X screen would not open; said once, then tried again quietly
     window <name> <id> at <x>,<y> <w>x<h>   the app's window u, v are measured in, when it changes (or "window none")
     key <code>                   a watched key went down (a Linux KEY_ code), with --keys 119,70
+    hide on: ... / hide off: ...  gamescope's own arrow blanked or given back, after "hide 1" / "hide 0" on stdin
+    click at <x>,<y> on <name> <w>x<h>: u <u>, v <v>   the left button went down (at most once a second), for a log
 
 shown is 0 when the app's cursor is hidden or empty (a game that hides it), by XFixes' cursor image.
 
@@ -52,6 +65,13 @@ import time
 
 POLL_S = 1 / 120
 CURSOR_CHECK_S = 0.25
+BUTTON1_MASK = 1 << 8  # X's Button1Mask in XQueryPointer's mask
+HIDE_CHECK_S = 1 / 30  # while gamescope's arrow is hidden: how soon a cursor the app sets again is blanked
+
+
+class _XColor(ctypes.Structure):
+    _fields_ = [("pixel", ctypes.c_ulong), ("red", ctypes.c_ushort), ("green", ctypes.c_ushort),
+                ("blue", ctypes.c_ushort), ("flags", ctypes.c_char), ("pad", ctypes.c_char)]
 
 
 class _CursorImage(ctypes.Structure):
@@ -98,6 +118,15 @@ def _libs():
                                           ctypes.POINTER(ctypes.c_int), ctypes.POINTER(ctypes.c_int),
                                           ctypes.POINTER(ctypes.c_ulong)]
     x11.XSync.argtypes = [ctypes.c_void_p, ctypes.c_int]
+    x11.XCreateBitmapFromData.restype = ctypes.c_ulong
+    x11.XCreateBitmapFromData.argtypes = [ctypes.c_void_p, ctypes.c_ulong, ctypes.c_char_p, ctypes.c_uint,
+                                          ctypes.c_uint]
+    x11.XCreatePixmapCursor.restype = ctypes.c_ulong
+    x11.XCreatePixmapCursor.argtypes = [ctypes.c_void_p, ctypes.c_ulong, ctypes.c_ulong, ctypes.POINTER(_XColor),
+                                        ctypes.POINTER(_XColor), ctypes.c_uint, ctypes.c_uint]
+    x11.XDefineCursor.argtypes = [ctypes.c_void_p, ctypes.c_ulong, ctypes.c_ulong]
+    x11.XUndefineCursor.argtypes = [ctypes.c_void_p, ctypes.c_ulong]
+    x11.XFlush.argtypes = [ctypes.c_void_p]
     x11.XSetErrorHandler.restype = ctypes.c_void_p
     x11.XSetErrorHandler.argtypes = [_ERROR_HANDLER]
     x11.XSetErrorHandler(_on_x_error)  # a window gone between looking it up and asking about it ends nothing
@@ -191,6 +220,18 @@ def quietly(call):
         f.seek(0)
         said = f.read().decode(errors="replace")
     return result, " ".join(dict.fromkeys(x.strip() for x in said.splitlines() if x.strip()))
+
+
+def cursor_decision(serial, visible, blank_serial, game_shown):
+    """While gamescope's arrow is being hidden: (whether the app wants a cursor, whether to blank the window under the
+    pointer now), from the X screen's cursor now (its serial, whether it has a visible pixel). Our own blank cursor
+    (blank_serial) says nothing new about the app; a visible one is the app's, to blank; an empty one not ours is the
+    app hiding its cursor."""
+    if blank_serial is not None and serial == blank_serial:
+        return game_shown, False
+    if visible:
+        return True, True
+    return False, False
 
 
 def cursor_shown(image):
@@ -291,18 +332,79 @@ class Screen:
         if not self.x11.XQueryPointer(self.dpy, self.root, ctypes.byref(r), ctypes.byref(c), ctypes.byref(rx),
                                       ctypes.byref(ry), ctypes.byref(wx), ctypes.byref(wy), ctypes.byref(m)):
             return None
+        self.buttons = m.value
         return rx.value, ry.value
 
-    def shown(self):
+    def cursor(self):
+        """(serial, has a visible pixel) of the X screen's cursor now, or None without XFixes."""
         if not self.fixes:
-            return True
+            return None
         img = self.xf.XFixesGetCursorImage(self.dpy)
         if not img:
-            return True
+            return None
         try:
-            return cursor_shown(img.contents)
+            return int(img.contents.cursor_serial), cursor_shown(img.contents)
         finally:
             self.x11.XFree(img)
+
+    def shown(self):
+        c = self.cursor()
+        return True if c is None else c[1]
+
+    # ---- hiding gamescope's own arrow (see the module's docstring) ----
+    def under_pointer(self):
+        """The deepest X window under the pointer, or 0."""
+        win, found = self.root, 0
+        for _ in range(16):
+            r, c = ctypes.c_ulong(), ctypes.c_ulong()
+            rx, ry, wx, wy, m = ctypes.c_int(), ctypes.c_int(), ctypes.c_int(), ctypes.c_int(), ctypes.c_uint()
+            if not self.x11.XQueryPointer(self.dpy, win, ctypes.byref(r), ctypes.byref(c), ctypes.byref(rx),
+                                          ctypes.byref(ry), ctypes.byref(wx), ctypes.byref(wy), ctypes.byref(m)):
+                break
+            if not c.value:
+                break
+            win = found = c.value
+        return found
+
+    def _blank(self):
+        if not getattr(self, "blank", 0):
+            bits = self.x11.XCreateBitmapFromData(self.dpy, self.root, b"\0", 1, 1)
+            black = _XColor()
+            self.blank = self.x11.XCreatePixmapCursor(self.dpy, bits, bits, ctypes.byref(black), ctypes.byref(black),
+                                                      0, 0)
+        return self.blank
+
+    def hide_step(self):
+        """One look while gamescope's arrow is hidden: blanks the window under the pointer when the app shows a cursor
+        there. Returns whether the app wants a cursor (for Pocket XR's own pointer)."""
+        c = self.cursor()
+        if c is None:
+            return True
+        serial, visible = c
+        if not hasattr(self, "game_shown"):
+            self.game_shown, self.blank_serial, self.blanked = True, None, set()
+        self.game_shown, blank_now = cursor_decision(serial, visible, self.blank_serial, self.game_shown)
+        if blank_now:
+            win = self.under_pointer()
+            if win:
+                _ERRORS[0] = 0
+                self.x11.XDefineCursor(self.dpy, win, self._blank())
+                self.x11.XSync(self.dpy, 0)
+                if not _ERRORS[0]:
+                    self.blanked.add(win)
+                    after = self.cursor()
+                    if after and not after[1]:
+                        self.blank_serial = after[0]
+        return self.game_shown
+
+    def restore(self):
+        """Gives back the cursors blanked (the app's own come back when it sets them again; until then the screen's)."""
+        for win in list(getattr(self, "blanked", ())):
+            self.x11.XUndefineCursor(self.dpy, win)
+        if getattr(self, "blanked", None):
+            self.x11.XSync(self.dpy, 0)
+            self.blanked.clear()
+        self.blank_serial = None
 
 
 def watched_keys(argv):
@@ -314,16 +416,55 @@ def watched_keys(argv):
     return []
 
 
+def read_commands(stream, timeout=0.0, pending=None):
+    """Lines waiting on [stream] (gaming.py's commands: "hide 1", "hide 0"), [] when none; None once it has ended.
+    Read from the file descriptor itself, so lines that came in one write are all seen (a text stream's own buffer
+    would hide them from select); [pending] (a bytearray) keeps a part line between calls."""
+    import select
+    pending = bytearray() if pending is None else pending
+    try:
+        fd = stream.fileno()
+    except (OSError, ValueError, AttributeError):
+        return None
+    try:
+        r, _, _ = select.select([fd], [], [], timeout)
+        if r:
+            data = os.read(fd, 4096)
+            if not data:
+                return None
+            pending.extend(data)
+    except (OSError, ValueError):
+        return None
+    *lines, rest = bytes(pending).split(b"\n")
+    pending[:] = rest
+    return [x.decode(errors="replace").strip() for x in lines if x.strip()]
+
+
 def main(argv=None):
     out = sys.stdout
+    import signal
+    signal.signal(signal.SIGTERM, lambda n, f: sys.exit(0))  # so the cursors blanked are given back (finally below)
+    screens = {}
+    try:
+        return _main(out, argv, screens)
+    finally:
+        for q in screens.values():
+            try:
+                q.restore()
+            except Exception:  # noqa: BLE001
+                pass
+
+
+def _main(out, argv, screens):
     codes = watched_keys(sys.argv[1:] if argv is None else argv)
     try:
         x11, xf = _libs()
     except OSError as e:
         print(f"none no libX11 ({e})", flush=True)
         return 1
-    screens = {}
     current, said, shown, next_cursor = None, None, True, 0.0
+    hide, commands_open, commands_buf = False, True, bytearray()
+    last_click = 0.0
     next_open = 0.0
     unopened = set()
     focus = None
@@ -331,6 +472,19 @@ def main(argv=None):
     in_wayland, said_wayland = False, False
     while True:
         now = time.monotonic()
+        if commands_open:
+            got = read_commands(sys.stdin, 0.0, commands_buf)
+            if got is None:
+                commands_open = False
+            for cmd in got or ():
+                if cmd in ("hide 1", "hide 0") and (cmd == "hide 1") != hide:
+                    hide = cmd == "hide 1"
+                    if not hide:
+                        for q in screens.values():
+                            q.restore()
+                    next_cursor = 0.0
+                    print("hide " + ("on: gamescope's own arrow is blanked on the app's window" if hide
+                                     else "off: the app's cursors are given back"), flush=True)
         if now >= next_open:
             next_open = now + 3.0
             names = display_names()
@@ -371,13 +525,21 @@ def main(argv=None):
                 current = s
                 print(f"display {s.name} {s.size[0]}x{s.size[1]}", flush=True)
             if now >= next_cursor:
-                next_cursor = now + CURSOR_CHECK_S
-                shown = s.shown() and not in_wayland
+                next_cursor = now + (HIDE_CHECK_S if hide else CURSOR_CHECK_S)
+                shown = (s.hide_step() if hide else s.shown()) and not in_wayland
                 new_area = s.window_area(app_win) if (app_win and app_display == s.name) else None
                 if new_area != area:
                     area = new_area
                     print(f"window {s.name} 0x{app_win:x} at {area[0]},{area[1]} {area[2]}x{area[3]}" if area
                           else f"window none on {s.name}: the whole X screen", flush=True)
+            left = bool(getattr(s, "buttons", 0) & BUTTON1_MASK)
+            if left and not getattr(s, "left_down", False) and s.last is not None and now - last_click >= 1.0:
+                last_click = now
+                u, v = to_uv(s.last, s.size, area)
+                # For a log to show where a click landed: the X screen, the pointer there, and where Pocket XR draws
+                # it on the picture (u, v), at most once a second
+                print(f"click at {s.last[0]},{s.last[1]} on {s.name} {s.size[0]}x{s.size[1]}: u {u}, v {v}", flush=True)
+            s.left_down = left
             if s.last is not None:
                 line = to_uv(s.last, s.size, area) + (int(shown),)
                 if line != said:
