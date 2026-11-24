@@ -1,6 +1,6 @@
 {
   "name": "pocket-xr-decky",
-  "version": "0.7.8",
+  "version": "0.7.9",
   "description": "Pocket XR's Gaming Mode controls in the Quick Access menu",
   "type": "module",
   "scripts": {
