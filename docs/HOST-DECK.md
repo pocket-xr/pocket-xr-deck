@@ -1,7 +1,7 @@
 # The Deck as the computer for the phone's PC screens
 
-Pocket XR on the phone shows up to three PC screens: a computer's desktops, each in its own window. Here the Steam Deck
-is that computer, with nothing else installed. It replaces the Pocket XR PC Screens app (Sunshine in a Flatpak,
+Pocket XR on the phone shows a computer's desktops as PC screens, each in its own window. Here the Steam Deck is that
+computer, with nothing else installed. It replaces the Pocket XR PC Screens app (Sunshine in a Flatpak,
 `com.hayeco.pocketxr.PCScreens`).
 
 The code is `pocketxr/host/` (Python) and `native/host/` (C). It is a service, `pocket-xr-host`, which runs in
@@ -23,7 +23,13 @@ Pocket XR for Windows' own host (`src/PocketXR/PcHost`) is.
 | Clipboard | `desktop.py` | Klipper over D-Bus (`qdbus6`), for `/actions/clipboard` |
 | Finding the Deck | `helper.py` | The PC helper's UDP/TCP protocol on 47610, with the screens' ports in the UDP answer. `avahi-publish` is tried too |
 
-The ports are the PC Screens app's: P = 47989, 48989 and 49989 for PC screens 1, 2 and 3.
+The ports are the PC Screens app's: P = 47989, 48989 and 49989 for PC screens 1, 2 and 3. Three are served at
+first. **PC screens for a phone** on the control panel (`host_screens` in `~/.config/pocket-xr-deck/settings.json`,
+1 to 6) changes that, and the host follows within 10 seconds with no restart: screens 4, 5 and 6 are P = 50989, 51989
+and 52989, P = 47989 + 1000 per screen, so each screen's P-5 to P+21 never meets another's. A screen left out by a
+lower number stops once no phone streams from it. The count and the ports are set in one place, `screens.py`.
+`python3 -m pocketxr.host --ports ...` serves the ports given and ignores the setting. Nothing has been streamed from
+more than three screens yet.
 
 KWin lets only programs named in a desktop file use the screencast protocol. So the installer writes
 `~/.local/share/applications/pocket-xr-host.desktop` with `X-KDE-Wayland-Interfaces=zkde_screencast_unstable_v1` for
@@ -48,7 +54,7 @@ Windows, macOS and Linux helpers':
   - `pair`: a Yes on the Deck (kdialog).
   - `apollo-pin`: the PIN goes straight to the host.
   - `screen-prepare`: `{"ok":true}`.
-  - `screens-setup`: `{"ok":true,"ports":[...]}`, because the three screens are always there.
+  - `screens-setup`: `{"ok":true,"ports":[...]}`, because the screens are always there.
   - `status` and `start`: `"os":"linux-virtual"`, `"virtual":true`.
 - Phones allowed once stay allowed through the same token file, `~/.config/pocketxr/pc-helper.json`.
 

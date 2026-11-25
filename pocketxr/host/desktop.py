@@ -56,12 +56,18 @@ def bounds(outs):
     return x0, y0, x1 - x0, y1 - y0
 
 
+def _port_of(o):
+    """The PC screen's base port in a virtual output's name (Virtual-pxr-<port>), for sorting; 0 when not a number."""
+    tail = o["name"][len(VIRTUAL_PREFIX):]
+    return int(tail) if tail.isdigit() else 0
+
+
 def arrange(outs):
     """kscreen-doctor arguments that put the PC screens' virtual outputs side by side, right of the real screens, in
-    name (port) order. KWin remembers where outputs were for each set of outputs and puts them back there, so two
+    port order (PC screen 1 to 6). KWin remembers where outputs were for each set of outputs and puts them back there, so two
     virtual outputs can land on the same place (the Deck, 20 Nov 2026: both at 949,0, and PC screen 2 showed PC screen
     1's picture)."""
-    virtual = sorted((o for o in outs if o["name"].startswith(VIRTUAL_PREFIX)), key=lambda o: o["name"])
+    virtual = sorted((o for o in outs if o["name"].startswith(VIRTUAL_PREFIX)), key=lambda o: (_port_of(o), o["name"]))
     real = [o for o in outs if o not in virtual]
     x = max((o["x"] + o["w"] for o in real), default=0)
     moves = []

@@ -277,6 +277,11 @@ class Panel:
         self.text_size = Stepper(sp.body, tr("Text size"), tr("Larger, still sharp, on the PC screens your phone shows."),
                                  lambda step: send("text_size", step))
         self.text_size.pack(fill="x", padx=2)
+        # How many of this computer's screens a phone can open as its PC screens (pocketxr/host/screens.py), 1 to 6.
+        # English only for now, as the PC screens' other lines.
+        self.host_screens = Stepper(sp.body, "PC screens for a phone", "How many of this computer's screens a phone "
+                                    "can open: 3 at first, up to 6.", lambda step: send("host_screens", step))
+        self.host_screens.pack(fill="x", padx=2)
         self.viture = Switch(sp.body, tr("VITURE head tracking"), tr("Experimental on models other than the Beast"),
                              lambda on: send("viture", on))
 
@@ -385,6 +390,7 @@ class Panel:
             s.set(bool(st.get(k, k in ("cursor_follows_head", "sbs_3d"))))
         ts = st.get("text_scale", 100)
         self.text_size.set(tr("Standard") if ts == 100 else f"{ts}%")
+        self.host_screens.set(str(st.get("host_screens", 3)))
         flat = st.get("flat", False)
         for k in ("Nearer", "Further"):
             self.adjust[k].set(enabled=not flat)

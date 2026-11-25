@@ -266,8 +266,9 @@ Pocket XR turns them on while PC VR runs, and off again after.
 
 ## Your Deck on your phone
 
-New: Pocket XR on your phone can show this Deck's screens as its PC screens, up to three, each at the shape of its
-window. Tried with one phone so far; that first try showed a broken picture (SteamOS's HEVC encoder), so the Deck now
+New: Pocket XR on your phone can show this Deck's screens as its PC screens, three at first, each at the shape of its
+window. **PC screens for a phone** on the control panel raises that to up to six (not yet tried with more than
+three). Tried with one phone so far; that first try showed a broken picture (SteamOS's HEVC encoder), so the Deck now
 checks each encoder and sends H.264. In Desktop Mode the Deck answers the phone by itself, with nothing else to
 install. Put both on the same network. The first time, the Deck asks whether to allow the phone. It replaces the
 Pocket XR PC Screens app; the installer switches that app off. How it works and what has been checked:
