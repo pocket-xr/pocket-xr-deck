@@ -1,5 +1,22 @@
 # Changes
 
+## 0.7.15 (25 Nov 2026)
+
+From Pierre Zammit's report and two logs on 0.7.14 (Steam Deck LCD, XREAL XBX A01+). Thanks, Pierre.
+
+- **The pointer is followed in games again.** From the moment a game started, the program that follows the mouse got
+  stuck opening one of gamescope's X screens, which was there but never answered. Each time it was restarted (every
+  10 seconds) it tried that screen again and stuck again, so the pointer was never followed and gamescope's own arrow
+  moved with the head. Now each X screen gets 2 seconds to open. One that doesn't answer is left to open on its own,
+  and the others are followed meanwhile. The log says so once. Checked by tests with a stand-in screen that never
+  answers; not yet tried on a Deck.
+- **No second arrow flickering over links and buttons.** A browser sets a new cursor each time the pointer goes onto a
+  link or a button (a hand, a text bar). Gamescope drew it until Pocket XR blanked it again up to 1/30 s later, which
+  was the arrow flickering in and out. Cursors an app loads from its theme have a name, so Pocket XR now blanks every
+  cursor of that name at once, and the next hover shows nothing. Turning the screen in space off gives them back from
+  the cursor theme. If Pocket XR ends without giving them back, its next start does. Written from Xorg's and
+  libXcursor's source and checked by tests; not yet tried on a Deck.
+
 ## 0.7.14 (24 Nov 2026)
 
 - **Up to six PC screens for a phone.** Pocket XR on a phone could open three of this computer's screens; now it can
