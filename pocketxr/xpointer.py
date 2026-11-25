@@ -29,6 +29,16 @@ so the next hover shows nothing), as well as on the window. Giving back loads ea
 that ended without giving them back (stuck, killed) has the next one give them back. Written from Xorg's and
 libXcursor's source; not yet tried on a Deck.
 
+0.7.17 (the same tester's 0.7.16, 25 Nov 2026: with a second app open, gamescope's arrow stayed, "permanent and
+follows my head"; and the flicker on links stayed): gamescope draws the arrow of the X screen that has its input
+focus, which need not be the one the pointer is read from, so every X screen's cursor is blanked (hide_all), the root
+window's when no window of the app's is under that screen's pointer; and a screen whose cursor changed is blanked the
+moment it says so, before anything else is asked. A blank that does not take is said once ("hide <screen>'s cursor ...
+still shown"). And 0.7.15's blanking by name and 0.7.16's cursor events never ran: _libs asked libXfixes for a
+function it does not have and turned them off. Tried against two Xvfb screens (25 Nov 2026): 0.7.16 left both
+cursors showing (the root's on one, an app's hand on the other) and showed the hand again on each of 40 hovers;
+0.7.17 blanked both, showed it only the first time, and gave the hand back after "hide 0". Not yet tried on a Deck.
+
 This runs as its own process (python3 -m pocketxr.xpointer), because Xlib ends the whole program when its X server
 goes away (gamescope restarting), and prints one line each time something changes:
 
@@ -135,9 +145,11 @@ def _libs():
         xf.XFixesGetCursorImage.restype = ctypes.POINTER(_CursorImage)
         xf.XFixesGetCursorImage.argtypes = [ctypes.c_void_p]
         xf.XFixesQueryExtension.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_int), ctypes.POINTER(ctypes.c_int)]
-        try:  # 0.7.15: cursor names (XFixes 2)
-            xf.XFixesGetCursorImageAndName.restype = ctypes.POINTER(_CursorImage)
-            xf.XFixesGetCursorImageAndName.argtypes = [ctypes.c_void_p]
+        # 0.7.15: cursor names (XFixes 2). 0.7.17: libXfixes has no XFixesGetCursorImageAndName (the request's name
+        # in the protocol; XFixesGetCursorImage already gives the name), so asking for it here failed and turned all
+        # of this off: neither 0.7.15's blanking by name nor 0.7.16's cursor events ever ran (found against Xvfb, 25
+        # Nov 2026, with the same tester's flicker unchanged in 0.7.16).
+        try:
             xf.XFixesChangeCursorByName.argtypes = [ctypes.c_void_p, ctypes.c_ulong, ctypes.c_char_p]
             xf.XFixesSetCursorName.argtypes = [ctypes.c_void_p, ctypes.c_ulong, ctypes.c_char_p]
             xf.XFixesSelectCursorInput.argtypes = [ctypes.c_void_p, ctypes.c_ulong, ctypes.c_ulong]
@@ -510,7 +522,7 @@ class Screen:
         if not self.fixes:
             return None
         named = getattr(self.xf, "by_name", False) and _XCURSOR is not None
-        img = (self.xf.XFixesGetCursorImageAndName if named else self.xf.XFixesGetCursorImage)(self.dpy)
+        img = self.xf.XFixesGetCursorImage(self.dpy)
         if not img:
             return None
         try:
@@ -562,7 +574,10 @@ class Screen:
             name = getattr(self, "cursor_name", "")
             if name:
                 self._blank_name(name)
-            win = self.under_pointer()
+            # 0.7.17: with no window of the app's under the pointer, the root window's cursor is the one shown (an X
+            # screen whose app is not under its pointer, gamescope's focus on it all the same: see the module's
+            # docstring), so that one is blanked
+            win = self.under_pointer() or self.root
             if win:
                 _ERRORS[0] = 0
                 self.x11.XDefineCursor(self.dpy, win, self._blank())
@@ -573,7 +588,18 @@ class Screen:
                     if after and not after[1]:
                         self.blank_serial = after[0]
                         self.blank_serials = serials | {after[0]}
+                    elif after:
+                        # 0.7.17: said once a hide (see _main), so a log shows a cursor the blanking did not reach
+                        self.not_taken = f"{self.name}'s cursor {getattr(self, 'cursor_name', '') or '(no name)'} " \
+                                         f"still shown after blanking window 0x{win:x}"
         return self.game_shown
+
+    def root_size(self):
+        """0.7.17: the X screen's size now, (w, h), or None. gamescope sizes a game's Xwayland to the game after it
+        opens; libX11's own size (XDisplayWidth) stays the one at the open. A tester's 0.7.16 log has ":1 1280x800"
+        with the pointer at 1916,1065 on it."""
+        a = self.window_area(self.root)
+        return (a[2], a[3]) if a else None
 
     def changed(self):
         """0.7.16: whether the cursor changed since the last call (its events read and dropped)."""
@@ -625,6 +651,33 @@ class Screen:
                 self.x11.XSync(self.dpy, 0)
             names.clear()
             note_blanked(self.name, ())
+
+
+def hide_all(screens, current):
+    """0.7.17: one look on every X screen while gamescope's arrow is hidden; whether [current]'s app wants a cursor.
+    gamescope draws the arrow of the X screen its input focus is on (steamcompmgr.cpp, determine_and_apply_focus:
+    pFocus->cursor is the focused window's Xwayland's), which need not be the one the pointer is read from (the
+    screen GAMESCOPE_MOUSE_FOCUS_DISPLAY names). 0.7.16 blanked only that one, and a tester (Pierre Zammit, 25 Nov
+    2026) saw gamescope's arrow stay, "permanent and follows my head", with a second app open: his log has the pointer
+    read from :0 and :1 in turn. So each X screen's cursor is blanked."""
+    shown = True
+    for q in screens.values():
+        r = q.hide_step()
+        if q is current:
+            shown = r
+    return shown
+
+
+def blank_changed(screens, current):
+    """0.7.17: blanks each X screen whose cursor changed since the last look (Screen.changed); whether [current]'s app
+    wants a cursor when it was one of them, else None."""
+    got = None
+    for q in screens.values():
+        if q.changed():
+            r = q.hide_step()
+            if q is current:
+                got = r
+    return got
 
 
 def watched_keys(argv):
@@ -693,6 +746,7 @@ def _main(out, argv, screens):
     focus = None
     app_display, app_win, area = None, 0, None
     in_wayland, said_wayland = False, False
+    said_not_taken = set()
     import faulthandler
     while True:
         # Each turn starts the watch again: only a turn stuck for STUCK_S prints its stack (to stdout, which
@@ -710,6 +764,7 @@ def _main(out, argv, screens):
                         for q in screens.values():
                             q.restore()
                     next_cursor = 0.0
+                    said_not_taken = set()
                     print("hide " + ("on: gamescope's own arrow is blanked on the app's window" if hide
                                      else "off: the app's cursors are given back"), flush=True)
         if now >= next_open:
@@ -750,7 +805,17 @@ def _main(out, argv, screens):
                 print(f"display {s.name} {s.size[0]}x{s.size[1]}", flush=True)
             if now >= next_cursor:
                 next_cursor = now + (HIDE_CHECK_S if hide else CURSOR_CHECK_S)
-                shown = (s.hide_step() if hide else s.shown()) and not in_wayland
+                shown = (hide_all(screens, s) if hide else s.shown()) and not in_wayland
+                for q in screens.values():
+                    msg = getattr(q, "not_taken", None)
+                    q.not_taken = None
+                    if msg and msg not in said_not_taken:
+                        said_not_taken.add(msg)
+                        print("hide " + msg, flush=True)
+                size = s.root_size()
+                if size and size != s.size:
+                    s.size = size
+                    print(f"display {s.name} {s.size[0]}x{s.size[1]}", flush=True)
                 new_area = s.window_area(app_win) if (app_win and app_display == s.name) else None
                 if new_area != area:
                     area = new_area
@@ -770,7 +835,16 @@ def _main(out, argv, screens):
                     said = line
                     out.write(f"pointer {line[0]} {line[1]} {line[2]}\n")
                     out.flush()
-        # 0.7.16: while hiding, woken the moment a cursor changes on an X screen, and that one is looked at at once
+        # 0.7.16: while hiding, woken the moment a cursor changes on an X screen (never ran: see _libs).
+        # 0.7.17: a screen whose cursor changed is blanked then, before anything else is asked: gamescope reads a
+        # changed cursor's image when it next draws (MouseCursor::getTexture), so a blank set before then is all it
+        # sees. The change may already be in Xlib's queue, read off the socket by this turn's other calls, where
+        # select would not see it, so the queue is looked at first. Measured against Xvfb (25 Nov 2026): a new cursor
+        # blanked after 0.2 ms (median; 0.7 ms at most), where 0.7.16 took 6.7 ms (median; 34 ms at most).
+        if hide:
+            r = blank_changed(screens, current)  # changes Xlib already read
+            if r is not None:
+                shown = r and not in_wayland
         watch = [q.fd for q in screens.values() if hide and getattr(q, "fd", None) is not None]
         if watch:
             import select
@@ -780,9 +854,10 @@ def _main(out, argv, screens):
                 time.sleep(POLL_S)
         else:
             time.sleep(POLL_S)
-        for q in screens.values():
-            if q.changed() and hide and q is current:
-                next_cursor = 0.0
+        if hide:
+            r = blank_changed(screens, current)
+            if r is not None:
+                shown = r and not in_wayland
 
 
 if __name__ == "__main__":

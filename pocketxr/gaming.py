@@ -740,6 +740,7 @@ class Gaming:
         self.glasses = g
         self.log(f"gaming: glasses {g.name} ({g.family}, {g.vendor:04x}:{g.product:04x})")
         self.head = fusion.HeadFusion(g.axes, bias=fusion.load_bias(self._glasses_key(g)))
+        self.said_rest_blocks = 0
         if self.head.bias_ready:
             self.log(f"gaming: gyro calibration loaded for these glasses ({self._glasses_key(g)})")
         if g.imu == "network":
@@ -872,6 +873,13 @@ class Gaming:
                                  f"motion {imu_rate:.0f} reports a second")
                         self.reshade.pace_ms = []
                         last_stats = now
+                        # 0.7.17: each time stillness changed the gyro's zero, so a log shows whether it wandered
+                        h = self.head
+                        if h is not None and h.rest_blocks != getattr(self, "said_rest_blocks", 0):
+                            self.said_rest_blocks = h.rest_blocks
+                            zero = ", ".join(f"{math.degrees(b):.3f}" for b in h.bias)
+                            self.log(f"gaming: gyro zero now ({zero}) deg/s, from {h.rest_blocks} still stretches "
+                                     f"({'as quiet as lying still, calibrated' if h.calibrated else 'not calibrated'})")
                 except OSError as e:
                     with self.lock:
                         self._lost_gamescope(e)
