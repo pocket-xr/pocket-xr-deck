@@ -1,7 +1,7 @@
 """The host's identity and its paired phones, in ~/.config/pocket-xr-deck/host/ (this user only):
 
   cert.pem, key.pem   a self-signed RSA 2048 certificate, as Sunshine makes (made with SteamOS's openssl), shared by
-                      every PC screen, so a phone paired once is paired with all three
+                      every PC screen, so a phone paired once is paired with all of them
   ids.json            {"<port>": "<unique id>"}: one id per PC screen, as the phone saves each screen as its own computer
   clients.json        [{"name", "id", "cert" (PEM), "paired"}]: the phones' certificates, pinned
 
@@ -20,6 +20,7 @@ from . import rsa
 FOLDER = os.environ.get("PXR_HOST_CONFIG") or os.path.join(os.path.expanduser("~/.config/pocket-xr-deck"), "host")
 OLD = os.path.expanduser("~/.config/pocketxr")  # the PC Screens app's (Sunshine) settings
 OLD_BASE_PORT = 47989
+OLD_SCREENS = 3  # the PC Screens app had three Sunshines: sunshine-1 to sunshine-3
 
 
 def _write(path, text, private=False):
@@ -92,7 +93,7 @@ class Identity:
 
     def _take_old_clients(self):
         taken = []
-        for n in range(3):
+        for n in range(OLD_SCREENS):
             for d in _old_state(self.old, OLD_BASE_PORT + 1000 * n).get("named_devices", []):
                 if isinstance(d, dict) and d.get("cert") and all(c["cert"] != d["cert"] for c in taken):
                     taken.append({"name": d.get("name") or "Phone", "id": d.get("uuid") or str(uuid.uuid4()).upper(),

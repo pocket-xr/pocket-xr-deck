@@ -19,6 +19,9 @@ from pocketxr import sendlogs  # noqa: E402
 
 FONT, MEDIUM = ui_font(), ui_font(medium=True)  # Inter, or Noto Sans CJK in Korean, Japanese and Chinese
 W = 440
+DRAG_PX = 8  # a press that moves further than this scrolls the panel and is not a tap
+# Set while a press is scrolling the panel: its release then taps nothing (Panel._press and _drag).
+dragging = {"on": False}
 
 
 def send(cmd, value=None):
@@ -65,7 +68,7 @@ class Button(tk.Canvas):
         self.draw()
 
     def _release(self, e):
-        fire = self.pressed and self.enabled
+        fire = self.pressed and self.enabled and not dragging["on"]
         self._set(pressed=False)
         if fire and 0 <= e.x <= self.winfo_width() and 0 <= e.y <= self.winfo_height():
             self.command()
@@ -107,7 +110,7 @@ class Switch(tk.Canvas):
         self.title, self.sub, self.command = title, sub, command
         self.on = False
         self.bind("<Configure>", lambda e: self.draw())
-        self.bind("<ButtonRelease-1>", lambda e: self.command(not self.on))
+        self.bind("<ButtonRelease-1>", lambda e: dragging["on"] or self.command(not self.on))
 
     def set(self, on):
         if on != self.on:
@@ -220,8 +223,13 @@ class Panel:
                                   justify="left", anchor="w", wraplength=W - 36)
         self.logs_line.pack(fill="x", padx=4, pady=(2, 0))
 
+        # Everything between the title and Send logs scrolls (wheel, trackpad, or a drag on the touch screen): the panel
+        # is taller than its window on a Deck, and its lower rows were hidden behind Send logs.
+        self._scroll_area(root)
+        page = self.content
+
         head = tk.Frame(root, bg=C["page"])
-        head.pack(fill="x", padx=16, pady=(8, 2))
+        head.pack(fill="x", padx=16, pady=(8, 2), before=self.scroller)
         if self.icon is not None:
             self.small_icon = self.icon.subsample(max(1, self.icon.width() // 32))
             tk.Label(head, image=self.small_icon, bg=C["page"]).pack(side="left", padx=(0, 10))
@@ -235,7 +243,7 @@ class Panel:
         self.view = self.segment(tr("View"), [("3dof", tr("Window in space")), ("steady", tr("Steady 6DoF"))], "view")
         self.source = self.segment(tr("Show"), [("deck", tr("Deck screen")), ("apps", tr("App windows"))], "source")
 
-        sp = Card(root, tr("Space"))
+        sp = Card(page, tr("Space"))
         row = tk.Frame(sp.body, bg=C["card"])
         row.pack(fill="x", padx=4, pady=(4, 2))
         self.space_buttons = {}
@@ -277,10 +285,15 @@ class Panel:
         self.text_size = Stepper(sp.body, tr("Text size"), tr("Larger, still sharp, on the PC screens your phone shows."),
                                  lambda step: send("text_size", step))
         self.text_size.pack(fill="x", padx=2)
+        # How many of this computer's screens a phone can open as its PC screens (pocketxr/host/screens.py), 1 to 6.
+        # English only for now, as the PC screens' other lines.
+        self.host_screens = Stepper(sp.body, "PC screens for a phone", "How many of this computer's screens a phone "
+                                    "can open: 3 at first, up to 6.", lambda step: send("host_screens", step))
+        self.host_screens.pack(fill="x", padx=2)
         self.viture = Switch(sp.body, tr("VITURE head tracking"), tr("Experimental on models other than the Beast"),
                              lambda on: send("viture", on))
 
-        win = Card(root, tr("Window in front"))
+        win = Card(page, tr("Window in front"))
         wr = tk.Frame(win.body, bg=C["card"])
         wr.pack(fill="x", padx=4, pady=4)
         self.adjust = {}
@@ -298,8 +311,8 @@ class Panel:
         self.message = tk.Label(root, text="", bg=C["page"], fg=C["accent"], font=(FONT, 10), justify="left",
                                 anchor="w", wraplength=W - 36)
 
-        keys = tk.Frame(root, bg=C["page"])
-        keys.pack(fill="x", padx=16, pady=(2, 2))
+        keys = tk.Frame(page, bg=C["page"])
+        keys.pack(fill="x", padx=16, pady=(2, 8))
         tk.Label(keys, text=tr("Back buttons").upper(), bg=C["page"], fg=C["ink3"], font=(MEDIUM, 9)).grid(
             row=0, column=0, columnspan=4, sticky="w", pady=(0, 3))
         rows = (("L4", tr("Recentre"), tr("hold: switch view")), ("R4", tr("Next app"), tr("hold: Deck / apps")),
@@ -318,15 +331,95 @@ class Panel:
             tk.Label(t, text=hold, bg=C["page"], fg=C["ink3"], font=(FONT, 8)).pack(anchor="w")
         keys.columnconfigure(0, weight=1)
         keys.columnconfigure(1, weight=1)
-        # The message line sits between the guide and Quit, and only takes room when there is something to say.
-        self.message.pack(side="bottom", fill="x", padx=18, pady=(0, 2), before=quit_row) if False else None
+        # The message line sits under the scrolling part, above Send logs, and only takes room when there is
+        # something to say.
         self.quit_row = quit_row
 
         threading.Thread(target=self.reader, daemon=True).start()
         root.after(100, self.poll)
 
+    # ---- the scrolling part ----
+
+    def _scroll_area(self, root):
+        """A canvas between the title and Send logs that holds the cards and the back buttons' guide, with a thin bar
+        on the right that shows where you are when not everything fits."""
+        area = tk.Frame(root, bg=C["page"])
+        area.pack(fill="both", expand=True)
+        self.scroller = area
+        self.bar = tk.Canvas(area, width=6, bg=C["page"], highlightthickness=0, bd=0)
+        self.bar.pack(side="right", fill="y", padx=(0, 3))
+        self.canvas = tk.Canvas(area, bg=C["page"], highlightthickness=0, bd=0, height=100)
+        self.canvas.pack(side="left", fill="both", expand=True)
+        self.content = tk.Frame(self.canvas, bg=C["page"])
+        self.content_win = self.canvas.create_window(0, 0, window=self.content, anchor="nw")
+        self.content.bind("<Configure>", lambda e: self._fit_content())
+        self.canvas.bind("<Configure>", lambda e: (self.canvas.itemconfigure(self.content_win, width=e.width),
+                                                   self._fit_content()))
+        root.bind_all("<MouseWheel>", lambda e: self._wheel(-1 if e.delta > 0 else 1, e))
+        root.bind_all("<Button-4>", lambda e: self._wheel(-1, e))
+        root.bind_all("<Button-5>", lambda e: self._wheel(1, e))
+        root.bind_all("<ButtonPress-1>", self._press, add="+")
+        root.bind_all("<B1-Motion>", self._drag, add="+")
+        self.press = None
+
+    def _fit_content(self):
+        self.canvas.configure(scrollregion=(0, 0, self.canvas.winfo_width(), self.content.winfo_reqheight()))
+        self._draw_bar()
+
+    def _fits(self):
+        return self.content.winfo_reqheight() <= self.canvas.winfo_height()
+
+    def _inside(self, widget):
+        w = widget
+        while w is not None:
+            if w is self.canvas:
+                return True
+            w = getattr(w, "master", None)
+        return False
+
+    def _wheel(self, step, e):
+        if self._fits() or not self._inside(e.widget):
+            return
+        self.canvas.yview_scroll(step * 3, "units")
+        self._draw_bar()
+
+    def _press(self, e):
+        dragging["on"] = False
+        self.press = (e.y_root, self.canvas.canvasy(0)) if self._inside(e.widget) and not self._fits() else None
+
+    def _drag(self, e):
+        if self.press is None:
+            return
+        y0, top = self.press
+        if not dragging["on"] and abs(e.y_root - y0) <= DRAG_PX:
+            return
+        if not dragging["on"]:
+            dragging["on"] = True
+            if isinstance(e.widget, Button):  # the button under the finger lets go without tapping
+                e.widget._set(pressed=False, hover=False)
+        total = max(1, self.content.winfo_reqheight())
+        self.canvas.yview_moveto(max(0.0, top - (e.y_root - y0)) / total)
+        self._draw_bar()
+
+    def scroll_to(self, widget):
+        """Scrolls so [widget] (inside the scrolling part) is in view."""
+        self.root.update_idletasks()
+        y = widget.winfo_rooty() - self.content.winfo_rooty()
+        top, h = self.canvas.canvasy(0), self.canvas.winfo_height()
+        if y < top or y + widget.winfo_height() > top + h:
+            self.canvas.yview_moveto(max(0, y - 8) / max(1, self.content.winfo_reqheight()))
+            self._draw_bar()
+
+    def _draw_bar(self):
+        self.bar.delete("all")
+        h = self.bar.winfo_height()
+        if self._fits() or h < 10:
+            return
+        a, b = self.canvas.yview()
+        rounded(self.bar, 0, a * h, 6, max(a * h + 20, b * h), 3, fill=C["rim_focus"], outline="")
+
     def segment(self, title, options, cmd):
-        card = Card(self.root, title)
+        card = Card(self.content, title)
         row = tk.Frame(card.body, bg=C["card"])
         row.pack(fill="x", padx=4, pady=4)
         out = {}
@@ -385,6 +478,7 @@ class Panel:
             s.set(bool(st.get(k, k in ("cursor_follows_head", "sbs_3d"))))
         ts = st.get("text_scale", 100)
         self.text_size.set(tr("Standard") if ts == 100 else f"{ts}%")
+        self.host_screens.set(str(st.get("host_screens", 3)))
         flat = st.get("flat", False)
         for k in ("Nearer", "Further"):
             self.adjust[k].set(enabled=not flat)
@@ -408,7 +502,7 @@ class Panel:
         if self.message.cget("text") != msg:
             self.message.configure(text=msg)
             if msg and not self.message.winfo_ismapped():
-                self.message.pack(side="bottom", fill="x", padx=18, pady=(0, 2))
+                self.message.pack(side="bottom", fill="x", padx=18, pady=(0, 2), before=self.scroller)
             elif not msg and self.message.winfo_ismapped():
                 self.message.pack_forget()
 

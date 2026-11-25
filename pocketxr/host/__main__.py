@@ -1,6 +1,9 @@
 """python3 -m pocketxr.host [--ports 47989,48989,49989] [--no-helper] [--seconds S]: the host, as the
 pocket-xr-host service runs it, logging to ~/.local/state/pocket-xr-deck/host.log.
 
+Without --ports it serves the PC screens the control panel's "PC screens for a phone" asks for (screens.py: three at
+first, up to six), and follows a change within 10 seconds. With --ports it serves those and no others.
+
 python3 -m pocketxr.host --pin NNNN: gives a waiting phone its PIN (when no Pocket XR helper typed it).
 """
 import argparse
@@ -10,9 +13,9 @@ import sys
 import threading
 import time
 
-from . import identity
+from . import identity, screens
 from .helper import Helper
-from .server import BASE_PORTS, Host
+from .server import Host
 
 STATE = os.path.join(os.environ.get("XDG_STATE_HOME", os.path.expanduser("~/.local/state")), "pocket-xr-deck")
 LOG = os.path.join(STATE, "host.log")
@@ -35,7 +38,7 @@ class Log:
 
 def main(argv=None):
     p = argparse.ArgumentParser(prog="pocketxr.host")
-    p.add_argument("--ports", default=",".join(str(x) for x in BASE_PORTS))
+    p.add_argument("--ports")
     p.add_argument("--no-helper", action="store_true")
     p.add_argument("--seconds", type=float, default=0)
     p.add_argument("--pin")
@@ -46,7 +49,8 @@ def main(argv=None):
             f.write(a.pin.strip())
         return 0
     log = Log(LOG)
-    ports = [int(x) for x in a.ports.split(",") if x.strip()]
+    follow = not a.ports
+    ports = list(screens.ports(screens.wanted())) if follow else [int(x) for x in a.ports.split(",") if x.strip()]
     host = Host(identity.Identity(log=log), ports=ports, log=log)
     host.start()
     helper = None
@@ -62,6 +66,8 @@ def main(argv=None):
     signal.signal(signal.SIGINT, lambda *_: done.set())
     end = time.time() + a.seconds if a.seconds else None
     while not done.wait(10):
+        if follow:
+            host.set_count(screens.wanted())
         for line in host.stats():
             log("host: " + line)
         if end and time.time() > end:

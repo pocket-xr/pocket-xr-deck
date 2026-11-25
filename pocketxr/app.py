@@ -28,6 +28,7 @@ from .gl import (GL_BGRA, GL_BLEND, GL_CLAMP_TO_EDGE, GL_COLOR_BUFFER_BIT, GL_LI
                  split_displays)
 from . import pcvr as pcvrmod
 from .pcscreens import PcScreens
+from .host import screens as host_screens
 from . import settingsctl
 from .i18n import tr
 from .recorder import Recorder
@@ -47,6 +48,7 @@ DEFAULTS = {"view": "3dof", "source": "deck", "distance": 2.0, "scale": 1.0, "ca
             "viture_tracking": None, "steady_gap_px": STEADY_GAP_DEFAULT_PX,
             "readability": False, "readability_saved": None,
             "text_scale": 100,  # Text size (readability.py): the PC screens a phone streams from this computer
+            host_screens.SETTING: host_screens.DEFAULT,  # how many PC screens a phone can open here (pocketxr/host)
             "keys": {}}  # keys.py: {"recentre": "KEY_STOPCD", ...} over its defaults
 
 # 3DoF: a window 1600 px wide is this wide at 1.0, in metres (the Deck's screen 1.28 m, an app's 1920 px screen 1.92 m:
@@ -612,6 +614,8 @@ class App:
             self.set_gap(int(value))
         elif cmd == "text_size":
             self.set_text_size(int(value))
+        elif cmd == "host_screens":
+            self.set_host_screens(int(value))
         elif cmd == "distance":
             key = self.space.focus if self.space.focus in self.space.poses else next(iter(self.space.poses), None)
             if key is not None and not self.settings.get("locked", False):
@@ -810,6 +814,19 @@ class App:
         self.log(f"text size: {old}% -> {new}%, PC screens laid out at {w}x{h} (at 1920x1080) from the next one"
                  + (", once Readability is off" if self.settings.get("readability") else ""))
 
+    def set_host_screens(self, step):
+        """PC screens for a phone: how many of this computer's screens a phone can open (pocketxr/host/screens.py),
+        1 to 6, three at first. The host service reads it within 10 seconds; a screen a phone streams from stays
+        until that stream ends."""
+        old = host_screens.count_of(self.settings.get(host_screens.SETTING, host_screens.DEFAULT))
+        new = max(1, min(host_screens.MAX, old + step))
+        if new == old:
+            return
+        self.settings[host_screens.SETTING] = new
+        save_settings(self.settings)
+        self.log(f"PC screens for a phone: {old} -> {new}, on ports "
+                 + ", ".join(str(p) for p in host_screens.ports(new)))
+
     def set_gap(self, step):
         """Screen gap: the space between screens in Steady mode, 10 canvas pixels a step, 0 to 120."""
         self.settings["steady_gap_px"] = steady_gap_px(self.settings["steady_gap_px"] + STEADY_GAP_STEP_PX * step)
@@ -914,6 +931,7 @@ class App:
             "flat": self._flat(),
             "steady_gap_px": self.settings["steady_gap_px"],
             "text_scale": readability.text_scale_of(self.settings.get("text_scale", 100)),
+            "host_screens": host_screens.count_of(self.settings.get(host_screens.SETTING, host_screens.DEFAULT)),
             "viture": bool(g and g.family == "viture"),
             "viture_on": bool(g and g.family == "viture" and self._viture_on()),
             "viture_label": tr("VITURE head tracking") if g and g.beast else tr("Experimental VITURE head tracking"),

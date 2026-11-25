@@ -1,5 +1,26 @@
 # Changes
 
+## 0.7.14 (24 Nov 2026)
+
+- **Up to six PC screens for a phone.** Pocket XR on a phone could open three of this computer's screens; now it can
+  open up to six. **PC screens for a phone** on the control panel, under Text size, sets how many (1 to 6). It starts
+  at 3, so nothing changes until you raise it. Screens 4, 5 and 6 are on ports 50989, 51989 and 52989, after 47989,
+  48989 and 49989, so open those on the firewall too if you have one. The host follows the setting within 10 seconds
+  with no restart, and the helper tells the phone the new list. Lowering it never cuts a stream: a screen a phone
+  streams from stops once that stream ends. The number and the ports are set in one place (`pocketxr/host/screens.py`).
+  What has been checked: the tests, and the host in WSL, where it served all six (screen 6 answered as "screen 6" on
+  52989, and the helper listed six ports) and dropped to four when the setting changed. **Not yet tried with a phone
+  or on a Deck: nothing has streamed from more than three screens.** Whether the phone's Pocket XR opens more than
+  three, and whether the Deck can capture and encode that many streams at once, is not known yet. The setting's line on
+  the control panel is in English only for now, as the PC screens' other lines.
+- **The control panel scrolls.** It was taller than its window (720 pixels high at most, 560 on a Deck), so its lower
+  rows were cut off: Text size sat half under Send logs, and Window in front and the back buttons' guide could not be
+  seen at all. Now everything between the title and Send logs scrolls, with the mouse wheel, the trackpad or a drag on
+  the touch screen, and a thin bar on the right shows where you are. Send logs and Quit stay where they are. A drag
+  that starts on a button scrolls and does not press it; a tap still does. Checked in WSL with the Inter fonts, at 560
+  and 720 pixels: every row, PC screens for a phone included, could be scrolled into view clear of Send logs. Not yet
+  tried on a Deck's touch screen.
+
 ## 0.7.13 (24 Nov 2026)
 
 From Pierre Zammit's video and log on 0.7.12 ("I have taken a video of what the issue with the cursor/mouse pointer

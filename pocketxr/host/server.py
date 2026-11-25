@@ -1,9 +1,9 @@
 """Pocket XR on the Steam Deck as the PC end of the phone's PC screens, with no Sunshine: the host that Moonlight's
 protocol reaches (ported from Sunshine and Apollo, GPLv3, as Pocket XR for Windows' PcHost).
 
-Up to three PC screens, each its own computer to the phone, on its own base port P (47989, 48989, 49989, as the PC
-Screens app's Sunshines were): HTTP P, HTTPS P-5, video P+9, control P+10, sound P+11, RTSP P+21. Each stream gets a
-KWin virtual output at the phone's window shape.
+Three PC screens at first, up to six (screens.py), each its own computer to the phone, on its own base port P (47989,
+48989, 49989, as the PC Screens app's Sunshines were, then 50989, 51989, 52989): HTTP P, HTTPS P-5, video P+9, control
+P+10, sound P+11, RTSP P+21. Each stream gets a KWin virtual output at the phone's window shape.
 """
 import hashlib
 import os
@@ -15,12 +15,12 @@ import time
 import urllib.parse
 from xml.sax.saxutils import escape
 
-from . import audio, control, desktop, ossl, rsa, video
+from . import audio, control, desktop, ossl, rsa, screens, video
 from .. import readability
 from .inputs import Inputs
 
 APP_ID = 1
-BASE_PORTS = (47989, 48989, 49989)
+BASE_PORTS = screens.ports(screens.DEFAULT)  # 47989, 48989, 49989
 # Apollo's permission bits as the PC helper gives a phone (input, clipboard both ways, launch, view), and what the
 # phone checks before it streams.
 PERMISSION = 0x07031F00 | 0x4001800
@@ -595,13 +595,15 @@ class Host:
         self.layout = desktop.Layout(log)
         self.inputs = Inputs(log, desktop=self.layout.desktop)
         self.screens = [Screen(self, i, p) for i, p in enumerate(ports)]
+        self.busy = set()  # base ports another program held: not tried again
+        self.change = threading.Lock()
 
     @property
     def ports(self):
         return [s.http_port for s in self.screens]
 
     def start(self):
-        ready = []
+        ready, busy = [], set()
         for s in self.screens:
             try:
                 s.start()
@@ -610,12 +612,47 @@ class Host:
                 # Another streaming host (an earlier Sunshine) holds this screen's ports: the others still serve,
                 # and the helper lists only these.
                 self.log("host: %s not served, port %d busy (%s)" % (s.name, s.http_port, e))
+                busy.add(s.http_port)
                 s.stop()
         self.screens = ready
+        self.busy = busy
         self.inputs.start()
         self.log("host: %s ready on %s (%d paired, %s)" % (
             self.name, ", ".join(str(p) for p in self.ports), self.identity.count(),
             ", ".join(c.upper() for c in self.codecs) or "no encoder"))
+
+    def set_count(self, count):
+        """Serves PC screens 1 to [count] (screens.py) from now on, as the control panel's "PC screens for a phone" asks.
+        New ones start at once. One past [count] stops once no phone streams from it, so a stream is never cut: the
+        next call stops it. A port found busy is left out and not tried again. True when the screens changed."""
+        want = screens.ports(count)
+        with self.change:
+            have = {s.http_port for s in self.screens}
+            keep, changed = [], False
+            for s in self.screens:
+                if s.http_port in want or s.running:
+                    keep.append(s)
+                else:
+                    s.stop()
+                    changed = True
+            for i, port in enumerate(want):
+                if port in have or port in self.busy:
+                    continue
+                s = Screen(self, i, port)
+                try:
+                    s.start()
+                except OSError as e:
+                    self.log("host: %s not served, port %d busy (%s)" % (s.name, port, e))
+                    self.busy.add(port)
+                    s.stop()
+                    continue
+                keep.append(s)
+                changed = True
+            if changed:
+                self.screens = sorted(keep, key=lambda s: s.http_port)
+                self.log("host: %s now on %s (%d PC screens asked for)" % (
+                    self.name, ", ".join(str(p) for p in self.ports), len(want)))
+            return changed
 
     def stop(self):
         for s in self.screens:
