@@ -85,9 +85,12 @@ STUCK_S = 10.0
 # 0.7.15: how long an X screen has to open. The same tester's 0.7.14 log (25 Nov 2026) has this reader stuck in
 # XOpenDisplay every 10 s from the moment a game started: an X screen whose socket is there but whose server never
 # answers. Each new reader tried it again and stuck again, so the pointer was never followed in the game ("the mouse
-# started moving to follow" the head). A screen that does not open in time is now left opening on its own thread, and
-# the others are followed meanwhile.
+# started moving to follow" the head). 0.7.15 left such an open on a thread of its own, and his 0.7.15 log has the
+# reader stuck all the same, now in the main thread's own X calls on the screen that did answer (XFixes, a bitmap):
+# libX11 locks across the whole process, and the open that never ended held it. 0.7.16 asks each new screen over its
+# socket first, without Xlib (Probe), and opens only one that answered, so nothing in Xlib ever waits on a silent one.
 OPEN_WAIT_S = 2.0
+PROBE_AGAIN_S = 15.0  # how soon a screen that did not answer is asked again
 # 0.7.15: the cursor names blanked and not yet given back, one "<display> <name>" a line (see the module's docstring).
 BLANKED = os.path.join(os.environ.get("XDG_STATE_HOME", os.path.expanduser("~/.local/state")), "pocket-xr-deck",
                        "blanked-cursors")
@@ -137,6 +140,7 @@ def _libs():
             xf.XFixesGetCursorImageAndName.argtypes = [ctypes.c_void_p]
             xf.XFixesChangeCursorByName.argtypes = [ctypes.c_void_p, ctypes.c_ulong, ctypes.c_char_p]
             xf.XFixesSetCursorName.argtypes = [ctypes.c_void_p, ctypes.c_ulong, ctypes.c_char_p]
+            xf.XFixesSelectCursorInput.argtypes = [ctypes.c_void_p, ctypes.c_ulong, ctypes.c_ulong]
             xf.by_name = True
         except AttributeError:
             xf.by_name = False
@@ -166,6 +170,9 @@ def _libs():
     x11.XDefineCursor.argtypes = [ctypes.c_void_p, ctypes.c_ulong, ctypes.c_ulong]
     x11.XUndefineCursor.argtypes = [ctypes.c_void_p, ctypes.c_ulong]
     x11.XFlush.argtypes = [ctypes.c_void_p]
+    x11.XConnectionNumber.argtypes = [ctypes.c_void_p]
+    x11.XPending.argtypes = [ctypes.c_void_p]
+    x11.XNextEvent.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
     x11.XSetErrorHandler.restype = ctypes.c_void_p
     x11.XSetErrorHandler.argtypes = [_ERROR_HANDLER]
     x11.XSetErrorHandler(_on_x_error)  # a window gone between looking it up and asking about it ends nothing
@@ -197,48 +204,87 @@ def note_blanked(display, names, path=None):
         pass
 
 
-class Opening:
-    """0.7.15: an X screen opening on its own thread (see OPEN_WAIT_S): screen, or error, once done."""
+class Probe:
+    """0.7.16: whether an X server answers, asked without Xlib (see OPEN_WAIT_S): the X connection setup (12 bytes, no
+    authorisation) sent over its socket, and any byte back counts, a refusal for want of authorisation included."""
 
-    def __init__(self, make, name):
-        import threading
-        self.name, self.screen, self.error, self.late = name, None, None, False
-
-        def run():
+    def __init__(self, name, now, root="/tmp/.X11-unix"):
+        import socket
+        import struct
+        self.started, self.sock = now, None
+        path = os.path.join(root, "X" + name[1:])
+        for addr in ("\0" + path, path):  # Xwayland listens on both; the abstract one first
             try:
-                self.screen = make(name)
-            except OSError as e:
-                self.error = e
-        self.thread = threading.Thread(target=run, name=f"open {name}", daemon=True)
-        self.thread.start()
+                sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            except (OSError, AttributeError):
+                return
+            try:
+                sock.setblocking(False)
+                sock.connect(addr)
+                sock.send(b"l\0" + struct.pack("<HHHH", 11, 0, 0, 0) + b"\0\0")
+                self.sock = sock
+                return
+            except OSError:
+                sock.close()
 
-    def wait(self, seconds):
-        self.thread.join(seconds)
-        return not self.thread.is_alive()
+    def poll(self, now, wait):
+        """True once it answered, False when it has not in [wait] s (or could not be asked), None while waiting."""
+        import select
+        if self.sock is None:
+            return False
+        try:
+            r, _, _ = select.select([self.sock], [], [], 0)
+            if r:
+                self.close()
+                return True
+        except (OSError, ValueError):
+            self.close()
+            return False
+        if now - self.started >= wait:
+            self.close()
+            return False
+        return None
+
+    def close(self):
+        if self.sock is not None:
+            self.sock.close()
+            self.sock = None
 
 
-def open_screens(names, screens, opening, make, wait=OPEN_WAIT_S):
-    """One round of opening: each name not yet open starts opening (or goes on), waited for at most [wait] s the first
-    time and not at all after. Returns (name, why) for each that failed, or did not answer in time (once)."""
+def open_screens(names, screens, probes, make, now, wait=OPEN_WAIT_S, again=PROBE_AGAIN_S, probe=Probe):
+    """One round of opening. A name not yet open is first asked over its socket (Probe); only one that answered is
+    opened with Xlib. One that does not answer in [wait] s is asked again [again] s later; nothing waits meanwhile.
+    Returns (name, why) for each that would not open, or did not answer (once until it answers)."""
     said = []
     for name in names:
         if name in screens:
             continue
-        job = opening.get(name)
-        if job is None:
-            job = opening[name] = Opening(make, name)
-        if not job.wait(0.0 if job.late else wait):
-            if not job.late:
-                job.late = True
-                said.append((name, f"no answer in {wait:.0f} s: an X screen that is not answering; it is left to "
-                                   "open on its own and the others are followed"))
+        st = probes.get(name)
+        if st is None or (st.get("quiet_until") is not None and now >= st["quiet_until"]):
+            st = probes[name] = {"probe": probe(name, now), "quiet_until": None, "said": (st or {}).get("said", False)}
+        if st["probe"] is None:
+            continue  # quiet until it is asked again
+        answer = st["probe"].poll(now, wait)
+        if answer is None:
             continue
-        del opening[name]
-        if job.screen is not None:
-            screens[name] = job.screen
-        else:
-            said.append((name, str(job.error or "would not open")))
+        if answer is False:
+            st["probe"], st["quiet_until"] = None, now + again
+            if not st["said"]:
+                st["said"] = True
+                said.append((name, f"no answer in {wait:.0f} s: an X screen that is not answering; asked again every "
+                                   f"{again:.0f} s, and the others are followed meanwhile"))
+            continue
+        del probes[name]
+        try:
+            screens[name] = make(name)
+        except OSError as e:
+            said.append((name, str(e)))
     return said
+
+
+def pending(probes):
+    """Whether a probe is waiting for its answer (the next round then comes sooner)."""
+    return any(st.get("probe") is not None for st in probes.values())
 
 
 # Xlib's own error handler ends the program on any error, such as asking about a window that just closed
@@ -371,6 +417,16 @@ class Screen:
         if xf:
             a, b = ctypes.c_int(), ctypes.c_int()
             self.fixes = bool(xf.XFixesQueryExtension(self.dpy, ctypes.byref(a), ctypes.byref(b)))
+        # 0.7.16: told the moment the cursor changes (XFixesDisplayCursorNotify), so a new one the app sets is blanked
+        # at once rather than at the next look, up to 1/30 s later (see the module's docstring)
+        self.fd, self.events = None, ctypes.create_string_buffer(192)
+        if self.fixes and getattr(xf, "by_name", False):
+            try:
+                xf.XFixesSelectCursorInput(self.dpy, self.root, 1)
+                x11.XFlush(self.dpy)
+                self.fd = x11.XConnectionNumber(self.dpy)
+            except (AttributeError, OSError):
+                self.fd = None
         self.last = None
         self.moved_at = 0.0
         self.keymap = ctypes.create_string_buffer(32)
@@ -519,6 +575,16 @@ class Screen:
                         self.blank_serials = serials | {after[0]}
         return self.game_shown
 
+    def changed(self):
+        """0.7.16: whether the cursor changed since the last call (its events read and dropped)."""
+        if getattr(self, "fd", None) is None:
+            return False
+        n = 0
+        while self.x11.XPending(self.dpy):
+            self.x11.XNextEvent(self.dpy, self.events)
+            n += 1
+        return n > 0
+
     def _blank_name(self, name):
         """0.7.15: every cursor the app holds by [name] made an empty one (see the module's docstring)."""
         if _XCURSOR is None or not getattr(self.xf, "by_name", False):
@@ -623,7 +689,7 @@ def _main(out, argv, screens):
     last_click = 0.0
     next_open = 0.0
     unopened = set()
-    opening = {}
+    probes = {}
     focus = None
     app_display, app_win, area = None, 0, None
     in_wayland, said_wayland = False, False
@@ -647,14 +713,14 @@ def _main(out, argv, screens):
                     print("hide " + ("on: gamescope's own arrow is blanked on the app's window" if hide
                                      else "off: the app's cursors are given back"), flush=True)
         if now >= next_open:
-            next_open = now + 3.0
             names = display_names()
-            # 0.7.15: each on its own thread, waited for at most OPEN_WAIT_S (see there)
-            for name, why in open_screens(names, screens, opening, lambda n: Screen(x11, xf, n)):
+            # 0.7.16: each asked over its socket first (see OPEN_WAIT_S)
+            for name, why in open_screens(names, screens, probes, lambda n: Screen(x11, xf, n), now):
                 if name not in unopened:  # libX11 says why on stderr each try: said here once
                     unopened.add(name)
                     print(f"unopened {name} ({why}); tried again quietly", flush=True)
             unopened.difference_update(screens)
+            next_open = now + (0.1 if pending(probes) else 3.0)
             if not screens:
                 print("none no X screen opened (" + (", ".join(names) or "no sockets") + ")", flush=True)
         for s in screens.values():
@@ -704,7 +770,19 @@ def _main(out, argv, screens):
                     said = line
                     out.write(f"pointer {line[0]} {line[1]} {line[2]}\n")
                     out.flush()
-        time.sleep(POLL_S)
+        # 0.7.16: while hiding, woken the moment a cursor changes on an X screen, and that one is looked at at once
+        watch = [q.fd for q in screens.values() if hide and getattr(q, "fd", None) is not None]
+        if watch:
+            import select
+            try:
+                select.select(watch, [], [], POLL_S)
+            except (OSError, ValueError):
+                time.sleep(POLL_S)
+        else:
+            time.sleep(POLL_S)
+        for q in screens.values():
+            if q.changed() and hide and q is current:
+                next_cursor = 0.0
 
 
 if __name__ == "__main__":

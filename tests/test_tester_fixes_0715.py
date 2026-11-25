@@ -4,47 +4,10 @@ flickered in as a second arrow before it was blanked. No X server here: X is sto
 import os
 import sys
 import tempfile
-import threading
-import time
 import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 from pocketxr import xpointer as X  # noqa: E402
-
-
-class OpeningWithATimeLimit(unittest.TestCase):
-    def test_a_screen_that_never_answers_is_left_and_the_others_open(self):
-        stuck = threading.Event()
-        self.addCleanup(stuck.set)
-
-        def make(name):
-            if name == ":2":
-                stuck.wait()  # XOpenDisplay on a server that accepts but never answers
-            return "screen " + name
-
-        screens, opening = {}, {}
-        t0 = time.monotonic()
-        said = X.open_screens([":0", ":1", ":2"], screens, opening, make, wait=0.2)
-        self.assertLess(time.monotonic() - t0, 2.0)
-        self.assertEqual(sorted(screens), [":0", ":1"])
-        self.assertEqual([n for n, _ in said], [":2"])
-        self.assertIn("not answering", said[0][1])
-        # The next round neither waits for it nor says it again
-        t0 = time.monotonic()
-        self.assertEqual(X.open_screens([":0", ":1", ":2"], screens, opening, make, wait=0.2), [])
-        self.assertLess(time.monotonic() - t0, 0.15)
-        # Once it answers, it is taken
-        stuck.set()
-        opening[":2"].thread.join(1.0)
-        self.assertEqual(X.open_screens([":0", ":1", ":2"], screens, opening, make, wait=0.2), [])
-        self.assertIn(":2", screens)
-        self.assertEqual(opening, {})
-
-    def test_a_screen_that_refuses_says_why(self):
-        def make(name):
-            raise OSError("Authorization required")
-        said = X.open_screens([":2"], {}, {}, make, wait=0.5)
-        self.assertEqual(said, [(":2", "Authorization required")])
 
 
 class BlankedNames(unittest.TestCase):
