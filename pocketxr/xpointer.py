@@ -19,6 +19,16 @@ still shows and hides with the app's. "hide 0", the end of this program, or SIGT
 (XUndefineCursor: the app's own comes back when it sets one again; until then the X screen's default arrow). Written
 from gamescope's source; not yet tried on a Deck.
 
+0.7.15 (the same tester, 25 Nov 2026: "a second unsynced arrow flickers into existence and out again as I move the
+mouse", each time the pointer goes onto a link or button in a browser): a browser sets another cursor of its own (a hand
+over a link) on its window each time, and gamescope drew it until the next look here blanked it, up to 1/30 s later. A
+cursor an app loads from its theme carries the theme's name for it ("pointer", "text"), so the app's visible cursor is
+now blanked by that name too (XFixesChangeCursorByName: every cursor of that name the app holds becomes an empty one,
+so the next hover shows nothing), as well as on the window. Giving back loads each name from the cursor theme again
+(XcursorLibraryLoadCursor) and puts it in their place. Names blanked are kept in a file until given back, so a reader
+that ended without giving them back (stuck, killed) has the next one give them back. Written from Xorg's and
+libXcursor's source; not yet tried on a Deck.
+
 This runs as its own process (python3 -m pocketxr.xpointer), because Xlib ends the whole program when its X server
 goes away (gamescope restarting), and prints one line each time something changes:
 
@@ -72,6 +82,15 @@ HIDE_CHECK_S = 1 / 30  # while gamescope's arrow is hidden: how soon a cursor th
 # say one line at start and then nothing for 17 minutes, never ending: no pointer of Pocket XR's own, gamescope's arrow
 # never hidden, so the only arrow was gamescope's, off from where clicks land.
 STUCK_S = 10.0
+# 0.7.15: how long an X screen has to open. The same tester's 0.7.14 log (25 Nov 2026) has this reader stuck in
+# XOpenDisplay every 10 s from the moment a game started: an X screen whose socket is there but whose server never
+# answers. Each new reader tried it again and stuck again, so the pointer was never followed in the game ("the mouse
+# started moving to follow" the head). A screen that does not open in time is now left opening on its own thread, and
+# the others are followed meanwhile.
+OPEN_WAIT_S = 2.0
+# 0.7.15: the cursor names blanked and not yet given back, one "<display> <name>" a line (see the module's docstring).
+BLANKED = os.path.join(os.environ.get("XDG_STATE_HOME", os.path.expanduser("~/.local/state")), "pocket-xr-deck",
+                       "blanked-cursors")
 
 
 class _XColor(ctypes.Structure):
@@ -113,8 +132,23 @@ def _libs():
         xf.XFixesGetCursorImage.restype = ctypes.POINTER(_CursorImage)
         xf.XFixesGetCursorImage.argtypes = [ctypes.c_void_p]
         xf.XFixesQueryExtension.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_int), ctypes.POINTER(ctypes.c_int)]
+        try:  # 0.7.15: cursor names (XFixes 2)
+            xf.XFixesGetCursorImageAndName.restype = ctypes.POINTER(_CursorImage)
+            xf.XFixesGetCursorImageAndName.argtypes = [ctypes.c_void_p]
+            xf.XFixesChangeCursorByName.argtypes = [ctypes.c_void_p, ctypes.c_ulong, ctypes.c_char_p]
+            xf.XFixesSetCursorName.argtypes = [ctypes.c_void_p, ctypes.c_ulong, ctypes.c_char_p]
+            xf.by_name = True
+        except AttributeError:
+            xf.by_name = False
     except OSError:
         xf = None
+    global _XCURSOR
+    try:
+        _XCURSOR = ctypes.CDLL(ctypes.util.find_library("Xcursor") or "libXcursor.so.1")
+        _XCURSOR.XcursorLibraryLoadCursor.restype = ctypes.c_ulong
+        _XCURSOR.XcursorLibraryLoadCursor.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
+    except (OSError, AttributeError):
+        _XCURSOR = None
     x11.XGetGeometry.argtypes = [ctypes.c_void_p, ctypes.c_ulong, ctypes.POINTER(ctypes.c_ulong),
                                  ctypes.POINTER(ctypes.c_int), ctypes.POINTER(ctypes.c_int),
                                  ctypes.POINTER(ctypes.c_uint), ctypes.POINTER(ctypes.c_uint),
@@ -136,6 +170,75 @@ def _libs():
     x11.XSetErrorHandler.argtypes = [_ERROR_HANDLER]
     x11.XSetErrorHandler(_on_x_error)  # a window gone between looking it up and asking about it ends nothing
     return x11, xf
+
+
+# 0.7.15: libXcursor, to give blanked cursor names back from the theme; None without it (nothing is blanked by name)
+_XCURSOR = None
+
+
+def blanked_names(path=None):
+    """The (display, name) pairs blanked and not yet given back."""
+    try:
+        with open(path or BLANKED, encoding="utf-8") as f:
+            return [tuple(x.split(" ", 1)) for x in f.read().splitlines() if " " in x]
+    except OSError:
+        return []
+
+
+def note_blanked(display, names, path=None):
+    """Keeps [display]'s blanked names (replacing what was kept for it); none removes it."""
+    path = path or BLANKED
+    rows = [r for r in blanked_names(path) if r[0] != display] + [(display, n) for n in sorted(names)]
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8") as f:
+            f.write("".join(f"{d} {n}\n" for d, n in rows))
+    except OSError:
+        pass
+
+
+class Opening:
+    """0.7.15: an X screen opening on its own thread (see OPEN_WAIT_S): screen, or error, once done."""
+
+    def __init__(self, make, name):
+        import threading
+        self.name, self.screen, self.error, self.late = name, None, None, False
+
+        def run():
+            try:
+                self.screen = make(name)
+            except OSError as e:
+                self.error = e
+        self.thread = threading.Thread(target=run, name=f"open {name}", daemon=True)
+        self.thread.start()
+
+    def wait(self, seconds):
+        self.thread.join(seconds)
+        return not self.thread.is_alive()
+
+
+def open_screens(names, screens, opening, make, wait=OPEN_WAIT_S):
+    """One round of opening: each name not yet open starts opening (or goes on), waited for at most [wait] s the first
+    time and not at all after. Returns (name, why) for each that failed, or did not answer in time (once)."""
+    said = []
+    for name in names:
+        if name in screens:
+            continue
+        job = opening.get(name)
+        if job is None:
+            job = opening[name] = Opening(make, name)
+        if not job.wait(0.0 if job.late else wait):
+            if not job.late:
+                job.late = True
+                said.append((name, f"no answer in {wait:.0f} s: an X screen that is not answering; it is left to "
+                                   "open on its own and the others are followed"))
+            continue
+        del opening[name]
+        if job.screen is not None:
+            screens[name] = job.screen
+        else:
+            said.append((name, str(job.error or "would not open")))
+    return said
 
 
 # Xlib's own error handler ends the program on any error, such as asking about a window that just closed
@@ -232,7 +335,8 @@ def cursor_decision(serial, visible, blank_serial, game_shown):
     pointer now), from the X screen's cursor now (its serial, whether it has a visible pixel). Our own blank cursor
     (blank_serial) says nothing new about the app; a visible one is the app's, to blank; an empty one not ours is the
     app hiding its cursor."""
-    if blank_serial is not None and serial == blank_serial:
+    ours = serial in blank_serial if isinstance(blank_serial, (set, frozenset)) else serial == blank_serial
+    if blank_serial is not None and ours:
         return game_shown, False
     if visible:
         return True, True
@@ -272,6 +376,11 @@ class Screen:
         self.keymap = ctypes.create_string_buffer(32)
         self.down = set()
         self.atoms = {}
+        # 0.7.15: names a reader before this one blanked here and never gave back
+        left = [n for d, n in blanked_names() if d == name]
+        if left:
+            self.named = dict.fromkeys(left, 0)
+            self.restore()
 
     def _items(self, name):
         """A 32 bit property of this screen's root window (gamescope sets its own on its first Xwayland's), or []."""
@@ -344,10 +453,13 @@ class Screen:
         """(serial, has a visible pixel) of the X screen's cursor now, or None without XFixes."""
         if not self.fixes:
             return None
-        img = self.xf.XFixesGetCursorImage(self.dpy)
+        named = getattr(self.xf, "by_name", False) and _XCURSOR is not None
+        img = (self.xf.XFixesGetCursorImageAndName if named else self.xf.XFixesGetCursorImage)(self.dpy)
         if not img:
             return None
         try:
+            raw = img.contents.name if named else None
+            self.cursor_name = raw.decode(errors="replace") if raw else ""
             return int(img.contents.cursor_serial), cursor_shown(img.contents)
         finally:
             self.x11.XFree(img)
@@ -388,8 +500,12 @@ class Screen:
         serial, visible = c
         if not hasattr(self, "game_shown"):
             self.game_shown, self.blank_serial, self.blanked = True, None, set()
-        self.game_shown, blank_now = cursor_decision(serial, visible, self.blank_serial, self.game_shown)
+        serials = getattr(self, "blank_serials", set())
+        self.game_shown, blank_now = cursor_decision(serial, visible, serials or self.blank_serial, self.game_shown)
         if blank_now:
+            name = getattr(self, "cursor_name", "")
+            if name:
+                self._blank_name(name)
             win = self.under_pointer()
             if win:
                 _ERRORS[0] = 0
@@ -400,7 +516,27 @@ class Screen:
                     after = self.cursor()
                     if after and not after[1]:
                         self.blank_serial = after[0]
+                        self.blank_serials = serials | {after[0]}
         return self.game_shown
+
+    def _blank_name(self, name):
+        """0.7.15: every cursor the app holds by [name] made an empty one (see the module's docstring)."""
+        if _XCURSOR is None or not getattr(self.xf, "by_name", False):
+            return
+        if not hasattr(self, "named"):
+            self.named = {}
+        blank = self.named.get(name)
+        if not blank:
+            bits = self.x11.XCreateBitmapFromData(self.dpy, self.root, b"\0", 1, 1)
+            black = _XColor()
+            blank = self.x11.XCreatePixmapCursor(self.dpy, bits, bits, ctypes.byref(black), ctypes.byref(black), 0, 0)
+            # Named as the app's, so giving back finds it by that name
+            self.xf.XFixesSetCursorName(self.dpy, blank, name.encode())
+            self.named[name] = blank
+            note_blanked(self.name, self.named)
+        _ERRORS[0] = 0
+        self.xf.XFixesChangeCursorByName(self.dpy, blank, name.encode())
+        self.x11.XSync(self.dpy, 0)
 
     def restore(self):
         """Gives back the cursors blanked (the app's own come back when it sets them again; until then the screen's)."""
@@ -410,6 +546,19 @@ class Screen:
             self.x11.XSync(self.dpy, 0)
             self.blanked.clear()
         self.blank_serial = None
+        self.blank_serials = set()
+        # 0.7.15: the names blanked, given back from the cursor theme
+        names = getattr(self, "named", None)
+        if names:
+            if _XCURSOR is not None and getattr(self.xf, "by_name", False):
+                for name in list(names):
+                    cur = _XCURSOR.XcursorLibraryLoadCursor(self.dpy, name.encode())
+                    if cur:
+                        self.xf.XFixesSetCursorName(self.dpy, cur, name.encode())
+                        self.xf.XFixesChangeCursorByName(self.dpy, cur, name.encode())
+                self.x11.XSync(self.dpy, 0)
+            names.clear()
+            note_blanked(self.name, ())
 
 
 def watched_keys(argv):
@@ -474,6 +623,7 @@ def _main(out, argv, screens):
     last_click = 0.0
     next_open = 0.0
     unopened = set()
+    opening = {}
     focus = None
     app_display, app_win, area = None, 0, None
     in_wayland, said_wayland = False, False
@@ -499,15 +649,12 @@ def _main(out, argv, screens):
         if now >= next_open:
             next_open = now + 3.0
             names = display_names()
-            for name in names:
-                if name not in screens:
-                    try:
-                        screens[name] = Screen(x11, xf, name)
-                        unopened.discard(name)
-                    except OSError as e:
-                        if name not in unopened:  # libX11 says why on stderr each try: said here once
-                            unopened.add(name)
-                            print(f"unopened {name} ({e}); tried again quietly", flush=True)
+            # 0.7.15: each on its own thread, waited for at most OPEN_WAIT_S (see there)
+            for name, why in open_screens(names, screens, opening, lambda n: Screen(x11, xf, n)):
+                if name not in unopened:  # libX11 says why on stderr each try: said here once
+                    unopened.add(name)
+                    print(f"unopened {name} ({why}); tried again quietly", flush=True)
+            unopened.difference_update(screens)
             if not screens:
                 print("none no X screen opened (" + (", ".join(names) or "no sockets") + ")", flush=True)
         for s in screens.values():
