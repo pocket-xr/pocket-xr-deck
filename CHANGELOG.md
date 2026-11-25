@@ -1,5 +1,28 @@
 # Changes
 
+## 0.7.17 (25 Nov 2026)
+
+From Pierre Zammit's report and log on 0.7.16 (Steam Deck LCD, XREAL XBX A01+). Thanks, Pierre.
+
+- **No second arrow with a second app open.** Gamescope draws the arrow of the app that has the keyboard, which can
+  be on a different X screen from the one Pocket XR follows the mouse on. 0.7.16 hid the arrow on that one screen
+  only, and only over an app's window, so with a second app open gamescope's arrow stayed and moved with the head.
+  Now the arrow is hidden on every X screen, over the empty background too. Against two stand-in X screens, 0.7.16
+  left both arrows showing and 0.7.17 hid both; not yet tried on a Deck.
+- **The flicker over links and buttons, fixed at last.** 0.7.15's hiding by name and 0.7.16's instant hiding never
+  actually ran: Pocket XR asked the X library for a function it doesn't have, and turned both off when it wasn't
+  found. Against a stand-in X screen with a browser-like app hovering on and off a link 40 times, 0.7.16 showed the
+  hand every time and 0.7.17 only the first time (then never again). A new cursor is now hidden within a millisecond,
+  where 0.7.16 took about 7. Not yet tried on a Deck.
+- **The pointer on a game's screen when it changes size.** Gamescope resizes a game's X screen after it opens, and
+  Pocket XR kept the size from the moment it opened (his log has the pointer at 1916,1065 on a "1280x800" screen).
+  The size is now read again as it changes.
+- **Less slow drift once calibrated.** After a hold-still calibration, Pocket XR still kept fine-tuning the gyro's
+  zero while the glasses were worn. His log's motion data shows a worn, still head moves just enough to look like a
+  gyro error, so the screen could creep slowly to one side. Now, once calibrated, only stillness as quiet as glasses
+  lying on a table fine-tunes it, and the log says each time it changes. Checked with his motion data and tests;
+  not yet tried worn.
+
 ## 0.7.16 (25 Nov 2026)
 
 From Pierre Zammit's report, videos and log on 0.7.15 (Steam Deck LCD, XREAL XBX A01+). Thanks, Pierre.

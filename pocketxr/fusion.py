@@ -144,6 +144,15 @@ class HeadFusion:
     CAL_SD = math.radians(2.0)
     CAL_MAX = math.radians(5.0)
     CAL_MIN_REPORTS = 200
+    # 0.7.17 (the same tester, 25 Nov 2026, 0.7.16: still "the drift to the right ... reeeeaaaallly slow"): once the
+    # glasses are calibrated lying still, the automatic learning above kept going while they were worn. His 0.7.16
+    # log's raw reports, worn and still, have half seconds with each axis's spread 0.25 to 0.6 deg/s and means up to
+    # 0.5 deg/s: quiet enough for the test above, so a worn head's slow sway could be learnt as the gyro's zero, half of
+    # it at a time, and the screen then crept at that rate. Lying still, his glasses' spread is 0.05 deg/s. So once
+    # calibrated, only half seconds as quiet as lying still (each axis's spread under REST_SD_CALIBRATED) and close to
+    # the zero already known (REST_NEAR_CALIBRATED) refine it; a worn head never does.
+    REST_SD_CALIBRATED = math.radians(0.2)
+    REST_NEAR_CALIBRATED = math.radians(0.3)
 
     def __init__(self, axes="aura", bias=None):
         self.sign = AXES[axes]
@@ -175,10 +184,12 @@ class HeadFusion:
         self.last_gyro = (0.0, 0.0, 0.0)
         self.cal = None  # while a hold-still calibration runs: its sums
         self.cal_result = None  # ("ok", mean deg/s, spread deg/s) or ("moved", mean, spread), once one has ended
+        self.calibrated = False  # 0.7.17: a hold-still calibration's zero is in use (see REST_SD_CALIBRATED)
         if bias is not None and len(bias) == 3:
-            # Saved by a calibration: used from the start, and refined by the stillness learning as usual
+            # Saved by a calibration: used from the start, and refined only by stillness as quiet as lying still
             self.bias = [float(b) for b in bias]
             self.bias_ready = True
+            self.calibrated = True
 
     def _axes(self, v):
         return (v[0] * self.sign[0], v[1] * self.sign[1], v[2] * self.sign[2])
@@ -266,7 +277,12 @@ class HeadFusion:
         self.bias_sum = [0.0, 0.0, 0.0]
         self.bias_sq = [0.0, 0.0, 0.0]
         self.bias_n = 0
-        if not (max(sd) < self.REST_SD and all(abs(m) < self.rest_max for m in mean)):
+        if self.calibrated:
+            quiet = max(sd) < self.REST_SD_CALIBRATED and all(
+                abs(m - b) < self.REST_NEAR_CALIBRATED for m, b in zip(mean, self.bias))
+        else:
+            quiet = max(sd) < self.REST_SD and all(abs(m) < self.rest_max for m in mean)
+        if not quiet:
             self.rest_run = []
             return
         self.rest_run.append(mean)
@@ -324,6 +340,7 @@ class HeadFusion:
         if n >= self.CAL_MIN_REPORTS and max(sd) < self.CAL_SD and all(abs(m) < self.CAL_MAX for m in mean):
             self.bias = mean
             self.bias_ready = True
+            self.calibrated = True
             self.rest_run = []
             self.cal_result = ("ok",) + deg
         else:

@@ -193,7 +193,9 @@ class NestedDesktopPointer(unittest.TestCase):
 
     def test_pointer_hidden_for_a_wayland_app(self):
         src = read("pocketxr", "xpointer.py")
-        self.assertIn("shown = (s.hide_step() if hide else s.shown()) and not in_wayland", src)
+        # 0.7.17: every screen blanked (hide_all), the pointer still hidden for a Wayland app
+        self.assertIn("shown = (hide_all(screens, s) if hide else s.shown()) and not in_wayland", src)
+        self.assertIn("shown = r and not in_wayland", src)
 
 
 if __name__ == "__main__":
