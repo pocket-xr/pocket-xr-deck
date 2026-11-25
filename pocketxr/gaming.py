@@ -191,7 +191,8 @@ class Gaming:
             "glasses_buttons_line": i18n.tr("Lets go of the glasses so their own buttons work (brightness, for "
                                             "example). Head tracking pauses until you turn this off. Set the mode to "
                                             "Off, turn this on and wait for the glasses to blink off and on (up to a "
-                                            "few minutes), adjust them, turn this off, then pick a mode."),
+                                            "few minutes), adjust them, turn this off, then pick a mode. Unplugging "
+                                            "the glasses and plugging them back in is quicker."),
             "taps": bool(self.settings.get("taps", False)),
             "tap_sensitivity": self.taps.sensitivity,
             "tap_sensitivity_range": list(taps.SENSITIVITY),

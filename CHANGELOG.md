@@ -1,5 +1,22 @@
 # Changes
 
+## 0.7.16 (25 Nov 2026)
+
+From Pierre Zammit's report, videos and log on 0.7.15 (Steam Deck LCD, XREAL XBX A01+). Thanks, Pierre.
+
+- **The pointer is followed in games, for real this time.** 0.7.15 opened the X screen that never answers on a thread
+  of its own, but his log shows the program stuck all the same, now in its ordinary calls on the screen that did
+  answer: the X library locks across the whole program, and the open that never ended held that lock. Now each new X
+  screen is first asked over its socket, without the X library, and opened only once it answers. One that doesn't is
+  asked again every 15 seconds while the others are followed. Checked by tests, against a socket that never answers
+  and against WSL's own X server; not yet tried on a Deck.
+- **The second arrow over links and buttons, again.** In Nested Desktop the browser's cursors come from the desktop
+  inside it, which makes them from pictures with no name, so 0.7.15's blanking by name never applied there. Pocket XR
+  is now told the moment the cursor changes and blanks the new one at once, instead of at its next look up to 1/30 s
+  later, before gamescope draws its next frame in most cases. Checked by tests; not yet tried on a Deck.
+- **Use the glasses' buttons:** the note now says unplugging the glasses and plugging them back in is quicker than
+  waiting for them to blink (his tip), in every language.
+
 ## 0.7.15 (25 Nov 2026)
 
 From Pierre Zammit's report and two logs on 0.7.14 (Steam Deck LCD, XREAL XBX A01+). Thanks, Pierre.
