@@ -1,5 +1,14 @@
 # Changes
 
+## 0.7.18 (26 Nov 2026)
+
+From Pierre Zammit's report and log on 0.7.17 (Steam Deck LCD, XREAL XBX A01+). Thanks, Pierre.
+
+- **Pocket XR's pointer no longer disappears in games and apps.** 0.7.17's hiding of the app's cursor by name made
+  Pocket XR mistake that hidden cursor for the app hiding its own, so its pointer went too: invisible in a game though
+  it still worked, and in Stremio shown only over pictures. Against a stand-in X screen, 0.7.17 hid the pointer once
+  the app set its cursor again and 0.7.18 keeps it. Not yet tried on a Deck.
+
 ## 0.7.17 (25 Nov 2026)
 
 From Pierre Zammit's report and log on 0.7.16 (Steam Deck LCD, XREAL XBX A01+). Thanks, Pierre.
