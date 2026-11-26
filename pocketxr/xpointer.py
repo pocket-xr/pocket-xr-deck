@@ -401,6 +401,11 @@ def cursor_decision(serial, visible, blank_serial, game_shown):
     return False, False
 
 
+def blanked_by_name(name, named):
+    """0.7.18: whether the X screen's cursor, by its [name], is one Pocket XR blanked by name ([named]: name to blank)."""
+    return bool(name) and bool(named) and name in named
+
+
 def cursor_shown(image):
     """Whether an XFixes cursor image has any pixel that isn't fully transparent."""
     n = image.width * image.height
@@ -569,6 +574,13 @@ class Screen:
         if not hasattr(self, "game_shown"):
             self.game_shown, self.blank_serial, self.blanked = True, None, set()
         serials = getattr(self, "blank_serials", set())
+        # 0.7.18 (a tester, Pierre Zammit, 26 Nov 2026, on 0.7.17: in a game "the mouse was invisible, yet present", and
+        # in Stremio it showed only over pictures): a cursor blanked by name (_blank_name) has a new serial, not one of
+        # blank_serials, so the app showing its own cursor again read as the app hiding it, and Pocket XR's pointer
+        # went with it. An empty cursor by a name blanked here is ours.
+        if not visible and blanked_by_name(getattr(self, "cursor_name", ""), getattr(self, "named", None)):
+            serials = serials | {serial}
+            self.blank_serials = serials
         self.game_shown, blank_now = cursor_decision(serial, visible, serials or self.blank_serial, self.game_shown)
         if blank_now:
             name = getattr(self, "cursor_name", "")
