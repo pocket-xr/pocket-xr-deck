@@ -37,6 +37,9 @@ CONFIG = os.path.expanduser("~/.config/pocket-xr-deck/gaming.json")
 LOG = os.path.expanduser("~/.local/state/pocket-xr-deck/gaming.log")
 RAW_IMU = os.path.expanduser("~/.local/state/pocket-xr-deck/imu-raw.log")  # the Air family's first seconds, in full
 HEAD_LOG_S = 60.0  # the head's direction goes in the log once a second this long after glasses, a mode or a recentre
+# 0.7.19 (a tester, Pierre Zammit, 26 Nov 2026: "the drift is still there", with logs sent right after it): after that
+# minute nothing more was logged, so a drift building over minutes of watching never reached a log. Then every 10 s.
+HEAD_LOG_SLOW_S = 10.0
 FOV_V_DEG = 38.0  # the glasses' picture, vertical (as the desktop app)
 ASPECT = 16 / 9
 DEFAULTS = {"mode": "space", "size": 0.8, "curve": 0.0, "readability": False, "readability_saved": None,
@@ -501,8 +504,10 @@ class Gaming:
                 self.next_mode()
 
     def _log_head(self, now):
-        """Once a second for a while: where the head points, what the motion sensor reads, so a log shows motion."""
-        if self.head is None or now > self.head_log_until or now - self.head_logged < 1.0:
+        """Once a second for a while, then every HEAD_LOG_SLOW_S: where the head points, what the motion sensor reads, so a
+        log shows motion and a slow drift."""
+        every = 1.0 if now <= self.head_log_until else HEAD_LOG_SLOW_S
+        if self.head is None or now - self.head_logged < every:
             return
         self.head_logged = now
         w, x, y, z = self.head.view()

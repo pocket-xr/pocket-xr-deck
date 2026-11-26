@@ -1,5 +1,11 @@
 # Changes
 
+## 0.7.19 (26 Nov 2026)
+
+- **Logs show a slow drift.** The head's direction went in the log once a second for a minute after the glasses, a
+  mode change or a recentre, then not at all, so a drift building over minutes never reached a log sent after it.
+  It now goes on every 10 seconds (about 360 lines an hour). From Pierre Zammit's logs on 0.7.18's drift question.
+
 ## 0.7.18 (26 Nov 2026)
 
 From Pierre Zammit's report and log on 0.7.17 (Steam Deck LCD, XREAL XBX A01+). Thanks, Pierre.
