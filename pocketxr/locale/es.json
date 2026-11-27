@@ -222,5 +222,7 @@
   "Recentre includes head tilt": "Centrar incluye la inclinación de la cabeza",
   "For lying on one side: Recentre lines the picture up with your eyes, not the room's horizon.": "Para estar tumbado de lado: Centrar alinea la imagen con tus ojos, no con el horizonte de la habitación.",
   "Hide the moving pointer": "Ocultar el puntero que se mueve",
-  "With the screen in space, hides gamescope's own arrow, which moves with your head and is not where clicks land. Pocket XR's pointer stays.": "Con la pantalla en el espacio, oculta la flecha propia de gamescope, que se mueve con tu cabeza y no está donde caen los clics. El puntero de Pocket XR se queda."
+  "With the screen in space, hides gamescope's own arrow, which moves with your head and is not where clicks land. Pocket XR's pointer stays.": "Con la pantalla en el espacio, oculta la flecha propia de gamescope, que se mueve con tu cabeza y no está donde caen los clics. El puntero de Pocket XR se queda.",
+  "Drift trim": "Corrección de deriva",
+  "If the screen creeps slowly sideways while you hold still, move this toward where it should be: left of 0 if it creeps right, right of 0 if it creeps left. Degrees a minute.": "Si la pantalla se desplaza despacio hacia un lado mientras estás quieto, mueve esto hacia donde debería estar: a la izquierda de 0 si se va a la derecha, a la derecha de 0 si se va a la izquierda. Grados por minuto."
 }

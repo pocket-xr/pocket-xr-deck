@@ -47,6 +47,7 @@ DEFAULTS = {"mode": "space", "size": 0.8, "curve": 0.0, "readability": False, "r
             "sticks": True,  # the Deck's stick clicks: hold L3 recentres, hold R3 switches view, L3 three times calibrates
             "taps": False,  # taps on the glasses (taps.py): two recentre, three switch view; off until tried with glasses
             "tap_sensitivity": 100,  # percent (taps.SENSITIVITY); 100 is the values a tester liked
+            "drift_trim": 0.0,  # degrees a minute the screen turns left against a slow drift (fusion.set_trim)
             "recentre_roll": False,
             "hide_gamescope_pointer": True}  # Screen in space: gamescope's own arrow blanked (xpointer.py)  # Recentre includes head tilt: the head's roll too (fusion.recentre follow_roll)
 STICK_CAL_DELAY_S = 5.0  # a calibration from the stick clicks starts this long after, to take the glasses off first
@@ -199,6 +200,12 @@ class Gaming:
             "taps": bool(self.settings.get("taps", False)),
             "tap_sensitivity": self.taps.sensitivity,
             "tap_sensitivity_range": list(taps.SENSITIVITY),
+            "drift_trim": float(self.settings.get("drift_trim", 0.0)),
+            "drift_trim_max": fusion.HeadFusion.TRIM_MAX_DEG_MIN,
+            "drift_trim_label": i18n.tr("Drift trim"),
+            "drift_trim_line": i18n.tr("If the screen creeps slowly sideways while you hold still, move this toward "
+                                       "where it should be: left of 0 if it creeps right, right of 0 if it creeps "
+                                       "left. Degrees a minute."),
             "tap_sensitivity_label": i18n.tr("Tap sensitivity"),
             "tap_sensitivity_line": i18n.tr("Higher catches softer taps, lower only firm ones. Pressing the glasses' "
                                             "buttons can count as a tap, more so when it is high."),
@@ -355,6 +362,13 @@ class Gaming:
                     self.log(f"gaming: glasses brightness {level} asked for (Quick Access)")
             elif op == "glasses_buttons":
                 self._glasses_buttons(bool(req.get("on")))
+            elif op == "set_drift_trim":
+                # The panel's slider runs right positive, as it looks; the head's trim is left positive.
+                right = float(req.get("right", 0.0))
+                d = self.head.set_trim(-right) if self.head else max(-3.0, min(3.0, -right))
+                self.settings["drift_trim"] = round(d, 2)
+                save_settings(self.settings)
+                self.log(f"gaming: drift trim {self.settings['drift_trim']} degrees a minute (left positive, Quick Access)")
             elif op == "set_tap_sensitivity":
                 self.taps.set_sensitivity(req.get("percent", 100))
                 self.settings["tap_sensitivity"] = self.taps.sensitivity
@@ -744,7 +758,10 @@ class Gaming:
     def _start_glasses(self, g):
         self.glasses = g
         self.log(f"gaming: glasses {g.name} ({g.family}, {g.vendor:04x}:{g.product:04x})")
-        self.head = fusion.HeadFusion(g.axes, bias=fusion.load_bias(self._glasses_key(g)))
+        self.head = fusion.HeadFusion(g.axes, bias=fusion.load_bias(self._glasses_key(g)), family=g.family,
+                                      trim_deg_min=self.settings.get("drift_trim", 0.0))
+        if self.head.trim:
+            self.log(f"gaming: drift trim {self.settings.get('drift_trim')} degrees a minute (left positive)")
         self.said_rest_blocks = 0
         if self.head.bias_ready:
             self.log(f"gaming: gyro calibration loaded for these glasses ({self._glasses_key(g)})")

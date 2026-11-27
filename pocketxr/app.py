@@ -407,7 +407,7 @@ class App:
             self.reader.stop = True
             self.reader = None
         key = f"{g.vendor:04x}:{g.product:04x}"
-        self.head = fusion.HeadFusion(g.axes, bias=fusion.load_bias(key))
+        self.head = fusion.HeadFusion(g.axes, bias=fusion.load_bias(key), family=g.family)
         if self.head.bias_ready:
             self.log(f"gyro calibration loaded for these glasses ({key})")
         kind = g.imu

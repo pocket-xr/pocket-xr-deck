@@ -26,6 +26,10 @@ type Status = {
   keys_line?: string; // how another controller does the back buttons' jobs (Steam Input keys)
   sticks?: boolean; // the Deck's stick clicks do Pocket XR's jobs (hold L3, hold R3, L3 three times)
   taps?: boolean; // taps on the glasses: two recentre, three switch view
+  drift_trim?: number; // degrees a minute, left positive
+  drift_trim_max?: number;
+  drift_trim_label?: string;
+  drift_trim_line?: string;
   tap_sensitivity?: number; // percent
   tap_sensitivity_range?: number[];
   tap_sensitivity_label?: string;
@@ -239,6 +243,22 @@ function Content() {
             {w.recentre}
           </ButtonItem>
         </PanelSectionRow>
+        {st?.drift_trim_label ? (
+          <PanelSectionRow>
+            <SliderField
+              label={st.drift_trim_label}
+              description={st.drift_trim_line}
+              value={-(st.drift_trim ?? 0)}
+              min={-(st.drift_trim_max ?? 3)}
+              max={st.drift_trim_max ?? 3}
+              step={0.1}
+              showValue
+              valueSuffix=" °/min"
+              disabled={!st.running}
+              onChange={(v: number) => send({ op: "set_drift_trim", right: v })}
+            />
+          </PanelSectionRow>
+        ) : null}
         <PanelSectionRow>
           <ButtonItem
             layout="below"

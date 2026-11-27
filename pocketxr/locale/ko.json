@@ -222,5 +222,7 @@
   "Recentre includes head tilt": "가운데로 맞출 때 머리 기울기 포함",
   "For lying on one side: Recentre lines the picture up with your eyes, not the room's horizon.": "옆으로 누웠을 때: 가운데로 맞추면 방의 수평선이 아니라 눈에 맞춰 화면을 정렬해요.",
   "Hide the moving pointer": "움직이는 포인터 숨기기",
-  "With the screen in space, hides gamescope's own arrow, which moves with your head and is not where clicks land. Pocket XR's pointer stays.": "화면을 공간에 둘 때, 머리와 함께 움직이고 클릭되는 곳에 있지 않은 gamescope 자체 화살표를 숨겨요. Pocket XR 포인터는 그대로예요."
+  "With the screen in space, hides gamescope's own arrow, which moves with your head and is not where clicks land. Pocket XR's pointer stays.": "화면을 공간에 둘 때, 머리와 함께 움직이고 클릭되는 곳에 있지 않은 gamescope 자체 화살표를 숨겨요. Pocket XR 포인터는 그대로예요.",
+  "Drift trim": "드리프트 보정",
+  "If the screen creeps slowly sideways while you hold still, move this toward where it should be: left of 0 if it creeps right, right of 0 if it creeps left. Degrees a minute.": "가만히 있는데 화면이 천천히 옆으로 밀리면, 원래 있어야 할 쪽으로 이것을 옮기세요. 오른쪽으로 밀리면 0보다 왼쪽, 왼쪽으로 밀리면 0보다 오른쪽. 단위는 도/분입니다."
 }
