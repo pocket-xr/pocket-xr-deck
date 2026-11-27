@@ -222,5 +222,7 @@
   "Recentre includes head tilt": "Zentrieren mit Kopfneigung",
   "For lying on one side: Recentre lines the picture up with your eyes, not the room's horizon.": "Zum Liegen auf der Seite: Zentrieren richtet das Bild an deinen Augen aus, nicht am Horizont des Raums.",
   "Hide the moving pointer": "Wandernden Zeiger ausblenden",
-  "With the screen in space, hides gamescope's own arrow, which moves with your head and is not where clicks land. Pocket XR's pointer stays.": "Mit dem Bildschirm im Raum wird gamescopes eigener Pfeil ausgeblendet, der sich mit dem Kopf bewegt und nicht dort ist, wo Klicks landen. Der Zeiger von Pocket XR bleibt."
+  "With the screen in space, hides gamescope's own arrow, which moves with your head and is not where clicks land. Pocket XR's pointer stays.": "Mit dem Bildschirm im Raum wird gamescopes eigener Pfeil ausgeblendet, der sich mit dem Kopf bewegt und nicht dort ist, wo Klicks landen. Der Zeiger von Pocket XR bleibt.",
+  "Drift trim": "Drift-Ausgleich",
+  "If the screen creeps slowly sideways while you hold still, move this toward where it should be: left of 0 if it creeps right, right of 0 if it creeps left. Degrees a minute.": "Wenn das Bild langsam zur Seite wandert, während du stillhältst, schiebe dies dorthin, wo es sein soll: links von 0, wenn es nach rechts wandert, rechts von 0, wenn es nach links wandert. Grad pro Minute."
 }

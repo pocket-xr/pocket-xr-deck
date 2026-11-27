@@ -153,9 +153,20 @@ class HeadFusion:
     # the zero already known (REST_NEAR_CALIBRATED) refine it; a worn head never does.
     REST_SD_CALIBRATED = math.radians(0.2)
     REST_NEAR_CALIBRATED = math.radians(0.3)
+    # 0.7.20 (the same tester, 27 Nov 2026, 0.7.19: "apart from the slow drift ... can a LH/RH trim be added"): his log
+    # had calibrations saved with each axis's spread 0.19 to 0.58 deg/s and a zero up to 0.87 deg/s off, taken while the
+    # glasses moved (lying still they spread 0.05 deg/s); CAL_SD's 2 deg/s let them through. Air-family glasses now need
+    # the spread of lying still, under CAL_SD_AIR. Even after a good calibration his worn heading crept about 0.7 degrees
+    # a minute (0.2 to 8.2 degrees over 14 minutes), too slow to tell from a worn head's sway: the trim below (degrees a
+    # minute, left positive) turns the room against it, about the world's up axis.
+    CAL_SD_AIR = math.radians(0.15)
+    TRIM_MAX_DEG_MIN = 3.0
 
-    def __init__(self, axes="aura", bias=None):
+    def __init__(self, axes="aura", bias=None, family=None, trim_deg_min=0.0):
         self.sign = AXES[axes]
+        self.cal_sd = self.CAL_SD_AIR if family == "air" else self.CAL_SD
+        self.trim = 0.0  # radians a second the screen turns left, against a slow drift (set_trim)
+        self.set_trim(trim_deg_min)
         self.rest_max = self.REST_MAX if axes == "aura" else self.REST_MAX_OTHER
         self.lock = threading.Lock()
         self.q = (1.0, 0.0, 0.0, 0.0)  # world from head
@@ -190,6 +201,12 @@ class HeadFusion:
             self.bias = [float(b) for b in bias]
             self.bias_ready = True
             self.calibrated = True
+
+    def set_trim(self, deg_per_min):
+        """The drift trim: degrees a minute the screen turns left (negative: right), at most TRIM_MAX_DEG_MIN."""
+        d = max(-self.TRIM_MAX_DEG_MIN, min(self.TRIM_MAX_DEG_MIN, float(deg_per_min or 0.0)))
+        self.trim = math.radians(d) / 60.0
+        return d
 
     def _axes(self, v):
         return (v[0] * self.sign[0], v[1] * self.sign[1], v[2] * self.sign[2])
@@ -229,6 +246,9 @@ class HeadFusion:
             half = 0.5 * dt
             dq = (1.0, w[0] * half, w[1] * half, w[2] * half)
             self.q = qnorm(qmul(self.q, dq))
+            if self.trim:
+                # The head seen turning right turns the screen left: about the world's up axis, so tilt is untouched.
+                self.q = qnorm(qmul(about_y(-self.trim * dt), self.q))
             if self.want_recentre:
                 self._apply_recentre()
                 self.want_recentre = False
@@ -337,7 +357,7 @@ class HeadFusion:
         sd = [math.sqrt(max(0.0, q / n - m * m)) for q, m in zip(c["sq"], mean)]
         deg = (tuple(round(math.degrees(m), 3) for m in mean), tuple(round(math.degrees(s), 3) for s in sd))
         self.cal = None
-        if n >= self.CAL_MIN_REPORTS and max(sd) < self.CAL_SD and all(abs(m) < self.CAL_MAX for m in mean):
+        if n >= self.CAL_MIN_REPORTS and max(sd) < self.cal_sd and all(abs(m) < self.CAL_MAX for m in mean):
             self.bias = mean
             self.bias_ready = True
             self.calibrated = True

@@ -222,5 +222,7 @@
   "Recentre includes head tilt": "正面に戻すときに頭の傾きも使う",
   "For lying on one side: Recentre lines the picture up with your eyes, not the room's horizon.": "横向きに寝るとき用：正面に戻すと、部屋の水平ではなく目に合わせて画面をそろえます。",
   "Hide the moving pointer": "動くポインターを隠す",
-  "With the screen in space, hides gamescope's own arrow, which moves with your head and is not where clicks land. Pocket XR's pointer stays.": "画面を空間に置いているとき、頭と一緒に動き、クリックする場所とずれる gamescope 自身の矢印を隠します。Pocket XR のポインターは残ります。"
+  "With the screen in space, hides gamescope's own arrow, which moves with your head and is not where clicks land. Pocket XR's pointer stays.": "画面を空間に置いているとき、頭と一緒に動き、クリックする場所とずれる gamescope 自身の矢印を隠します。Pocket XR のポインターは残ります。",
+  "Drift trim": "ドリフト補正",
+  "If the screen creeps slowly sideways while you hold still, move this toward where it should be: left of 0 if it creeps right, right of 0 if it creeps left. Degrees a minute.": "じっとしているのに画面がゆっくり横へずれる場合は、これを本来の位置の方向へ動かしてください。右へずれるなら 0 より左、左へずれるなら 0 より右。単位は度/分。"
 }

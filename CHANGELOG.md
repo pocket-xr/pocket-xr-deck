@@ -1,5 +1,19 @@
 # Changes
 
+## 0.7.20 (27 Nov 2026)
+
+From Pierre Zammit's report and log on 0.7.19 (Steam Deck LCD, XREAL XBX A01+).
+
+- **Drift trim** (Quick Access, Gaming Mode). If the screen creeps slowly sideways while you hold still, slide it
+  the other way until it stays: left of 0 if it creeps right, right of 0 if it creeps left, up to 3 degrees a
+  minute. It turns the room about the vertical, so tilt is untouched, and it is remembered. In his log the worn
+  heading crept about 0.7 degrees a minute (0.2 to 8.2 degrees over 14 minutes) after a good calibration, too slow
+  for Pocket XR to tell from a worn head's sway. Tested against made-up gyro readings; not yet tried with glasses.
+- **Calibrations taken while the glasses moved are no longer saved** (XREAL Air family, the XBX among them). His log
+  had calibrations saved with a spread of 0.19 to 0.58 degrees a second and a gyro zero up to 0.87 degrees a second
+  off, which makes a steady drift until the next calibration. Lying still his glasses spread 0.05, and Pocket XR now
+  asks for under 0.15. Other glasses keep the old check.
+
 ## 0.7.19 (26 Nov 2026)
 
 - **Logs show a slow drift.** The head's direction went in the log once a second for a minute after the glasses, a
