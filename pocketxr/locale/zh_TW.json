@@ -222,5 +222,15 @@
   "Recentre includes head tilt": "回到正前方時包括頭部傾斜",
   "For lying on one side: Recentre lines the picture up with your eyes, not the room's horizon.": "側躺時用：回到正前方會讓畫面對齊你的眼睛，而不是房間的水平線。",
   "Hide the moving pointer": "隱藏會移動的指標",
-  "With the screen in space, hides gamescope's own arrow, which moves with your head and is not where clicks land. Pocket XR's pointer stays.": "螢幕放在空間中時，隱藏 gamescope 自己的箭頭：它隨頭部移動，也不在點擊落下的位置。Pocket XR 的指標保留。"
+  "With the screen in space, hides gamescope's own arrow, which moves with your head and is not where clicks land. Pocket XR's pointer stays.": "螢幕放在空間中時，隱藏 gamescope 自己的箭頭：它隨頭部移動，也不在點擊落下的位置。Pocket XR 的指標保留。",
+  "Picture brightness": "畫面亮度",
+  "Dims the whole picture on the glasses, for a dark room or a film. 100 % is the picture as it is.": "調暗眼鏡中的整個畫面，適合暗室或看電影。100 % 為原始畫面。",
+  "Glasses button {n}": "眼鏡按鍵 {n}",
+  "Brighter": "調亮",
+  "Dimmer": "調暗",
+  "Switch view": "切換檢視",
+  "Nothing": "無",
+  "What the buttons on your glasses do while Pocket XR has them. Not sure which is which? Press one and see. New: say how it works for you.": "Pocket XR 使用眼鏡時，眼鏡上各按鍵的作用。分不清哪個是哪個？按一下看看。新功能：請告訴我們使用效果。",
+  "Drift trim": "漂移微調",
+  "If the screen creeps slowly sideways while you hold still, move this toward where it should be: left of 0 if it creeps right, right of 0 if it creeps left. Degrees a minute.": "如果你保持不動時畫面慢慢往一側偏移，把這個往畫面應在的方向調：畫面往右偏就調到 0 的左邊，往左偏就調到 0 的右邊。單位為度每分鐘。"
 }

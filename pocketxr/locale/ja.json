@@ -224,5 +224,13 @@
   "Hide the moving pointer": "動くポインターを隠す",
   "With the screen in space, hides gamescope's own arrow, which moves with your head and is not where clicks land. Pocket XR's pointer stays.": "画面を空間に置いているとき、頭と一緒に動き、クリックする場所とずれる gamescope 自身の矢印を隠します。Pocket XR のポインターは残ります。",
   "Drift trim": "ドリフト補正",
-  "If the screen creeps slowly sideways while you hold still, move this toward where it should be: left of 0 if it creeps right, right of 0 if it creeps left. Degrees a minute.": "じっとしているのに画面がゆっくり横へずれる場合は、これを本来の位置の方向へ動かしてください。右へずれるなら 0 より左、左へずれるなら 0 より右。単位は度/分。"
+  "If the screen creeps slowly sideways while you hold still, move this toward where it should be: left of 0 if it creeps right, right of 0 if it creeps left. Degrees a minute.": "じっとしているのに画面がゆっくり横へずれる場合は、これを本来の位置の方向へ動かしてください。右へずれるなら 0 より左、左へずれるなら 0 より右。単位は度/分。",
+  "Picture brightness": "映像の明るさ",
+  "Dims the whole picture on the glasses, for a dark room or a film. 100 % is the picture as it is.": "グラスに映る映像全体を暗くします。暗い部屋や映画に。100 % は映像そのままです。",
+  "Glasses button {n}": "グラスのボタン {n}",
+  "Brighter": "明るく",
+  "Dimmer": "暗く",
+  "Switch view": "ビュー切り替え",
+  "Nothing": "何もしない",
+  "What the buttons on your glasses do while Pocket XR has them. Not sure which is which? Press one and see. New: say how it works for you.": "Pocket XR がグラスを使っている間、グラスのボタンが何をするか。どれがどのボタンかわからない場合は、押して確かめてください。新機能：使ってみた感想を教えてください。"
 }

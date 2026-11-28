@@ -63,6 +63,11 @@ AIR_XBX = frozenset({0x0440, 0x0442})
 MCU_R_BRIGHTNESS = 0x03
 MCU_W_BRIGHTNESS = 0x04
 MCU_P_BUTTON = 0x6C05
+# 0.7.21 (a tester, Pierre Zammit, 28 Nov 2026: "If you ever think of a way to make the buttons usable"): their XBX A01+
+# reported every press while the heartbeat ran, three reports a press within milliseconds (actions 16, 17 and 1),
+# from physical buttons 1, 2 and 3. What the actions mean is not known; one press is the burst from one button, so a
+# button's reports closer together than this count once (AirReader.on_button).
+BUTTON_PRESS_GAP_S = 0.3
 BUTTON_BRIGHTNESS_UP = 0x06
 BUTTON_BRIGHTNESS_DOWN = 0x07
 BRIGHTNESS_MAX = 7
@@ -334,9 +339,13 @@ class AirReader(_HidReader):
     LOGGED_PER_NODE = 12  # raw reports logged per node per try
     RECORD_S = 5.0          # every report in full, this long after the samples start (record_path)
 
-    def __init__(self, on_report, pid, log=print, nodes=None, opener=None, record_path=None):
+    def __init__(self, on_report, pid, log=print, nodes=None, opener=None, record_path=None, on_button=None, clock=None):
         super().__init__(on_report, log)
         self.pid = pid
+        # 0.7.21: told the physical button (1, 2, 3) once a press, from the heartbeat's thread (BUTTON_PRESS_GAP_S)
+        self.on_button = on_button
+        self._clock = clock or time.monotonic
+        self._button_last = {}
         self.record_path = record_path  # a file for RECORD_S of raw reports, made once per reader
         self.recorded = False
         self.paused = False  # Gaming Mode's "off": no motion stream (the XBX heartbeat keeps going, see AIR_XBX)
@@ -507,6 +516,14 @@ class AirReader(_HidReader):
         elif msg == MCU_P_BUTTON and len(data) >= 9:
             phys, action, value = data[0], data[4], data[8]
             self.log(f"imu: glasses button {phys}, action {action}, value {value}")
+            now = self._clock()
+            last = self._button_last.get(phys)
+            self._button_last[phys] = now
+            if self.on_button and (last is None or now - last > BUTTON_PRESS_GAP_S):
+                try:
+                    self.on_button(phys)
+                except Exception as e:  # noqa: BLE001 - a job going wrong must not stop the heartbeat
+                    self.log(f"imu: glasses button {phys}: its job failed ({e})")
             if action in (BUTTON_BRIGHTNESS_UP, BUTTON_BRIGHTNESS_DOWN) and value <= BRIGHTNESS_MAX:
                 # The value is the brightness after the press (Monado). Setting it again does nothing if the glasses
                 # already took it, and sets it if they only reported the press.

@@ -132,6 +132,7 @@ class GamingService(unittest.TestCase):
         g = G()
         g.pointer_proc = P()
         g.effect_on = effect
+        g.space_on = effect  # 0.7.21: the effect can be on just to dim; the pointer follows the screen in space
         g.settings = {"hide_gamescope_pointer": setting}
         g.pointer_hide_sent = None
         return g
@@ -142,8 +143,15 @@ class GamingService(unittest.TestCase):
         self.gaming.Gaming._pointer_hide(g)  # said once
         self.assertEqual(g.pointer_proc.stdin.getvalue(), "hide 1\n")
         g.effect_on = False
+        g.space_on = False
         self.gaming.Gaming._pointer_hide(g)
         self.assertEqual(g.pointer_proc.stdin.getvalue(), "hide 1\nhide 0\n")
+
+    def test_not_hidden_when_the_effect_only_dims(self):
+        g = self.fake(True)
+        g.space_on = False  # 0.7.21: Picture brightness below 100 % with the picture as it is
+        self.gaming.Gaming._pointer_hide(g)
+        self.assertEqual(g.pointer_proc.stdin.getvalue(), "hide 0\n")
 
     def test_the_switch_off_keeps_it(self):
         g = self.fake(True, setting=False)

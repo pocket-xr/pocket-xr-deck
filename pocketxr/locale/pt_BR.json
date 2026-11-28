@@ -224,5 +224,13 @@
   "Hide the moving pointer": "Esconder o ponteiro que se move",
   "With the screen in space, hides gamescope's own arrow, which moves with your head and is not where clicks land. Pocket XR's pointer stays.": "Com a tela no espaço, esconde a seta do próprio gamescope, que se move com a cabeça e não está onde os cliques caem. O ponteiro do Pocket XR fica.",
   "Drift trim": "Ajuste de deriva",
-  "If the screen creeps slowly sideways while you hold still, move this toward where it should be: left of 0 if it creeps right, right of 0 if it creeps left. Degrees a minute.": "Se a tela desliza devagar para o lado enquanto você fica parado, mova isto para onde ela deveria estar: à esquerda de 0 se ela desliza para a direita, à direita de 0 se desliza para a esquerda. Graus por minuto."
+  "If the screen creeps slowly sideways while you hold still, move this toward where it should be: left of 0 if it creeps right, right of 0 if it creeps left. Degrees a minute.": "Se a tela desliza devagar para o lado enquanto você fica parado, mova isto para onde ela deveria estar: à esquerda de 0 se ela desliza para a direita, à direita de 0 se desliza para a esquerda. Graus por minuto.",
+  "Picture brightness": "Brilho da imagem",
+  "Dims the whole picture on the glasses, for a dark room or a film. 100 % is the picture as it is.": "Escurece a imagem inteira nos óculos, para um quarto escuro ou um filme. 100 % é a imagem como ela é.",
+  "Glasses button {n}": "Botão dos óculos {n}",
+  "Brighter": "Mais claro",
+  "Dimmer": "Mais escuro",
+  "Switch view": "Trocar a visão",
+  "Nothing": "Nada",
+  "What the buttons on your glasses do while Pocket XR has them. Not sure which is which? Press one and see. New: say how it works for you.": "O que os botões dos seus óculos fazem enquanto o Pocket XR os usa. Não sabe qual é qual? Aperte um e veja. Novo: conte como funciona para você."
 }
