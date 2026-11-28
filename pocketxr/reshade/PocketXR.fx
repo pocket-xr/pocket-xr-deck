@@ -18,6 +18,7 @@ uniform float4 pxr_quat < source = "pxr_quat"; >;
 uniform float4 pxr_view < source = "pxr_view"; >;
 // x: 1 to draw the screen in space, 0 to pass the picture through as it is. y: soft edge, in screen widths.
 // z: curve, 0 flat to 1 (the screen bent round the eye, every part of it as far away as the middle).
+// w (0.7.21): how much to dim the picture, 0 none to 0.8 (Picture brightness 20 %), in both ways of drawing.
 uniform float4 pxr_mode < source = "pxr_mode"; >;
 // The mouse pointer, drawn here so it sits over what it points at on the moved screen (gamescope's own cursor is
 // drawn after this effect, where the pointer is on the Deck's screen). x, y: where, 0 to 1 across and down the
@@ -55,8 +56,9 @@ void PxrVS(in uint id : SV_VertexID, out float4 position : SV_Position, out floa
 
 float4 PxrPS(float4 position : SV_Position, float2 texcoord : TEXCOORD) : SV_Target
 {
+    float bright = 1.0 - saturate(pxr_mode.w);
     if (pxr_mode.x < 0.5)
-        return tex2D(PxrBackBuffer, texcoord);
+        return float4(tex2D(PxrBackBuffer, texcoord).rgb * bright, 1.0);
 
     // This pixel's direction from the eye: x right, y up, looking along -z.
     float3 eye = float3((texcoord.x * 2.0 - 1.0) * pxr_view.x, (1.0 - texcoord.y * 2.0) * pxr_view.y, -1.0);
@@ -103,7 +105,7 @@ float4 PxrPS(float4 position : SV_Position, float2 texcoord : TEXCOORD) : SV_Tar
         else if (inside > -0.6)
             colour = float3(0.05, 0.05, 0.05);
     }
-    return float4(colour * fade, 1.0);
+    return float4(colour * fade * bright, 1.0);
 }
 
 technique PocketXR

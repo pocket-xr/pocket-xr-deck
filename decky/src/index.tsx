@@ -1,6 +1,6 @@
 // Pocket XR's Quick Access panel: the Gaming Mode controls for Pocket XR for Steam Deck.
 // It talks to Pocket XR's Gaming Mode service through this plugin's backend (main.py). GPL-3.0, as Pocket XR.
-import { ButtonItem, PanelSection, PanelSectionRow, SliderField, ToggleField, staticClasses } from "@decky/ui";
+import { ButtonItem, DropdownItem, PanelSection, PanelSectionRow, SliderField, ToggleField, staticClasses } from "@decky/ui";
 import { callable, definePlugin, toaster } from "@decky/api";
 import { useEffect, useState } from "react";
 import { FaGlasses } from "react-icons/fa";
@@ -47,6 +47,14 @@ type Status = {
   brightness_line?: string;
   glasses_buttons_label?: string;
   glasses_buttons_line?: string;
+  picture_brightness?: number; // percent: the whole picture dimmed by Pocket XR's effect (0.7.21)
+  picture_brightness_range?: number[];
+  picture_brightness_label?: string;
+  picture_brightness_line?: string;
+  glasses_button_jobs?: Record<string, string> | null; // the XBX glasses' buttons' jobs (0.7.21); null: not offered
+  glasses_button_labels?: Record<string, string>;
+  glasses_button_options?: { job: string; label: string }[];
+  glasses_buttons_jobs_line?: string;
   taps_label?: string;
   taps_line?: string;
   sticks_label?: string;
@@ -290,6 +298,43 @@ function Content() {
               disabled={!ready}
               onChange={(v: number) => send({ op: "set_brightness", level: v })}
             />
+          </PanelSectionRow>
+        ) : null}
+        {st?.picture_brightness_label && st.picture_brightness !== undefined ? (
+          <PanelSectionRow>
+            <SliderField
+              label={st.picture_brightness_label}
+              description={st.picture_brightness_line}
+              value={st.picture_brightness}
+              min={st.picture_brightness_range?.[0] ?? 20}
+              max={st.picture_brightness_range?.[1] ?? 100}
+              step={5}
+              showValue
+              valueSuffix=" %"
+              disabled={!st.running}
+              onChange={(v: number) => send({ op: "set_picture_brightness", percent: v })}
+            />
+          </PanelSectionRow>
+        ) : null}
+        {st?.glasses_button_jobs && st.glasses_button_options ? (
+          <PanelSectionRow>
+            {Object.keys(st.glasses_button_jobs)
+              .sort()
+              .map((b) => (
+                <DropdownItem
+                  key={b}
+                  label={st.glasses_button_labels?.[b] ?? b}
+                  rgOptions={(st.glasses_button_options ?? []).map((o) => ({ data: o.job, label: o.label }))}
+                  selectedOption={st.glasses_button_jobs?.[b]}
+                  disabled={!ready}
+                  onChange={(o) => send({ op: "set_glasses_button", button: b, job: o.data })}
+                />
+              ))}
+            {st.glasses_buttons_jobs_line ? (
+              <div style={{ fontSize: "12px", lineHeight: "16px", color: "#8b929a", marginTop: "6px" }}>
+                {st.glasses_buttons_jobs_line}
+              </div>
+            ) : null}
           </PanelSectionRow>
         ) : null}
         {st?.glasses_buttons_label && st.glasses_buttons !== null && st.glasses_buttons !== undefined ? (

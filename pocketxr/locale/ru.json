@@ -222,5 +222,15 @@
   "Recentre includes head tilt": "Центрирование учитывает наклон головы",
   "For lying on one side: Recentre lines the picture up with your eyes, not the room's horizon.": "Чтобы лежать на боку: центрирование выравнивает картинку по глазам, а не по горизонту комнаты.",
   "Hide the moving pointer": "Скрыть движущийся указатель",
-  "With the screen in space, hides gamescope's own arrow, which moves with your head and is not where clicks land. Pocket XR's pointer stays.": "Когда экран в пространстве, скрывает собственную стрелку gamescope, которая движется вместе с головой и не совпадает с местом щелчка. Указатель Pocket XR остаётся."
+  "With the screen in space, hides gamescope's own arrow, which moves with your head and is not where clicks land. Pocket XR's pointer stays.": "Когда экран в пространстве, скрывает собственную стрелку gamescope, которая движется вместе с головой и не совпадает с местом щелчка. Указатель Pocket XR остаётся.",
+  "Picture brightness": "Яркость изображения",
+  "Dims the whole picture on the glasses, for a dark room or a film. 100 % is the picture as it is.": "Затемняет всё изображение в очках, для тёмной комнаты или фильма. 100 % — изображение как есть.",
+  "Glasses button {n}": "Кнопка очков {n}",
+  "Brighter": "Ярче",
+  "Dimmer": "Темнее",
+  "Switch view": "Сменить вид",
+  "Nothing": "Ничего",
+  "What the buttons on your glasses do while Pocket XR has them. Not sure which is which? Press one and see. New: say how it works for you.": "Что делают кнопки ваших очков, пока ими пользуется Pocket XR. Не знаете, где какая? Нажмите одну и посмотрите. Новое: расскажите, как это работает у вас.",
+  "Drift trim": "Компенсация дрейфа",
+  "If the screen creeps slowly sideways while you hold still, move this toward where it should be: left of 0 if it creeps right, right of 0 if it creeps left. Degrees a minute.": "Если экран медленно уползает в сторону, пока вы не двигаетесь, сдвиньте это туда, где он должен быть: левее 0, если он уползает вправо, правее 0, если влево. Градусы в минуту."
 }

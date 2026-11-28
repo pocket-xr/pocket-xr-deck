@@ -1,5 +1,19 @@
 # Changes
 
+## 0.7.21 (28 Nov 2026)
+
+From Pierre Zammit's question on 0.7.20 ("If you ever think of a way to make the buttons usable") and their log.
+
+- **The XBX glasses' buttons do things again** (Gaming Mode). While Pocket XR has XBX A01 or A01+ glasses their own
+  buttons do nothing, but they still report each press, and their log had 91 of them. Each of the three buttons now
+  has a job you pick in Quick Access: Brighter, Dimmer, Recentre, Switch view or Nothing. By default button 1
+  recentres and buttons 2 and 3 make the picture brighter and dimmer. Which physical button is which is not known
+  yet, so the panel says to press one and see. Tested against made-up button reports; not yet tried with glasses.
+- **Picture brightness** (Quick Access, Gaming Mode). Dims the whole picture on the glasses, 20 to 100 %, for a dark
+  room or a film, in every mode. The XBX glasses refuse the brightness commands other XREAL glasses take, so this
+  dims the picture itself.
+- Drift trim's texts in Russian and Chinese, which 0.7.20 left in English.
+
 ## 0.7.20 (27 Nov 2026)
 
 From Pierre Zammit's report and log on 0.7.19 (Steam Deck LCD, XREAL XBX A01+).

@@ -224,5 +224,13 @@
   "Hide the moving pointer": "Nascondi il puntatore che si muove",
   "With the screen in space, hides gamescope's own arrow, which moves with your head and is not where clicks land. Pocket XR's pointer stays.": "Con lo schermo nello spazio, nasconde la freccia di gamescope, che si muove con la testa e non è dove arrivano i clic. Il puntatore di Pocket XR resta.",
   "Drift trim": "Correzione deriva",
-  "If the screen creeps slowly sideways while you hold still, move this toward where it should be: left of 0 if it creeps right, right of 0 if it creeps left. Degrees a minute.": "Se lo schermo scivola lentamente di lato mentre stai fermo, sposta questo verso dove dovrebbe essere: a sinistra di 0 se scivola a destra, a destra di 0 se scivola a sinistra. Gradi al minuto."
+  "If the screen creeps slowly sideways while you hold still, move this toward where it should be: left of 0 if it creeps right, right of 0 if it creeps left. Degrees a minute.": "Se lo schermo scivola lentamente di lato mentre stai fermo, sposta questo verso dove dovrebbe essere: a sinistra di 0 se scivola a destra, a destra di 0 se scivola a sinistra. Gradi al minuto.",
+  "Picture brightness": "Luminosità dell'immagine",
+  "Dims the whole picture on the glasses, for a dark room or a film. 100 % is the picture as it is.": "Scurisce tutta l'immagine negli occhiali, per una stanza buia o un film. 100 % è l'immagine così com'è.",
+  "Glasses button {n}": "Tasto degli occhiali {n}",
+  "Brighter": "Più luminoso",
+  "Dimmer": "Più scuro",
+  "Switch view": "Cambia vista",
+  "Nothing": "Niente",
+  "What the buttons on your glasses do while Pocket XR has them. Not sure which is which? Press one and see. New: say how it works for you.": "Cosa fanno i tasti dei tuoi occhiali mentre Pocket XR li usa. Non sai quale è quale? Premine uno e guarda. Novità: dicci come funziona per te."
 }

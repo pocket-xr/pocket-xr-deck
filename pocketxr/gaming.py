@@ -49,6 +49,8 @@ DEFAULTS = {"mode": "space", "size": 0.8, "curve": 0.0, "readability": False, "r
             "tap_sensitivity": 100,  # percent (taps.SENSITIVITY); 100 is the values a tester liked
             "drift_trim": 0.0,  # degrees a minute the screen turns left against a slow drift (fusion.set_trim)
             "recentre_roll": False,
+            "picture_brightness": 100,  # percent: the whole picture dimmed in the effect (pxr_mode.w), 0.7.21
+            "glasses_button_jobs": {},  # {"1": "recentre", ...} over BUTTON_JOBS_DEFAULT, 0.7.21
             "hide_gamescope_pointer": True}  # Screen in space: gamescope's own arrow blanked (xpointer.py)  # Recentre includes head tilt: the head's roll too (fusion.recentre follow_roll)
 STICK_CAL_DELAY_S = 5.0  # a calibration from the stick clicks starts this long after, to take the glasses off first
 # The Quick Access panel (decky/ plugin) talks to the service here: one JSON request per line, one JSON answer per line
@@ -58,6 +60,34 @@ PREDICT_S = 0.020  # head prediction: gamescope's composite and the glasses' dis
 GONE_GRACE_S = 12.0
 EDGE = 0.004  # the screen's soft edge, in screen widths
 VERSION_CHECK_S = 5.0  # how often the service looks for a new Pocket XR installed over it
+# 0.7.21 (a tester, Pierre Zammit, 28 Nov 2026: "If you ever think of a way to make the buttons usable"): while Pocket XR
+# has the XBX glasses their own buttons do nothing (hidimu.AIR_XBX), and they take no brightness commands. They do
+# report each press (buttons 1 to 3), so each button gets a job here, and Picture brightness dims the picture itself.
+PICTURE_BRIGHTNESS = (20, 100)  # percent; below 20 the picture is too dark to see on the glasses
+PICTURE_BRIGHTNESS_STEP = 10  # a press of Brighter or Dimmer
+BUTTON_JOBS = ("brighter", "dimmer", "recentre", "switch_view", "nothing")
+# Which physical button is which on the XBX is not known yet: 2 and 3 were pressed most in their log (brightness up and
+# down, probably), 1 once. Each can be changed in the Quick Access panel.
+BUTTON_JOBS_DEFAULT = {"1": "recentre", "2": "brighter", "3": "dimmer"}
+
+
+def picture_brightness(v):
+    """[v] percent as Picture brightness: within PICTURE_BRIGHTNESS, on 5 % steps."""
+    try:
+        v = float(v)
+    except (TypeError, ValueError):
+        v = 100.0
+    lo, hi = PICTURE_BRIGHTNESS
+    return int(max(lo, min(hi, round(v / 5.0) * 5)))
+
+
+def button_jobs(settings):
+    """Each glasses button's job: the saved choices over BUTTON_JOBS_DEFAULT, anything unknown left out."""
+    jobs = dict(BUTTON_JOBS_DEFAULT)
+    for k, v in (settings.get("glasses_button_jobs") or {}).items():
+        if str(k) in BUTTON_JOBS_DEFAULT and v in BUTTON_JOBS:
+            jobs[str(k)] = v
+    return jobs
 RESTART_EXIT = 75  # ends with this, so systemd starts it again (Restart=on-failure)
 CURVE_MAX = 1.0  # the screen bent round the eye (PocketXR.fx)
 
@@ -131,7 +161,8 @@ class Gaming:
         self.reader = None
         self.control = None
         self.reshade = None
-        self.effect_on = False
+        self.effect_on = False  # the effect loaded in gamescope: for the screen in space, or only to dim (0.7.21)
+        self.space_on = False  # the effect draws the screen in space (pxr_mode.x), not the picture as it is
         self.lock = threading.Lock()
         self.head_log_until = 0.0
         self.cal_text = ""
@@ -197,6 +228,21 @@ class Gaming:
                                             "Off, turn this on and wait for the glasses to blink off and on (up to a "
                                             "few minutes), adjust them, turn this off, then pick a mode. Unplugging "
                                             "the glasses and plugging them back in is quicker."),
+            "picture_brightness": picture_brightness(self.settings.get("picture_brightness", 100)),
+            "picture_brightness_range": list(PICTURE_BRIGHTNESS),
+            "picture_brightness_label": i18n.tr("Picture brightness"),
+            "picture_brightness_line": i18n.tr("Dims the whole picture on the glasses, for a dark room or a film. 100 % "
+                                               "is the picture as it is."),
+            # The XBX glasses' own buttons, each with a job (0.7.21): None hides them (other glasses don't report)
+            "glasses_button_jobs": self._button_jobs_shown(),
+            "glasses_button_labels": {b: i18n.tr("Glasses button {n}", n=b) for b in BUTTON_JOBS_DEFAULT},
+            "glasses_button_options": [{"job": "brighter", "label": i18n.tr("Brighter")},
+                                       {"job": "dimmer", "label": i18n.tr("Dimmer")},
+                                       {"job": "recentre", "label": i18n.tr("Recentre")},
+                                       {"job": "switch_view", "label": i18n.tr("Switch view")},
+                                       {"job": "nothing", "label": i18n.tr("Nothing")}],
+            "glasses_buttons_jobs_line": i18n.tr("What the buttons on your glasses do while Pocket XR has them. Not sure "
+                                                 "which is which? Press one and see. New: say how it works for you."),
             "taps": bool(self.settings.get("taps", False)),
             "tap_sensitivity": self.taps.sensitivity,
             "tap_sensitivity_range": list(taps.SENSITIVITY),
@@ -234,6 +280,13 @@ class Gaming:
             # Buttons the panel shows only when they would do something: [{"op", "label"}]
             "actions": self._actions(),
         }
+
+    def _button_jobs_shown(self):
+        """The glasses buttons' jobs for the panel, only with XBX glasses held by the heartbeat (they report presses)."""
+        r = self.reader
+        if not (isinstance(r, hidimu.AirReader) and r.pid in hidimu.AIR_XBX) or self.buttons_released:
+            return None
+        return button_jobs(self.settings)
 
     @staticmethod
     def _glasses_key(g):
@@ -406,6 +459,16 @@ class Gaming:
                         self._lost_gamescope(e)
             elif op == "recentre":
                 self.recentre()
+            elif op == "set_picture_brightness":
+                self._set_picture_brightness(req.get("percent", 100), "Quick Access")
+            elif op == "set_glasses_button":
+                b, job = str(req.get("button")), req.get("job")
+                if b in BUTTON_JOBS_DEFAULT and job in BUTTON_JOBS:
+                    jobs = dict(self.settings.get("glasses_button_jobs") or {})
+                    jobs[b] = job
+                    self.settings["glasses_button_jobs"] = jobs
+                    save_settings(self.settings)
+                    self.log(f"gaming: glasses button {b} now does {job} (Quick Access)")
             return self.status()
 
     def _control_server(self):
@@ -593,7 +656,7 @@ class Gaming:
         after Pocket XR's effect, where the pointer would be on a flat screen, so it moves with the head and is never
         where a click lands) and "hide_gamescope_pointer" is on. Pocket XR's own pointer stays."""
         p = self.pointer_proc
-        want = bool(self.effect_on and self.settings.get("hide_gamescope_pointer", True))
+        want = bool(self.space_on and self.settings.get("hide_gamescope_pointer", True))
         if p is None or p.poll() is not None or p.stdin is None or want == getattr(self, "pointer_hide_sent", None):
             return
         try:
@@ -603,27 +666,80 @@ class Gaming:
         except (OSError, ValueError):
             pass
 
-    def _effect(self, on):
+    def _dimmed(self):
+        return picture_brightness(self.settings.get("picture_brightness", 100)) < PICTURE_BRIGHTNESS[1]
+
+    def _effect(self, space, keep_dim=True):
+        """The effect in gamescope: drawing the screen in space when [space], else passing the picture through, dimmed,
+        while Picture brightness is below 100 % and glasses are in (0.7.21), else off. Only changes are sent."""
         if self.reshade is None:
             return
+        dim = keep_dim and self.glasses is not None and self._dimmed()
+        on = bool(space or dim)
+        if on == self.effect_on and bool(space) == self.space_on:
+            return
         try:
-            if on and not self.effect_on:
+            if on:
+                self.space_on = bool(space)
                 self._send_view()
                 self._send_mode()
-                self.reshade.enable()
-                self.effect_on = True
-                self.log("gaming: screen in space on")
-                self._pointer_hide()
-            elif not on and self.effect_on:
+                if not self.effect_on:
+                    self.reshade.enable()
+                    self.effect_on = True
+                if space:
+                    self.log("gaming: screen in space on")
+                else:
+                    pct = picture_brightness(self.settings.get("picture_brightness", 100))
+                    self.log(f"gaming: the picture as it is, dimmed to {pct} %")
+            else:
                 self.reshade.disable()
                 self.effect_on = False
+                self.space_on = False
                 self.log("gaming: screen in space off")
-                self._pointer_hide()
+            self._pointer_hide()
         except OSError as e:
             self._lost_gamescope(e)
 
     def _send_mode(self, r=None):
-        (r or self.reshade).set_floats("pxr_mode", (1.0, EDGE, curve_of(self.settings.get("curve", 0.0)), 0.0))
+        dim = 1.0 - picture_brightness(self.settings.get("picture_brightness", 100)) / 100.0
+        curve = curve_of(self.settings.get("curve", 0.0))
+        (r or self.reshade).set_floats("pxr_mode", (1.0 if self.space_on else 0.0, EDGE, curve, dim))
+
+    def _set_picture_brightness(self, percent, why):
+        """Picture brightness (0.7.21): saved, sent to the effect at once, and the effect loaded just to dim if needed."""
+        p = picture_brightness(percent)
+        self.settings["picture_brightness"] = p
+        save_settings(self.settings)
+        self.log(f"gaming: picture brightness {p} % ({why})")
+        if self.reshade is None:
+            return
+        try:
+            if self.effect_on:
+                self._send_mode()
+        except OSError as e:
+            self._lost_gamescope(e)
+            return
+        if self.glasses is not None:
+            self._effect(self.mode() == "space")
+
+    def _glasses_button(self, phys):
+        """A press of the glasses' button [phys] (hidimu.AirReader.on_button, on its heartbeat thread): its job, on a
+        thread of its own so the heartbeat never waits for the lock."""
+        threading.Thread(target=self._do_glasses_button, args=(phys,), name="glasses-button", daemon=True).start()
+
+    def _do_glasses_button(self, phys):
+        with self.lock:
+            job = button_jobs(self.settings).get(str(phys), "nothing")
+            self.log(f"gaming: glasses button {phys} pressed: {job}")
+            now = picture_brightness(self.settings.get("picture_brightness", 100))
+            if job == "brighter":
+                self._set_picture_brightness(now + PICTURE_BRIGHTNESS_STEP, f"glasses button {phys}")
+            elif job == "dimmer":
+                self._set_picture_brightness(now - PICTURE_BRIGHTNESS_STEP, f"glasses button {phys}")
+            elif job == "recentre":
+                self.recentre()
+            elif job == "switch_view":
+                self.next_mode()
 
     def _set_readability(self, on):
         """Readability (readability.py): the game screen 30 degrees wide. Off puts the size back."""
@@ -738,6 +854,7 @@ class Gaming:
         install_effect(self.log)
         r.set_effect(EFFECT)
         r.set_floats("pxr_quat", (0.0, 0.0, 0.0, 1.0))
+        self.space_on = False
         self._send_mode(r)
         self.reshade = r
         self.effect_on = False
@@ -752,6 +869,7 @@ class Gaming:
             pass
         self.reshade = None
         self.effect_on = False
+        self.space_on = False
         self.pointer_sent = None
 
     # ---- glasses ----
@@ -768,7 +886,8 @@ class Gaming:
         if g.imu == "network":
             self.reader = imu.ImuReader(self._report, log=self.log)
         elif g.imu == "air":
-            self.reader = hidimu.AirReader(self._report, g.product, log=self.log, record_path=RAW_IMU)
+            self.reader = hidimu.AirReader(self._report, g.product, log=self.log, record_path=RAW_IMU,
+                                           on_button=self._glasses_button)
             self.reader.released = self.buttons_released  # still let go, when the glasses come back after a reset
         elif g.imu == "viture" and g.viture_tracking_default():
             self.reader = hidimu.VitureReader(self._report, g.product, log=self.log)
@@ -790,7 +909,7 @@ class Gaming:
 
     def _stop_glasses(self, put_back=True):
         self.log(f"gaming: glasses gone: {self.glasses.name}" if self.glasses else "gaming: glasses off")
-        self._effect(False)
+        self._effect(False, keep_dim=False)
         if self.reader:
             self.reader.stop = True
             self.reader = None
@@ -870,8 +989,9 @@ class Gaming:
                             self.cal_due = None
                             self._start_calibration()
                         self._check_calibration()
-                        if self.glasses and self.reshade and not self.effect_on and self.mode() == "space":
-                            self._effect(True)
+                        if self.glasses and self.reshade and not self.effect_on and (
+                                self.mode() == "space" or self._dimmed()):
+                            self._effect(self.mode() == "space")
                     else:
                         if self.reshade is not None:
                             self._lost_gamescope("Gaming Mode ended")
@@ -881,7 +1001,7 @@ class Gaming:
             if self.reshade is not None:
                 try:
                     self.reshade.pump()
-                    if self.effect_on and self.head is not None:
+                    if self.space_on and self.head is not None:
                         w, x, y, z = self._predicted_view()
                         self.reshade.paced_floats("pxr_quat", (x, y, z, w))
                         self._send_pointer()

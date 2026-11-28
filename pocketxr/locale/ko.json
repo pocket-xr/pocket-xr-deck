@@ -224,5 +224,13 @@
   "Hide the moving pointer": "움직이는 포인터 숨기기",
   "With the screen in space, hides gamescope's own arrow, which moves with your head and is not where clicks land. Pocket XR's pointer stays.": "화면을 공간에 둘 때, 머리와 함께 움직이고 클릭되는 곳에 있지 않은 gamescope 자체 화살표를 숨겨요. Pocket XR 포인터는 그대로예요.",
   "Drift trim": "드리프트 보정",
-  "If the screen creeps slowly sideways while you hold still, move this toward where it should be: left of 0 if it creeps right, right of 0 if it creeps left. Degrees a minute.": "가만히 있는데 화면이 천천히 옆으로 밀리면, 원래 있어야 할 쪽으로 이것을 옮기세요. 오른쪽으로 밀리면 0보다 왼쪽, 왼쪽으로 밀리면 0보다 오른쪽. 단위는 도/분입니다."
+  "If the screen creeps slowly sideways while you hold still, move this toward where it should be: left of 0 if it creeps right, right of 0 if it creeps left. Degrees a minute.": "가만히 있는데 화면이 천천히 옆으로 밀리면, 원래 있어야 할 쪽으로 이것을 옮기세요. 오른쪽으로 밀리면 0보다 왼쪽, 왼쪽으로 밀리면 0보다 오른쪽. 단위는 도/분입니다.",
+  "Picture brightness": "화면 밝기",
+  "Dims the whole picture on the glasses, for a dark room or a film. 100 % is the picture as it is.": "안경에 보이는 화면 전체를 어둡게 해요. 어두운 방이나 영화에 좋아요. 100 %는 화면 그대로예요.",
+  "Glasses button {n}": "안경 버튼 {n}",
+  "Brighter": "더 밝게",
+  "Dimmer": "더 어둡게",
+  "Switch view": "보기 바꾸기",
+  "Nothing": "없음",
+  "What the buttons on your glasses do while Pocket XR has them. Not sure which is which? Press one and see. New: say how it works for you.": "Pocket XR이 안경을 쓰는 동안 안경 버튼이 하는 일이에요. 어느 버튼이 어느 건지 모르겠다면 하나를 눌러 보세요. 새 기능: 어떻게 되는지 알려 주세요."
 }
